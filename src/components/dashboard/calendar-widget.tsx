@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
 
-const MAX_ICAL_FEEDS = 5; 
+const MAX_ICAL_FEEDS = 5;
 
 interface IcalFeedItem {
   id: string;
@@ -59,7 +59,7 @@ export function CalendarWidget() {
   const [newIcalUrl, setNewIcalUrl] = useState('');
   const [newIcalLabel, setNewIcalLabel] = useState('');
   
-  const [editingFeed, setEditingFeed] = useState<IcalFeedItem | null>(null); // Changed from editingFeedId
+  const [editingFeed, setEditingFeed] = useState<IcalFeedItem | null>(null);
   const [currentEditUrl, setCurrentEditUrl] = useState('');
   const [currentEditLabel, setCurrentEditLabel] = useState('');
 
@@ -131,7 +131,7 @@ export function CalendarWidget() {
       toast({ title: "URL Required", description: "Please enter an iCal feed URL.", variant: "destructive" });
       return;
     }
-    if (!newIcalUrl.toLowerCase().endsWith('.ics') && !newIcalUrl.toLowerCase().startsWith('webcal://') && !newIcalUrl.toLowerCase().startsWith('http://') && !newIcalUrl.toLowerCase().startsWith('https://')) {
+     if (!newIcalUrl.toLowerCase().endsWith('.ics') && !newIcalUrl.toLowerCase().startsWith('webcal://') && !newIcalUrl.toLowerCase().startsWith('http://') && !newIcalUrl.toLowerCase().startsWith('https://')) {
        toast({
         title: "Invalid URL",
         description: "Please enter a valid iCalendar URL (ending in .ics, or starting with webcal://, http://, or https://).",
@@ -175,7 +175,6 @@ export function CalendarWidget() {
      });
      return;
    }
-
     const newLabel = currentEditLabel.trim() || currentEditUrl;
 
     setIcalFeeds(prevFeeds => 
@@ -191,7 +190,7 @@ export function CalendarWidget() {
   const handleRemoveIcalFeed = (idToRemove: string) => {
     setIcalFeeds(prev => prev.filter(feed => feed.id !== idToRemove));
     if (editingFeed && editingFeed.id === idToRemove) {
-      setEditingFeed(null); // Close edit dialog if the feed being edited is removed
+      setEditingFeed(null);
     }
     toast({ title: "Feed Removed", description: "The iCal feed has been removed." });
   };
@@ -268,9 +267,9 @@ export function CalendarWidget() {
             {icalFeeds.length > 0 && (
               <div className="w-full space-y-1">
                 <p className="text-xs text-muted-foreground">Active Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS}):</p>
-                <ScrollArea className="h-auto max-h-[70px] pr-1">
+                <ScrollArea className="h-auto max-h-[160px] pr-1"> {/* Increased max-h here */}
                 {icalFeeds.map(feed => (
-                  <div key={feed.id} className="bg-muted/50 p-1.5 rounded-sm mb-1 text-xs last:mb-0">
+                  <div key={feed.id} className="bg-muted/50 p-1.5 rounded-sm mb-1 text-xs last:mb-0 flex flex-col">
                     <div className="flex w-full items-center">
                       <span className="font-medium truncate mr-1.5" title={feed.label}>
                         {feed.label}
@@ -280,7 +279,7 @@ export function CalendarWidget() {
                         {feed.url}
                       </span>
                     </div>
-                    <div className="flex justify-end space-x-1 mt-1">
+                    <div className="flex justify-end space-x-1 mt-1 self-end"> {/* Ensure this div is visible */}
                       <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => openEditDialog(feed)}>
                         <Pencil className="w-3 h-3 text-primary" />
                       </Button>
@@ -296,7 +295,7 @@ export function CalendarWidget() {
           </div>
         )}
 
-        <ScrollArea className="flex-1 pr-3"> {/* Event list ScrollArea */}
+        <ScrollArea className="flex-1 pr-3">
           {isLoading && <p className="text-sm text-muted-foreground p-2">Loading events...</p>}
           {!isLoading && error && <p className="text-sm text-destructive p-2">{error}</p>}
           {!isLoading && !error && upcomingEvents.length === 0 && icalFeeds.length === 0 && (
@@ -372,6 +371,4 @@ export function CalendarWidget() {
     </Card>
   );
 }
-    
 
-    
