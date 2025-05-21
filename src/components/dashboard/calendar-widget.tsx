@@ -279,10 +279,10 @@ export function CalendarWidget() {
                   {feed.label}
                 </span>
                 <LinkIcon className="w-3 h-3 text-muted-foreground flex-shrink-0 mr-1.5" />
-                <span className="text-muted-foreground truncate flex-1 min-w-0 mr-1.5" title={feed.url}>
+                <span className="text-muted-foreground truncate flex-1 min-w-0" title={feed.url}>
                   {feed.url}
                 </span>
-                <div className="flex items-center flex-shrink-0 space-x-1">
+                <div className="flex items-center flex-shrink-0 ml-auto pl-1 space-x-1">
                   <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => startEditFeed(feed)}>
                     <Pencil className="w-3 h-3 text-primary" />
                   </Button>
@@ -302,3 +302,4 @@ export function CalendarWidget() {
     
 
       
+
