@@ -16,7 +16,7 @@ import ICAL from 'ical.js';
 const IcalProcessorInputSchema = z.object({
   icalUrl: z.string().url().describe('The URL of the iCalendar (.ics) feed.'),
   label: z.string().optional().describe('An optional label for the calendar feed.'),
-  color: z.string().optional().describe('An optional HSL color string for events from this feed.'),
+  color: z.string().optional().describe('An optional hex color string for events from this feed (e.g., #FF0000).'),
 });
 export type IcalProcessorInput = z.infer<typeof IcalProcessorInputSchema>;
 
@@ -32,19 +32,20 @@ const CalendarEventSchema = z.object({
 const IcalProcessorOutputSchema = z.array(CalendarEventSchema);
 export type IcalProcessorOutput = z.infer<typeof IcalProcessorOutputSchema>;
 
-const predefinedColors = [
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
-  'hsl(var(--primary))',
-  'hsl(var(--secondary))',
+const predefinedHexColors = [
+  '#F44336', // Red
+  '#2196F3', // Blue
+  '#4CAF50', // Green
+  '#FF9800', // Orange
+  '#9C27B0', // Purple
+  '#FFC107', // Yellow (Amber)
+  '#009688', // Teal
+  '#E91E63', // Pink
 ];
 let colorIndex = 0;
 
 const assignColor = (): string => {
-  const color = predefinedColors[colorIndex % predefinedColors.length];
+  const color = predefinedHexColors[colorIndex % predefinedHexColors.length];
   colorIndex++;
   return color;
 };
@@ -120,15 +121,20 @@ const icalProcessorFlow = ai.defineFlow(
                   endTimeDate.getMinutes() === 0 && 
                   endTimeDate.getSeconds() === 0 &&
                   endTimeDate.getMilliseconds() === 0) {
+                // For multi-day all-day events, ical.js often sets the end date to midnight of the day *after* the event.
+                // To make it inclusive, subtract one millisecond.
                 endTimeDate = new Date(endTimeDate.getTime() - 1); 
               } else if (endTimeDate.getTime() === startTimeDate.getTime()) {
+                 // Single all-day event, make it span the whole day
                  endTimeDate = new Date(startTimeDate);
                  endTimeDate.setHours(23, 59, 59, 999);
               } else if (endTimeDate.getHours() === 0 && endTimeDate.getMinutes() === 0 && endTimeDate.getSeconds() === 0 && endTimeDate.getMilliseconds() === 0) {
+                 // If it ends exactly at midnight, make it end of previous day
                  endTimeDate = new Date(endTimeDate.getTime() -1);
               }
             }
             
+            // Filter out events that have already passed or are too far in the future
             if (endTimeDate < today || startTimeDate >= expansionEndDate) {
               return; 
             }
@@ -139,7 +145,7 @@ const icalProcessorFlow = ai.defineFlow(
               startTime: startTimeDate.toISOString(),
               endTime: endTimeDate.toISOString(),
               calendarSource: finalCalendarSource,
-              color: finalFeedColor, // Use the determined color
+              color: finalFeedColor, 
               isAllDay: isAllDay,
             });
         };
@@ -149,21 +155,22 @@ const icalProcessorFlow = ai.defineFlow(
           let nextOccurrenceTime: ICAL.Time | null;
 
           while ((nextOccurrenceTime = iterator.next()) && nextOccurrenceTime.toJSDate() < expansionEndDate) {
+            // Only process occurrences that are not fully in the past
             if (nextOccurrenceTime.toJSDate() >= today || event.endDate?.toJSDate() >= today) { 
               const occurrenceDetails = event.getOccurrenceDetails(nextOccurrenceTime);
               processEventInstance(
                 occurrenceDetails.startDate,
                 occurrenceDetails.endDate,
-                String(occurrenceDetails.item.summary || originalSummary),
-                originalUid, 
-                occurrenceDetails.recurrenceId.toJSDate().toISOString() 
+                String(occurrenceDetails.item.summary || originalSummary), // Use item's summary if available (for overridden recurrences)
+                originalUid, // Use original event UID for linking
+                occurrenceDetails.recurrenceId.toJSDate().toISOString() // Use recurrence ID for uniqueness
               );
             }
           }
-        } else if (event.startDate) { 
+        } else if (event.startDate) { // Handle non-recurring events
             processEventInstance(
                 event.startDate,
-                event.endDate || event.startDate, 
+                event.endDate || event.startDate, // If no end date, assume it's same as start
                 originalSummary,
                 originalUid
             );
@@ -173,7 +180,9 @@ const icalProcessorFlow = ai.defineFlow(
     } catch (error) {
       console.error(`Error processing iCal feed ${icalUrl} with ical.js:`, error);
       const errorMessage = error instanceof Error ? error.message : String(error);
+      // It's better to throw an error that Genkit can understand, or handle it gracefully
       throw new Error(`Failed to process iCal feed ${icalUrl}: ${errorMessage}`);
     }
   }
 );
+

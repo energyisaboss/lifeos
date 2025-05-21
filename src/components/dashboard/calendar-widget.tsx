@@ -2,9 +2,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw, LinkIcon, Pencil } from 'lucide-react';
+import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw, LinkIcon, Pencil, Palette } from 'lucide-react';
 import type { CalendarEvent as AppCalendarEvent } from '@/lib/types'; // String dates
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -27,15 +27,17 @@ import {
 
 const MAX_ICAL_FEEDS = 5;
 
-const widgetPredefinedColors = [
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
-  'hsl(var(--primary))',
-  'hsl(var(--secondary))',
+const predefinedNamedColors: { name: string, value: string }[] = [
+  { name: 'Red', value: '#F44336' },
+  { name: 'Blue', value: '#2196F3' },
+  { name: 'Green', value: '#4CAF50' },
+  { name: 'Orange', value: '#FF9800' },
+  { name: 'Purple', value: '#9C27B0' },
+  { name: 'Yellow', value: '#FFC107' }, // Amber for better contrast than pure yellow
+  { name: 'Teal', value: '#009688' },
+  { name: 'Pink', value: '#E91E63' },
 ];
+
 
 interface IcalFeedItem {
   id: string;
@@ -60,7 +62,7 @@ export function CalendarWidget() {
           id: item.id || Date.now().toString() + Math.random(),
           url: item.url || '',
           label: item.label || `Feed ${index + 1}`,
-          color: item.color || widgetPredefinedColors[index % widgetPredefinedColors.length],
+          color: item.color || predefinedNamedColors[index % predefinedNamedColors.length].value,
         })).filter(item => typeof item.url === 'string' && typeof item.label === 'string' && typeof item.color === 'string') : [];
       } catch (e) {
         console.error("Failed to parse iCal feeds from localStorage", e);
@@ -165,7 +167,7 @@ export function CalendarWidget() {
       return;
     }
     const newFeedId = `new-${Date.now().toString()}`;
-    const newFeedColor = widgetPredefinedColors[icalFeeds.length % widgetPredefinedColors.length];
+    const newFeedColor = predefinedNamedColors[icalFeeds.length % predefinedNamedColors.length].value;
     const newFeed = { 
       id: newFeedId,
       url: '', 
@@ -183,6 +185,10 @@ export function CalendarWidget() {
       )
     );
   };
+  
+  const isValidHexColor = (color: string) => {
+    return /^#([0-9A-F]{3}){1,2}$/i.test(color);
+  }
 
   const handleUpdateFeed = (id: string) => {
     const feedToUpdate = icalFeeds.find(feed => feed.id === id);
@@ -200,6 +206,14 @@ export function CalendarWidget() {
       });
       return;
     }
+    if (!isValidHexColor(feedToUpdate.color)) {
+      toast({
+        title: "Invalid Color",
+        description: "Please enter a valid hex color code (e.g., #RRGGBB or #RGB).",
+        variant: "destructive",
+      });
+      return;
+    }
     
     const updatedFeedsWithPersistentId = icalFeeds.map(f => 
         f.id === id && id.startsWith('new-') 
@@ -208,8 +222,7 @@ export function CalendarWidget() {
     );
     
     setIcalFeeds(updatedFeedsWithPersistentId);
-    // localStorage.setItem('icalFeedsLifeOS_v2', JSON.stringify(updatedFeedsWithPersistentId)); // Already handled by useEffect on icalFeeds
-    setTriggerRefetch(prev => prev + 1); // Trigger re-fetch for all feeds
+    setTriggerRefetch(prev => prev + 1); 
     toast({ title: "Feed Updated", description: `Feed "${feedToUpdate.label || feedToUpdate.url}" settings saved. Events refreshing.` });
   };
 
@@ -291,26 +304,36 @@ export function CalendarWidget() {
                         />
                       </div>
                       <div>
-                        <Label className="text-xs">Color</Label>
-                        <div className="flex flex-wrap gap-1.5 mt-1 mb-2">
-                          {widgetPredefinedColors.map(colorValue => (
+                        <Label className="text-xs flex items-center mb-1">
+                          <Palette size={14} className="mr-1.5" /> Color
+                        </Label>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1 mb-2">
+                          {predefinedNamedColors.map(colorOption => (
                             <button
-                              key={colorValue}
+                              key={colorOption.value}
                               type="button"
-                              title={colorValue}
+                              title={colorOption.name}
                               className={cn(
                                 "w-5 h-5 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
-                                feed.color === colorValue ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
+                                feed.color === colorOption.value ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
                               )}
-                              style={{ backgroundColor: colorValue }}
-                              onClick={() => handleFeedInputChange(feed.id, 'color', colorValue)}
+                              style={{ backgroundColor: colorOption.value }}
+                              onClick={() => handleFeedInputChange(feed.id, 'color', colorOption.value)}
                             />
                           ))}
+                           <Input
+                            type="text"
+                            placeholder="#HEX"
+                            value={feed.color}
+                            onChange={(e) => handleFeedInputChange(feed.id, 'color', e.target.value)}
+                            className="h-7 w-20 text-xs"
+                            maxLength={7}
+                          />
                         </div>
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap justify-end gap-2">
-                      <Button variant="outline" size="sm" className="h-8" onClick={() => handleUpdateFeed(feed.id)}>
+                       <Button variant="outline" size="sm" className="h-8" onClick={() => handleUpdateFeed(feed.id)}>
                         <RefreshCw className="w-3 h-3 mr-1.5" />
                         Update
                       </Button>
@@ -357,3 +380,4 @@ export function CalendarWidget() {
     </Card>
   );
 }
+
