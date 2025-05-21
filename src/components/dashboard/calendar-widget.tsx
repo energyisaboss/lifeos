@@ -140,7 +140,7 @@ export function CalendarWidget() {
         <SectionTitle icon={CalendarDays} title="Upcoming Events" />
       </CardHeader>
       <CardContent className="flex-grow overflow-hidden flex flex-col pb-0">
-        <ScrollArea className="flex-1 pr-3">
+        <ScrollArea className="flex-1 pr-3"> {/* Removed mb-4 */}
           {isLoading && <p className="text-sm text-muted-foreground">Loading events...</p>}
           {!isLoading && error && <p className="text-sm text-destructive">{error}</p>}
           {!isLoading && upcomingEvents.length > 0 ? (
@@ -162,8 +162,8 @@ export function CalendarWidget() {
         </ScrollArea>
       </CardContent>
       <Separator />
-      <CardFooter className="px-4 pt-0 pb-4 flex-col items-start space-y-3"> {/* Changed pt-2 to pt-0 */}
-        <form onSubmit={handleAddIcalUrl} className="flex gap-2 w-full mt-2"> {/* Added mt-2 to form for a little space */}
+      <CardFooter className="px-4 pt-0 pb-4 flex-col items-start space-y-3">
+        <form onSubmit={handleAddIcalUrl} className="flex gap-2 w-full mt-2">
           <Input
             type="url"
             placeholder="Add iCal feed URL (.ics or webcal://)"
@@ -198,3 +198,4 @@ export function CalendarWidget() {
     </Card>
   );
 }
+
