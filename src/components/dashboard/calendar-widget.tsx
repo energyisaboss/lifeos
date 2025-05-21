@@ -137,8 +137,8 @@ export function CalendarWidget() {
         });
         return;
       }
-      if (icalFeeds.some(feed => feed.url === newIcalUrl)) {
-        toast({ title: "Feed Exists", description: "This iCal feed URL has already been added.", variant: "destructive" });
+      if (icalFeeds.some(feed => feed.url === newIcalUrl && feed.label === feedLabel)) {
+        toast({ title: "Feed Exists", description: "This iCal feed URL and label combination has already been added.", variant: "destructive" });
         return;
       }
       setIcalFeeds(prev => [...prev, { id: Date.now().toString(), url: newIcalUrl, label: feedLabel }]);
@@ -226,7 +226,7 @@ export function CalendarWidget() {
       </CardContent>
       <Separator className="mx-4" />
       <CardFooter className="px-4 pt-3 pb-4 flex-col items-start">
-        <form onSubmit={handleFormSubmit} className="flex flex-col sm:flex-row gap-2 w-full items-start">
+        <form onSubmit={handleFormSubmit} className="flex flex-col sm:flex-row gap-2 w-full items-start mt-2">
           <Input
             type="text"
             placeholder="Label (e.g., Work)"
@@ -264,7 +264,7 @@ export function CalendarWidget() {
         {icalFeeds.length > 0 && (
           <div className="w-full space-y-1 mt-3">
             <p className="text-xs text-muted-foreground">Active Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS}):</p>
-            <ScrollArea className="h-auto max-h-[70px] pr-1"> {/* Increased max-h slightly */}
+            <ScrollArea className="h-auto max-h-[70px] pr-1">
             {icalFeeds.map(feed => (
               <div key={feed.id} className="flex items-center justify-between text-xs bg-muted/50 p-1.5 rounded-sm mb-1 last:mb-0">
                 <div className="flex items-center space-x-1 truncate">
@@ -289,3 +289,4 @@ export function CalendarWidget() {
   );
 }
 
+    
