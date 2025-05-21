@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview A Genkit flow to fetch and parse iCalendar (iCal) feeds.
+ * @fileOverview A Genkit flow to fetch and parse iCalendar (iCal) feeds using ical.js.
  *
  * - processIcalFeed - Fetches and parses an iCal feed URL, returning calendar events.
  * - IcalProcessorInput - The input type for the processIcalFeed function.
@@ -11,7 +11,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import type { CalendarEvent } from '@/lib/types';
-import ical from 'node-ical';
+import ICAL from 'ical.js';
 
 const IcalProcessorInputSchema = z.object({
   icalUrl: z.string().url().describe('The URL of the iCalendar (.ics) feed.'),
@@ -61,61 +61,75 @@ const icalProcessorFlow = ai.defineFlow(
   },
   async ({ icalUrl }) => {
     try {
-      const eventsRaw = await ical.async.fromURL(icalUrl);
+      const response = await fetch(icalUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch iCal feed: ${response.statusText}`);
+      }
+      const icalString = await response.text();
+      const jcalData = ICAL.parse(icalString);
+      const calendarComponent = new ICAL.Component(jcalData);
+      const vevents = calendarComponent.getAllSubcomponents('vevent');
+      
       const processedEvents: CalendarEvent[] = [];
-      const feedColor = assignColor(); // Assign a consistent color for this feed
+      const feedColor = assignColor();
 
-      for (const key in eventsRaw) {
-        if (eventsRaw.hasOwnProperty(key)) {
-          const event = eventsRaw[key];
-          if (event.type === 'VEVENT' && event.start && event.summary) {
-            // Basic check for essential fields
-            const startTime = new Date(event.start);
-            // End time might not always be present, or might be same as start for 0-duration
-            // Or for all-day events, end might be the start of the next day.
-            // node-ical usually makes event.end a Date object if it exists.
-            let endTime = event.end ? new Date(event.end) : new Date(startTime);
+      for (const veventComponent of vevents) {
+        const event = new ICAL.Event(veventComponent);
 
-            // Handle all-day events: node-ical sets datetype to 'date'
-            // and typically start time to 00:00:00 and end time to 00:00:00 of the next day
-            // or sometimes end time is not present or same as start.
-            // A common convention for full-day events is that the time part is 00:00:00.
-            const isAllDay = event.datetype === 'date' || 
-                             (startTime.getHours() === 0 && startTime.getMinutes() === 0 && startTime.getSeconds() === 0 &&
-                              endTime.getHours() === 0 && endTime.getMinutes() === 0 && endTime.getSeconds() === 0 &&
-                              (endTime.getTime() > startTime.getTime() || event.summary.toLowerCase().includes('all day')));
-            
-            if (isAllDay && endTime.getTime() === startTime.getTime()) {
+        if (event.summary && event.startDate) {
+          const startTime = event.startDate.toJSDate();
+          let endTime = event.endDate ? event.endDate.toJSDate() : new Date(startTime);
+
+          const isAllDay = event.startDate.isDate;
+
+          if (isAllDay) {
+            // For all-day events, ical.js endDate is often the start of the next day.
+            // Adjust to be the end of the current day for consistency.
+            // Ensure startTime is at the beginning of the day for all-day events.
+            startTime.setHours(0, 0, 0, 0);
+
+            if (endTime.getTime() > startTime.getTime() && 
+                endTime.getHours() === 0 && 
+                endTime.getMinutes() === 0 && 
+                endTime.getSeconds() === 0) {
+              endTime = new Date(endTime.getTime() - 1); // Set to 23:59:59.999 of the previous day
+            } else if (endTime.getTime() === startTime.getTime()) {
               // If it's an all-day event and end time is same as start, set end to end of day.
-              endTime = new Date(startTime);
-              endTime.setHours(23, 59, 59, 999);
-            } else if (isAllDay && endTime.getTime() > startTime.getTime() && endTime.getHours() === 0 && endTime.getMinutes() === 0) {
-                // If end time is start of next day, adjust to end of current day for simpler rendering
-                endTime = new Date(endTime.getTime() - 1); 
+               endTime = new Date(startTime);
+               endTime.setHours(23, 59, 59, 999);
             }
-
-
-            // If it's a multi-day all-day event, endTime might be days later at 00:00.
-            // Our current component might not render multi-day all-day events spanning across midnight perfectly,
-            // but this parsing is a good start.
-
-            processedEvents.push({
-              id: `${icalUrl}-${event.uid || key}`, // Ensure unique ID by prefixing with URL
-              title: String(event.summary || 'Untitled Event'),
-              startTime: startTime,
-              endTime: endTime,
-              calendarSource: event.organizer ? (typeof event.organizer === 'string' ? event.organizer : event.organizer.params?.CN || icalUrl) : icalUrl,
-              color: feedColor, 
-              isAllDay: isAllDay,
-            });
           }
+          
+          const organizerProp = veventComponent.getFirstProperty('organizer');
+          let calendarSource = icalUrl;
+          if (organizerProp) {
+            const cnParam = organizerProp.getParameter('cn');
+            if (cnParam) {
+              calendarSource = cnParam;
+            } else if (organizerProp.getValues().length > 0) {
+              calendarSource = String(organizerProp.getValues()[0]);
+               // Basic check for mailto link, remove it
+              if (calendarSource.toLowerCase().startsWith('mailto:')) {
+                calendarSource = calendarSource.substring(7);
+              }
+            }
+          }
+
+
+          processedEvents.push({
+            id: `${icalUrl}-${event.uid || event.startDate.toUnixTime()}`, // Ensure unique ID
+            title: String(event.summary || 'Untitled Event'),
+            startTime: startTime,
+            endTime: endTime,
+            calendarSource: calendarSource,
+            color: feedColor, 
+            isAllDay: isAllDay,
+          });
         }
       }
       return processedEvents;
     } catch (error) {
-      console.error(`Error processing iCal feed ${icalUrl}:`, error);
-      // Return an empty array or throw a custom error to be handled by the client
-      // For now, returning empty array on error to not break the whole widget if one feed fails.
+      console.error(`Error processing iCal feed ${icalUrl} with ical.js:`, error);
       return []; 
     }
   }
