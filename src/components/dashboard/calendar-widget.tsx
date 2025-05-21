@@ -9,7 +9,7 @@ import type { CalendarEvent as AppCalendarEvent } from '@/lib/types'; // String 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { processIcalFeed } from '@/ai/flows/ical-processor-flow';
+import { processIcalFeed, IcalProcessorInput } from '@/ai/flows/ical-processor-flow';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
@@ -99,7 +99,7 @@ export function CalendarWidget() {
     if (justAddedFeedId && feedListRef.current) {
       const newFeedCard = feedListRef.current.querySelector(`[data-feed-id="${justAddedFeedId}"]`);
       if (newFeedCard) {
-        newFeedCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        newFeedCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
       }
       setJustAddedFeedId(null); 
     }
@@ -201,11 +201,15 @@ export function CalendarWidget() {
       return;
     }
     
-    // id might have been temporary "new-...", ensure it's a more persistent one if it was new
-    const updatedFeeds = icalFeeds.map(f => f.id === id && id.startsWith('new-') ? {...f, id: `feed-${Date.now()}-${Math.random().toString(36).substring(2,9)}`} : f )
-    setIcalFeeds(updatedFeeds);
-    localStorage.setItem('icalFeedsLifeOS_v2', JSON.stringify(updatedFeeds));
-    setTriggerRefetch(prev => prev + 1);
+    const updatedFeedsWithPersistentId = icalFeeds.map(f => 
+        f.id === id && id.startsWith('new-') 
+        ? {...f, id: `feed-${Date.now()}-${Math.random().toString(36).substring(2,9)}`} 
+        : f 
+    );
+    
+    setIcalFeeds(updatedFeedsWithPersistentId);
+    // localStorage.setItem('icalFeedsLifeOS_v2', JSON.stringify(updatedFeedsWithPersistentId)); // Already handled by useEffect on icalFeeds
+    setTriggerRefetch(prev => prev + 1); // Trigger re-fetch for all feeds
     toast({ title: "Feed Updated", description: `Feed "${feedToUpdate.label || feedToUpdate.url}" settings saved. Events refreshing.` });
   };
 
@@ -250,7 +254,7 @@ export function CalendarWidget() {
       </CardHeader>
       <CardContent className="px-4 py-0 flex-grow overflow-hidden flex flex-col">
         {showFeedManagement && (
-          <div className="pt-3 pb-2 border-b border-border mb-2"> {/* Container for ALL feed management */}
+          <div className="pt-3 pb-2 border-b border-border mb-2">
             <div className="flex justify-between items-center mb-3">
               <h4 className="text-sm font-medium text-muted-foreground">Manage iCal Feeds</h4>
               <Button size="sm" variant="outline" onClick={handleAddNewFeed} disabled={icalFeeds.length >= MAX_ICAL_FEEDS}>
@@ -258,8 +262,8 @@ export function CalendarWidget() {
               </Button>
             </div>
             
-            <ScrollArea className="max-h-[300px] pr-1 overflow-y-auto">
-              <div ref={feedListRef} className="space-y-3">
+            <ScrollArea className="max-h-[300px] pr-1 overflow-y-auto calendar-feed-scroll-area" ref={feedListRef}>
+              <div className="space-y-3">
                 {icalFeeds.map((feed) => (
                   <Card key={feed.id} data-feed-id={feed.id} className="p-3 bg-muted/30">
                     <div className="space-y-2">
@@ -325,7 +329,7 @@ export function CalendarWidget() {
           </div>
         )}
 
-        <ScrollArea className="flex-1 pr-3">
+        <ScrollArea className="flex-1 pr-3 py-2">
           {isLoading && <p className="text-sm text-muted-foreground p-2 py-2">Loading events...</p>}
           {!isLoading && error && <p className="text-sm text-destructive p-2 py-2">{error}</p>}
           {!isLoading && !error && upcomingEvents.length === 0 && icalFeeds.filter(f => f.url.trim()).length === 0 && (
@@ -335,7 +339,7 @@ export function CalendarWidget() {
              <p className="text-sm text-muted-foreground p-2 py-2">No upcoming events from active feeds for the next 30 days, or feeds might need updating.</p>
           )}
           {!isLoading && !error && upcomingEvents.length > 0 && (
-            <ul className="space-y-3 py-2">
+            <ul className="space-y-3">
               {upcomingEvents.map((event) => (
                 <li key={event.id} className="flex items-start space-x-3 pb-2 border-b border-border last:border-b-0">
                   <div className="flex-shrink-0 w-2 h-6 mt-1 rounded-full" style={{ backgroundColor: event.color }} />
@@ -353,5 +357,3 @@ export function CalendarWidget() {
     </Card>
   );
 }
-
-    

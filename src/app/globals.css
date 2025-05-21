@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -100,5 +101,15 @@ body {
   body {
     @apply bg-background text-foreground;
     min-height: 100vh;
+  }
+}
+
+/* Custom scrollbar styles for specific calendar feed list */
+@layer utilities {
+  .calendar-feed-scroll-area > [data-orientation="vertical"] {
+    @apply !w-1.5; /* Thinner scrollbar track (6px) */
+  }
+  .calendar-feed-scroll-area > [data-orientation="vertical"] > [data-radix-scroll-area-thumb] {
+    @apply !bg-muted; /* Darker scrollbar thumb using theme's muted color */
   }
 }
