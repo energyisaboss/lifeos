@@ -16,6 +16,7 @@ import ICAL from 'ical.js';
 const IcalProcessorInputSchema = z.object({
   icalUrl: z.string().url().describe('The URL of the iCalendar (.ics) feed.'),
   label: z.string().optional().describe('An optional label for the calendar feed.'),
+  color: z.string().optional().describe('An optional HSL color string for events from this feed.'),
 });
 export type IcalProcessorInput = z.infer<typeof IcalProcessorInputSchema>;
 
@@ -59,7 +60,7 @@ const icalProcessorFlow = ai.defineFlow(
     inputSchema: IcalProcessorInputSchema,
     outputSchema: IcalProcessorOutputSchema,
   },
-  async ({ icalUrl, label: feedLabelInput }) => {
+  async ({ icalUrl, label: feedLabelInput, color: feedColorInput }) => {
     try {
       const response = await fetch(icalUrl);
       if (!response.ok) {
@@ -71,7 +72,7 @@ const icalProcessorFlow = ai.defineFlow(
       const vevents = calendarComponent.getAllSubcomponents('vevent');
       
       const processedEvents: AppCalendarEvent[] = [];
-      const feedColor = assignColor();
+      const finalFeedColor = feedColorInput || assignColor();
 
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Start of today
@@ -138,7 +139,7 @@ const icalProcessorFlow = ai.defineFlow(
               startTime: startTimeDate.toISOString(),
               endTime: endTimeDate.toISOString(),
               calendarSource: finalCalendarSource,
-              color: feedColor,
+              color: finalFeedColor, // Use the determined color
               isAllDay: isAllDay,
             });
         };

@@ -1,10 +1,10 @@
 
 "use client";
 
-import React, { useState, useEffect, FormEvent } from 'react';
-import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw } from 'lucide-react';
+import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw, LinkIcon } from 'lucide-react';
 import type { CalendarEvent as AppCalendarEvent } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -13,13 +13,25 @@ import { processIcalFeed } from '@/ai/flows/ical-processor-flow';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 const MAX_ICAL_FEEDS = 5;
+
+const widgetPredefinedColors = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-5))',
+  'hsl(var(--primary))',
+  'hsl(var(--secondary))',
+];
 
 interface IcalFeedItem {
   id: string;
   url: string;
   label: string;
+  color: string;
 }
 
 interface ParsedCalendarEvent extends Omit<AppCalendarEvent, 'startTime' | 'endTime'> {
@@ -31,14 +43,15 @@ export function CalendarWidget() {
   const [showFeedManagement, setShowFeedManagement] = useState(false);
   const [icalFeeds, setIcalFeeds] = useState<IcalFeedItem[]>(() => {
     if (typeof window !== 'undefined') {
-      const savedFeeds = localStorage.getItem('icalFeedsLifeOS'); // Changed localStorage key
+      const savedFeeds = localStorage.getItem('icalFeedsLifeOS_v2'); // Changed key for new structure
       try {
         const parsed = savedFeeds ? JSON.parse(savedFeeds) : [];
-        return Array.isArray(parsed) ? parsed.map(item => ({
+        return Array.isArray(parsed) ? parsed.map((item: any, index: number) => ({
           id: item.id || Date.now().toString() + Math.random(),
           url: item.url || '',
-          label: item.label || item.url || 'Unnamed Feed',
-        })).filter(item => item.url || item.label) : []; // Allow items with just a label initially
+          label: item.label || item.url || `Feed ${index + 1}`,
+          color: item.color || widgetPredefinedColors[index % widgetPredefinedColors.length],
+        })).filter(item => item.url || item.label) : [];
       } catch (e) {
         console.error("Failed to parse iCal feeds from localStorage", e);
         return [];
@@ -52,7 +65,6 @@ export function CalendarWidget() {
   const [error, setError] = useState<string | null>(null);
   const [triggerRefetch, setTriggerRefetch] = useState(0);
 
-
   const parseEventDatesAndSort = (eventsStrings: AppCalendarEvent[]): ParsedCalendarEvent[] => {
     return eventsStrings
       .map(event => ({
@@ -65,10 +77,9 @@ export function CalendarWidget() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('icalFeedsLifeOS', JSON.stringify(icalFeeds.filter(feed => feed.url.trim() !== '' || feed.label.trim() !== '')));
+      localStorage.setItem('icalFeedsLifeOS_v2', JSON.stringify(icalFeeds.filter(feed => feed.url.trim() !== '' || feed.label.trim() !== '')));
     }
   }, [icalFeeds]);
-
 
   useEffect(() => {
     const fetchAndProcessEvents = async () => {
@@ -84,7 +95,7 @@ export function CalendarWidget() {
       setError(null);
       
       const results = await Promise.allSettled(
-        validFeeds.map(feed => processIcalFeed({ icalUrl: feed.url, label: feed.label }))
+        validFeeds.map(feed => processIcalFeed({ icalUrl: feed.url, label: feed.label, color: feed.color }))
       );
 
       const fetchedEventsStrings: AppCalendarEvent[] = [];
@@ -103,10 +114,10 @@ export function CalendarWidget() {
         }
       });
       
-      if (hasErrors && typeof window !== 'undefined') { // Ensure toast is called client-side
+      if (hasErrors && typeof window !== 'undefined') {
         toast({
           title: "Error Loading Some Feeds",
-          description: "Some iCalendar feeds could not be loaded or processed. Please check their URLs and labels.",
+          description: "Some iCalendar feeds could not be loaded. Please check settings.",
           variant: "destructive",
         });
       }
@@ -117,8 +128,7 @@ export function CalendarWidget() {
     };
 
     fetchAndProcessEvents();
-  }, [icalFeeds, triggerRefetch]); // Trigger refetch also
-
+  }, [icalFeeds, triggerRefetch]);
 
   const handleAddNewFeed = () => {
     if (icalFeeds.length >= MAX_ICAL_FEEDS) {
@@ -129,10 +139,16 @@ export function CalendarWidget() {
       });
       return;
     }
-    setIcalFeeds(prev => [...prev, { id: Date.now().toString(), url: '', label: '' }]);
+    const newFeedColor = widgetPredefinedColors[icalFeeds.length % widgetPredefinedColors.length];
+    setIcalFeeds(prev => [...prev, { 
+      id: Date.now().toString(), 
+      url: '', 
+      label: `Feed ${prev.length + 1}`, 
+      color: newFeedColor 
+    }]);
   };
 
-  const handleFeedInputChange = (id: string, field: 'url' | 'label', value: string) => {
+  const handleFeedInputChange = (id: string, field: 'url' | 'label' | 'color', value: string) => {
     setIcalFeeds(prevFeeds =>
       prevFeeds.map(feed =>
         feed.id === id ? { ...feed, [field]: value } : feed
@@ -151,21 +167,18 @@ export function CalendarWidget() {
     if (!feedToUpdate.url.toLowerCase().endsWith('.ics') && !feedToUpdate.url.toLowerCase().startsWith('webcal://') && !feedToUpdate.url.toLowerCase().startsWith('http://') && !feedToUpdate.url.toLowerCase().startsWith('https://')) {
       toast({
        title: "Invalid URL",
-       description: "Please enter a valid iCalendar URL (ending in .ics, or starting with webcal://, http://, or https://).",
+       description: "Please enter a valid iCalendar URL.",
        variant: "destructive",
      });
      return;
    }
     
-    // The localStorage useEffect will handle saving.
-    // Trigger a refetch of all events.
-    setTriggerRefetch(prev => prev + 1);
+    setTriggerRefetch(prev => prev + 1); // This will trigger the useEffect to process feeds
     toast({ title: "Feed Updated", description: `Feed "${feedToUpdate.label || feedToUpdate.url}" settings saved. Events refreshing.` });
   };
 
   const handleRemoveIcalFeed = (idToRemove: string) => {
     setIcalFeeds(prev => prev.filter(feed => feed.id !== idToRemove));
-    // Events will re-fetch due to icalFeeds dependency in useEffect.
     toast({ title: "Feed Removed", description: "The iCal feed has been removed." });
   };
   
@@ -207,14 +220,14 @@ export function CalendarWidget() {
         {showFeedManagement && (
           <div className="pt-3 pb-2 border-b border-border mb-2">
             <div className="flex justify-between items-center mb-3">
-              <h4 className="text-sm font-medium text-muted-foreground">Manage iCal Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS})</h4>
+              <h4 className="text-sm font-medium text-muted-foreground">Manage iCal Feeds</h4>
               <Button size="sm" variant="outline" onClick={handleAddNewFeed} disabled={icalFeeds.length >= MAX_ICAL_FEEDS}>
-                <PlusCircle className="w-4 h-4 mr-2" /> Add New Feed
+                <PlusCircle className="w-4 h-4 mr-2" /> Add New Feed ({icalFeeds.length}/{MAX_ICAL_FEEDS})
               </Button>
             </div>
             
             {icalFeeds.length > 0 && (
-              <ScrollArea className="h-auto max-h-[240px] pr-1 space-y-3"> {/* Increased max-h */}
+              <ScrollArea className="h-auto max-h-[240px] pr-1 space-y-3">
                 {icalFeeds.map(feed => (
                   <Card key={feed.id} className="p-3 bg-muted/30">
                     <div className="space-y-2">
@@ -241,6 +254,24 @@ export function CalendarWidget() {
                           required
                         />
                       </div>
+                      <div>
+                        <Label className="text-xs">Color</Label>
+                        <div className="flex space-x-1.5 mt-1">
+                          {widgetPredefinedColors.map(colorValue => (
+                            <button
+                              key={colorValue}
+                              type="button"
+                              title={colorValue}
+                              className={cn(
+                                "w-5 h-5 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
+                                feed.color === colorValue ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
+                              )}
+                              style={{ backgroundColor: colorValue }}
+                              onClick={() => handleFeedInputChange(feed.id, 'color', colorValue)}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     </div>
                     <div className="mt-3 flex justify-end space-x-2">
                       <Button variant="outline" size="sm" className="h-8" onClick={() => handleUpdateFeed(feed.id)}>
@@ -256,7 +287,7 @@ export function CalendarWidget() {
                 ))}
               </ScrollArea>
             )}
-             {icalFeeds.length === 0 && (
+             {icalFeeds.length === 0 && !isLoading && (
                 <p className="text-xs text-muted-foreground text-center py-2">No feeds added yet. Click "Add New Feed".</p>
              )}
           </div>
