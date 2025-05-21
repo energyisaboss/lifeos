@@ -42,8 +42,8 @@ export function EnvironmentalWidget() {
         const errorMessage = err instanceof Error ? err.message : String(err);
         if (errorMessage.includes("OpenWeatherMap API key is not configured")) {
              setError("OpenWeatherMap API key is missing. Please add it to your .env.local file (OPENWEATHER_API_KEY=your_key) and restart the development server.");
-        } else if (errorMessage.includes("401")) {
-            setError("Failed to fetch weather data: Invalid API Key. Please check your OpenWeatherMap API key and subscription.");
+        } else if (errorMessage.includes("401") || errorMessage.toLowerCase().includes("unauthorized")) {
+            setError("Failed to fetch weather data: Invalid API Key or Unauthorized. Please check your OpenWeatherMap API key, ensure it's active, and that you're subscribed to the One Call API 3.0 plan.");
         }
         else {
              setError(`Failed to load environmental data. ${errorMessage}`);
