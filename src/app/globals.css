@@ -107,9 +107,10 @@ body {
 /* Custom scrollbar styles for specific calendar feed list */
 @layer utilities {
   .calendar-feed-scroll-area > [data-orientation="vertical"] {
-    @apply !w-1.5; /* Thinner scrollbar track (6px) */
+    @apply !w-[5px]; /* Thinner scrollbar track (5px) */
   }
   .calendar-feed-scroll-area > [data-orientation="vertical"] > [data-radix-scroll-area-thumb] {
     @apply !bg-muted; /* Darker scrollbar thumb using theme's muted color */
   }
 }
+
