@@ -5,7 +5,7 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
 import { CalendarDays, LinkIcon, PlusCircle, Trash2 } from 'lucide-react';
-import type { CalendarEvent } from '@/lib/types'; // CalendarEvent now has string dates
+import type { CalendarEvent as AppCalendarEvent } from '@/lib/types'; // CalendarEvent now has string dates
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import { toast } from '@/hooks/use-toast';
 const MAX_ICAL_FEEDS = 3;
 
 // Helper type for internal use with Date objects after parsing
-interface ParsedCalendarEvent extends Omit<CalendarEvent, 'startTime' | 'endTime'> {
+interface ParsedCalendarEvent extends Omit<AppCalendarEvent, 'startTime' | 'endTime'> {
   startTime: Date;
   endTime: Date;
 }
@@ -35,7 +35,7 @@ export function CalendarWidget() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const parseEventDates = (event: CalendarEvent): ParsedCalendarEvent => ({
+  const parseEventDates = (event: AppCalendarEvent): ParsedCalendarEvent => ({
     ...event,
     startTime: new Date(event.startTime),
     endTime: new Date(event.endTime),
@@ -51,7 +51,7 @@ export function CalendarWidget() {
       setError(null);
       
       if (icalUrls.length === 0) {
-        setAllEvents([]); // No mock events, so set to empty if no URLs
+        setAllEvents([]); 
         setIsLoading(false);
         return;
       }
@@ -60,7 +60,7 @@ export function CalendarWidget() {
         icalUrls.map(url => processIcalFeed({ icalUrl: url }))
       );
 
-      const fetchedEventsStrings: CalendarEvent[] = [];
+      const fetchedEventsStrings: AppCalendarEvent[] = [];
       let hasErrors = false;
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') {
@@ -81,7 +81,7 @@ export function CalendarWidget() {
       }
 
       const parsedFetchedEvents = fetchedEventsStrings.map(parseEventDates);
-      setAllEvents(parsedFetchedEvents); // Only display fetched events
+      setAllEvents(parsedFetchedEvents); 
       setIsLoading(false);
     };
 
@@ -140,7 +140,7 @@ export function CalendarWidget() {
         <SectionTitle icon={CalendarDays} title="Upcoming Events" />
       </CardHeader>
       <CardContent className="flex-grow overflow-hidden flex flex-col">
-        <ScrollArea className="h-[200px] pr-3 mb-4">
+        <ScrollArea className="flex-1 pr-3 mb-4">
           {isLoading && <p className="text-sm text-muted-foreground">Loading events...</p>}
           {!isLoading && error && <p className="text-sm text-destructive">{error}</p>}
           {!isLoading && upcomingEvents.length > 0 ? (
