@@ -10,7 +10,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import type { CalendarEvent } from '@/lib/types';
+// Note: CalendarEvent type will now have string dates, matching the schema
+import type { CalendarEvent as AppCalendarEvent } from '@/lib/types';
 import ICAL from 'ical.js';
 
 const IcalProcessorInputSchema = z.object({
@@ -19,16 +20,18 @@ const IcalProcessorInputSchema = z.object({
 export type IcalProcessorInput = z.infer<typeof IcalProcessorInputSchema>;
 
 // Define a Zod schema for CalendarEvent to be used in the flow output
+// This schema expects ISO date strings
 const CalendarEventSchema = z.object({
   id: z.string(),
   title: z.string(),
-  startTime: z.date(),
-  endTime: z.date(),
+  startTime: z.string().datetime({ offset: true }).describe("Start time in ISO 8601 format"),
+  endTime: z.string().datetime({ offset: true }).describe("End time in ISO 8601 format"),
   calendarSource: z.string(),
   color: z.string(),
   isAllDay: z.boolean().optional(),
 });
 const IcalProcessorOutputSchema = z.array(CalendarEventSchema);
+// This type will be z.infer<typeof IcalProcessorOutputSchema>, which has string dates
 export type IcalProcessorOutput = z.infer<typeof IcalProcessorOutputSchema>;
 
 const predefinedColors = [
@@ -70,33 +73,28 @@ const icalProcessorFlow = ai.defineFlow(
       const calendarComponent = new ICAL.Component(jcalData);
       const vevents = calendarComponent.getAllSubcomponents('vevent');
       
-      const processedEvents: CalendarEvent[] = [];
+      const processedEvents: IcalProcessorOutput = []; // Type matches schema (string dates)
       const feedColor = assignColor();
 
       for (const veventComponent of vevents) {
         const event = new ICAL.Event(veventComponent);
 
         if (event.summary && event.startDate) {
-          const startTime = event.startDate.toJSDate();
-          let endTime = event.endDate ? event.endDate.toJSDate() : new Date(startTime);
+          let startTimeDate = event.startDate.toJSDate();
+          let endTimeDate = event.endDate ? event.endDate.toJSDate() : new Date(startTimeDate);
 
           const isAllDay = event.startDate.isDate;
 
           if (isAllDay) {
-            // For all-day events, ical.js endDate is often the start of the next day.
-            // Adjust to be the end of the current day for consistency.
-            // Ensure startTime is at the beginning of the day for all-day events.
-            startTime.setHours(0, 0, 0, 0);
-
-            if (endTime.getTime() > startTime.getTime() && 
-                endTime.getHours() === 0 && 
-                endTime.getMinutes() === 0 && 
-                endTime.getSeconds() === 0) {
-              endTime = new Date(endTime.getTime() - 1); // Set to 23:59:59.999 of the previous day
-            } else if (endTime.getTime() === startTime.getTime()) {
-              // If it's an all-day event and end time is same as start, set end to end of day.
-               endTime = new Date(startTime);
-               endTime.setHours(23, 59, 59, 999);
+            startTimeDate.setHours(0, 0, 0, 0);
+            if (endTimeDate.getTime() > startTimeDate.getTime() && 
+                endTimeDate.getHours() === 0 && 
+                endTimeDate.getMinutes() === 0 && 
+                endTimeDate.getSeconds() === 0) {
+              endTimeDate = new Date(endTimeDate.getTime() - 1); 
+            } else if (endTimeDate.getTime() === startTimeDate.getTime()) {
+               endTimeDate = new Date(startTimeDate);
+               endTimeDate.setHours(23, 59, 59, 999);
             }
           }
           
@@ -108,19 +106,17 @@ const icalProcessorFlow = ai.defineFlow(
               calendarSource = cnParam;
             } else if (organizerProp.getValues().length > 0) {
               calendarSource = String(organizerProp.getValues()[0]);
-               // Basic check for mailto link, remove it
               if (calendarSource.toLowerCase().startsWith('mailto:')) {
                 calendarSource = calendarSource.substring(7);
               }
             }
           }
 
-
           processedEvents.push({
-            id: `${icalUrl}-${event.uid || event.startDate.toUnixTime()}`, // Ensure unique ID
+            id: `${icalUrl}-${event.uid || event.startDate.toUnixTime()}`,
             title: String(event.summary || 'Untitled Event'),
-            startTime: startTime,
-            endTime: endTime,
+            startTime: startTimeDate.toISOString(), // Convert to ISO string
+            endTime: endTimeDate.toISOString(),     // Convert to ISO string
             calendarSource: calendarSource,
             color: feedColor, 
             isAllDay: isAllDay,

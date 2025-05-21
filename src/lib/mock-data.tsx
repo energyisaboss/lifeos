@@ -1,5 +1,6 @@
+
 import type { NewsArticle, CalendarEvent, EnvironmentalData, Asset, AssetPortfolio, AssetHolding } from './types';
-import { CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Moon, Sun, Thermometer, Wind } from 'lucide-react';
+import { CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Moon, Sun } from 'lucide-react';
 
 export const mockNewsArticles: NewsArticle[] = [
   { id: '1', title: 'Global Tech Summit Concludes with AI Breakthroughs', source: 'Tech Chronicle', summary: 'The annual Global Tech Summit saw major announcements in AI and quantum computing...', url: '#', category: 'Technology', publishedAt: '2024-07-28T10:00:00Z' },
@@ -9,12 +10,31 @@ export const mockNewsArticles: NewsArticle[] = [
 ];
 
 const today = new Date();
+const createDate = (dayOffset: number, hour: number, minute: number) => {
+  const date = new Date(today);
+  date.setDate(today.getDate() + dayOffset);
+  date.setHours(hour, minute, 0, 0);
+  return date.toISOString();
+};
+
+const createAllDayDate = (dayOffset: number, start: boolean) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() + dayOffset);
+    if (start) {
+        date.setHours(0,0,0,0);
+    } else {
+        date.setHours(23,59,59,999);
+    }
+    return date.toISOString();
+}
+
+
 export const mockCalendarEvents: CalendarEvent[] = [
-  { id: '1', title: 'Team Meeting', startTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 10, 0), endTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 11, 0), calendarSource: 'Work Calendar', color: 'hsl(var(--chart-1))' },
-  { id: '2', title: 'Dentist Appointment', startTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 14, 30), endTime: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 15, 30), calendarSource: 'Personal Calendar', color: 'hsl(var(--chart-2))' },
-  { id: '3', title: 'Project Deadline', startTime: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 17, 0), endTime: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 17, 0), calendarSource: 'Work Calendar', color: 'hsl(var(--chart-1))', isAllDay: false },
-  { id: '4', title: 'Gym Session', startTime: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 2, 7, 0), endTime: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 2, 8, 0), calendarSource: 'Fitness Calendar', color: 'hsl(var(--chart-3))' },
-  { id: '5', title: 'Weekend Getaway', startTime: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3, 0, 0), endTime: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 5, 0, 0), calendarSource: 'Personal Calendar', color: 'hsl(var(--chart-2))', isAllDay: true },
+  { id: '1', title: 'Team Meeting', startTime: createDate(0, 10, 0), endTime: createDate(0, 11, 0), calendarSource: 'Work Calendar', color: 'hsl(var(--chart-1))' },
+  { id: '2', title: 'Dentist Appointment', startTime: createDate(0, 14, 30), endTime: createDate(0, 15, 30), calendarSource: 'Personal Calendar', color: 'hsl(var(--chart-2))' },
+  { id: '3', title: 'Project Deadline', startTime: createDate(1, 17, 0), endTime: createDate(1, 17, 0), calendarSource: 'Work Calendar', color: 'hsl(var(--chart-1))', isAllDay: false },
+  { id: '4', title: 'Gym Session', startTime: createDate(2, 7, 0), endTime: createDate(2, 8, 0), calendarSource: 'Fitness Calendar', color: 'hsl(var(--chart-3))' },
+  { id: '5', title: 'Weekend Getaway', startTime: createAllDayDate(3, true), endTime: createAllDayDate(5, false), calendarSource: 'Personal Calendar', color: 'hsl(var(--chart-2))', isAllDay: true },
 ];
 
 

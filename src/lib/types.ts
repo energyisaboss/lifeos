@@ -12,8 +12,8 @@ export interface NewsArticle {
 export interface CalendarEvent {
   id: string;
   title: string;
-  startTime: Date;
-  endTime: Date;
+  startTime: string; // Changed from Date
+  endTime: string;   // Changed from Date
   calendarSource: string; // e.g., 'Google Calendar', 'Outlook'
   color: string; // Hex color for visual distinction
   isAllDay?: boolean;

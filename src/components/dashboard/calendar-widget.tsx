@@ -5,8 +5,8 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
 import { CalendarDays, LinkIcon, PlusCircle, Trash2 } from 'lucide-react';
-import type { CalendarEvent } from '@/lib/types';
-import { mockCalendarEvents } from '@/lib/mock-data.tsx';
+import type { CalendarEvent } from '@/lib/types'; // CalendarEvent now has string dates
+import { mockCalendarEvents } from '@/lib/mock-data.tsx'; // mockCalendarEvents now have string dates
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,12 @@ import { toast } from '@/hooks/use-toast';
 
 const MAX_ICAL_FEEDS = 3;
 
+// Helper type for internal use with Date objects after parsing
+interface ParsedCalendarEvent extends Omit<CalendarEvent, 'startTime' | 'endTime'> {
+  startTime: Date;
+  endTime: Date;
+}
+
 export function CalendarWidget() {
   const [icalUrls, setIcalUrls] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
@@ -26,9 +32,15 @@ export function CalendarWidget() {
     return [];
   });
   const [newIcalUrl, setNewIcalUrl] = useState('');
-  const [allEvents, setAllEvents] = useState<CalendarEvent[]>([]);
+  const [allEvents, setAllEvents] = useState<ParsedCalendarEvent[]>([]); // Internal state uses Date objects
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const parseEventDates = (event: CalendarEvent): ParsedCalendarEvent => ({
+    ...event,
+    startTime: new Date(event.startTime),
+    endTime: new Date(event.endTime),
+  });
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -36,23 +48,27 @@ export function CalendarWidget() {
     }
 
     const fetchAndProcessEvents = async () => {
-      if (icalUrls.length === 0) {
-        setAllEvents([...mockCalendarEvents]); // Keep mock events if no URLs
-        return;
-      }
-
       setIsLoading(true);
       setError(null);
+      
+      // Parse mock events
+      const parsedMockEvents = mockCalendarEvents.map(parseEventDates);
+
+      if (icalUrls.length === 0) {
+        setAllEvents(parsedMockEvents);
+        setIsLoading(false);
+        return;
+      }
       
       const results = await Promise.allSettled(
         icalUrls.map(url => processIcalFeed({ icalUrl: url }))
       );
 
-      const fetchedEvents: CalendarEvent[] = [];
+      const fetchedEventsStrings: CalendarEvent[] = [];
       let hasErrors = false;
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') {
-          fetchedEvents.push(...result.value);
+          fetchedEventsStrings.push(...result.value);
         } else {
           console.error(`Error fetching/processing iCal feed ${icalUrls[index]}:`, result.reason);
           setError(prevError => prevError ? `${prevError}, Failed to load ${icalUrls[index].substring(0,30)}...` : `Failed to load ${icalUrls[index].substring(0,30)}...`);
@@ -68,9 +84,8 @@ export function CalendarWidget() {
         });
       }
 
-      // Combine with mock events or replace, depending on desired behavior.
-      // For now, let's show both:
-      setAllEvents([...mockCalendarEvents, ...fetchedEvents]);
+      const parsedFetchedEvents = fetchedEventsStrings.map(parseEventDates);
+      setAllEvents([...parsedMockEvents, ...parsedFetchedEvents]);
       setIsLoading(false);
     };
 
@@ -80,7 +95,6 @@ export function CalendarWidget() {
   const handleAddIcalUrl = async (e: FormEvent) => {
     e.preventDefault();
     if (newIcalUrl && !icalUrls.includes(newIcalUrl) && icalUrls.length < MAX_ICAL_FEEDS) {
-      // Basic validation for .ics or webcal protocol
       if (!newIcalUrl.toLowerCase().endsWith('.ics') && !newIcalUrl.toLowerCase().startsWith('webcal://')) {
          toast({
           title: "Invalid URL",
@@ -105,15 +119,13 @@ export function CalendarWidget() {
   };
   
   const upcomingEvents = allEvents
-    .filter(event => event.startTime >= new Date(new Date().setHours(0,0,0,0))) // Today or future
+    .filter(event => event.startTime >= new Date(new Date().setHours(0,0,0,0))) 
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
-    .slice(0, 15); // Limit displayed events
+    .slice(0, 15);
 
-  const formatEventTime = (event: CalendarEvent) => {
+  const formatEventTime = (event: ParsedCalendarEvent) => {
     if (event.isAllDay) return "All Day";
     const start = format(event.startTime, 'p');
-    // If end time is not meaningfully different from start time (e.g., for zero-duration or very short events from iCal)
-    // or if it's the same day and same time, just show start time.
     if (!event.endTime || event.endTime.getTime() === event.startTime.getTime() || 
         (format(event.endTime, 'p') === start && event.startTime.toDateString() === event.endTime.toDateString())) {
       return start;
@@ -122,7 +134,7 @@ export function CalendarWidget() {
     return `${start} - ${end}`;
   };
   
-  const formatEventDate = (event: CalendarEvent) => {
+  const formatEventDate = (event: ParsedCalendarEvent) => {
     return format(event.startTime, 'EEE, MMM d');
   }
 
