@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -6,26 +7,34 @@ import { SectionTitle } from './section-title';
 import { Clock } from 'lucide-react';
 
 export function DateTimeWidget() {
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
 
   useEffect(() => {
+    // Set initial time on client mount
+    setCurrentTime(new Date());
+
     const timerId = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
     return () => clearInterval(timerId);
   }, []);
 
-  const formattedDate = currentTime.toLocaleDateString(undefined, {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-  const formattedTime = currentTime.toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  const formattedTime = currentTime
+    ? currentTime.toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
+    : '--:--:--'; // Placeholder for initial render
+
+  const formattedDate = currentTime
+    ? currentTime.toLocaleDateString(undefined, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : 'Loading date...'; // Placeholder for initial render
 
   return (
     <Card className="shadow-lg">
