@@ -5,7 +5,7 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
 import { CalendarDays, LinkIcon, PlusCircle, Trash2 } from 'lucide-react';
-import type { CalendarEvent as AppCalendarEvent } from '@/lib/types'; // CalendarEvent now has string dates
+import type { CalendarEvent as AppCalendarEvent } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -16,22 +16,28 @@ import { toast } from '@/hooks/use-toast';
 
 const MAX_ICAL_FEEDS = 3;
 
-// Helper type for internal use with Date objects after parsing
+interface IcalFeedItem {
+  id: string;
+  url: string;
+  label: string;
+}
+
 interface ParsedCalendarEvent extends Omit<AppCalendarEvent, 'startTime' | 'endTime'> {
   startTime: Date;
   endTime: Date;
 }
 
 export function CalendarWidget() {
-  const [icalUrls, setIcalUrls] = useState<string[]>(() => {
+  const [icalFeeds, setIcalFeeds] = useState<IcalFeedItem[]>(() => {
     if (typeof window !== 'undefined') {
-      const savedUrls = localStorage.getItem('icalUrls');
-      return savedUrls ? JSON.parse(savedUrls) : [];
+      const savedFeeds = localStorage.getItem('icalFeeds');
+      return savedFeeds ? JSON.parse(savedFeeds) : [];
     }
     return [];
   });
   const [newIcalUrl, setNewIcalUrl] = useState('');
-  const [allEvents, setAllEvents] = useState<ParsedCalendarEvent[]>([]); // Internal state uses Date objects
+  const [newIcalLabel, setNewIcalLabel] = useState('');
+  const [allEvents, setAllEvents] = useState<ParsedCalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,32 +53,32 @@ export function CalendarWidget() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('icalUrls', JSON.stringify(icalUrls));
+      localStorage.setItem('icalFeeds', JSON.stringify(icalFeeds));
     }
 
     const fetchAndProcessEvents = async () => {
       setIsLoading(true);
       setError(null);
       
-      if (icalUrls.length === 0) {
+      if (icalFeeds.length === 0) {
         setAllEvents([]); 
         setIsLoading(false);
         return;
       }
       
       const results = await Promise.allSettled(
-        icalUrls.map(url => processIcalFeed({ icalUrl: url }))
+        icalFeeds.map(feed => processIcalFeed({ icalUrl: feed.url, label: feed.label }))
       );
 
       const fetchedEventsStrings: AppCalendarEvent[] = [];
       let hasErrors = false;
       results.forEach((result, index) => {
+        const feed = icalFeeds[index];
         if (result.status === 'fulfilled') {
           fetchedEventsStrings.push(...result.value);
         } else {
-          console.error(`Error fetching/processing iCal feed ${icalUrls[index]}:`, result.reason);
-          const shortUrl = icalUrls[index].length > 30 ? `${icalUrls[index].substring(0,30)}...` : icalUrls[index];
-          setError(prevError => prevError ? `${prevError}, Failed to load ${shortUrl}` : `Failed to load ${shortUrl}`);
+          console.error(`Error fetching/processing iCal feed ${feed.label} (${feed.url}):`, result.reason);
+          setError(prevError => prevError ? `${prevError}, Failed to load ${feed.label}` : `Failed to load ${feed.label}`);
           hasErrors = true;
         }
       });
@@ -80,7 +86,7 @@ export function CalendarWidget() {
       if (hasErrors) {
         toast({
           title: "Error Loading Feeds",
-          description: "Some iCalendar feeds could not be loaded. Please check URLs.",
+          description: "Some iCalendar feeds could not be loaded. Please check URLs and labels.",
           variant: "destructive",
         });
       }
@@ -91,11 +97,11 @@ export function CalendarWidget() {
     };
 
     fetchAndProcessEvents();
-  }, [icalUrls]);
+  }, [icalFeeds]);
 
-  const handleAddIcalUrl = async (e: FormEvent) => {
+  const handleAddIcalFeed = async (e: FormEvent) => {
     e.preventDefault();
-    if (newIcalUrl && !icalUrls.includes(newIcalUrl) && icalUrls.length < MAX_ICAL_FEEDS) {
+    if (newIcalUrl && icalFeeds.length < MAX_ICAL_FEEDS) {
       if (!newIcalUrl.toLowerCase().endsWith('.ics') && !newIcalUrl.toLowerCase().startsWith('webcal://') && !newIcalUrl.toLowerCase().startsWith('http://') && !newIcalUrl.toLowerCase().startsWith('https://')) {
          toast({
           title: "Invalid URL",
@@ -104,9 +110,17 @@ export function CalendarWidget() {
         });
         return;
       }
-      setIcalUrls(prev => [...prev, newIcalUrl]);
+      if (icalFeeds.some(feed => feed.url === newIcalUrl)) {
+        toast({ title: "Feed Exists", description: "This iCal feed URL has already been added.", variant: "destructive" });
+        return;
+      }
+      
+      const feedLabel = newIcalLabel.trim() || newIcalUrl;
+      
+      setIcalFeeds(prev => [...prev, { id: Date.now().toString(), url: newIcalUrl, label: feedLabel }]);
       setNewIcalUrl('');
-    } else if (icalUrls.length >= MAX_ICAL_FEEDS) {
+      setNewIcalLabel('');
+    } else if (icalFeeds.length >= MAX_ICAL_FEEDS) {
         toast({
           title: "Feed Limit Reached",
           description: `You can add a maximum of ${MAX_ICAL_FEEDS} iCalendar feeds.`,
@@ -115,8 +129,8 @@ export function CalendarWidget() {
     }
   };
 
-  const handleRemoveIcalUrl = (urlToRemove: string) => {
-    setIcalUrls(prev => prev.filter(url => url !== urlToRemove));
+  const handleRemoveIcalFeed = (idToRemove: string) => {
+    setIcalFeeds(prev => prev.filter(feed => feed.id !== idToRemove));
   };
   
   const upcomingEvents = allEvents
@@ -168,30 +182,41 @@ export function CalendarWidget() {
       </CardContent>
       <Separator className="mx-4" />
       <CardFooter className="px-4 pt-3 pb-4 flex-col items-start">
-        <form onSubmit={handleAddIcalUrl} className="flex gap-2 w-full">
+        <form onSubmit={handleAddIcalFeed} className="flex flex-col sm:flex-row gap-2 w-full">
           <Input
-            type="url"
-            placeholder="Add iCal feed URL (.ics or webcal://)"
-            value={newIcalUrl}
-            onChange={(e) => setNewIcalUrl(e.target.value)}
-            className="h-9 text-xs"
-            disabled={icalUrls.length >= MAX_ICAL_FEEDS}
+            type="text"
+            placeholder="Label (e.g., Work)"
+            value={newIcalLabel}
+            onChange={(e) => setNewIcalLabel(e.target.value)}
+            className="h-9 text-xs sm:flex-1"
+            disabled={icalFeeds.length >= MAX_ICAL_FEEDS}
           />
-          <Button type="submit" size="sm" variant="outline" className="h-9" disabled={icalUrls.length >= MAX_ICAL_FEEDS || !newIcalUrl}>
-            <PlusCircle className="w-4 h-4" />
-          </Button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Input
+              type="url"
+              placeholder="iCal feed URL (.ics or webcal://)"
+              value={newIcalUrl}
+              onChange={(e) => setNewIcalUrl(e.target.value)}
+              className="h-9 text-xs flex-grow"
+              disabled={icalFeeds.length >= MAX_ICAL_FEEDS}
+              required
+            />
+            <Button type="submit" size="sm" variant="outline" className="h-9" disabled={icalFeeds.length >= MAX_ICAL_FEEDS || !newIcalUrl}>
+              <PlusCircle className="w-4 h-4" />
+            </Button>
+          </div>
         </form>
-        {icalUrls.length > 0 && (
+        {icalFeeds.length > 0 && (
           <div className="w-full space-y-1 mt-3">
-            <p className="text-xs text-muted-foreground">Active Feeds ({icalUrls.length}/{MAX_ICAL_FEEDS}):</p>
+            <p className="text-xs text-muted-foreground">Active Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS}):</p>
             <ScrollArea className="h-auto max-h-[60px]">
-            {icalUrls.map(url => (
-              <div key={url} className="flex items-center justify-between text-xs bg-muted/50 p-1.5 rounded-sm">
+            {icalFeeds.map(feed => (
+              <div key={feed.id} className="flex items-center justify-between text-xs bg-muted/50 p-1.5 rounded-sm">
                 <div className="flex items-center space-x-1 truncate">
                   <LinkIcon className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                  <span className="truncate" title={url}>{url}</span>
+                  <span className="truncate" title={feed.url}>{feed.label}</span>
                 </div>
-                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleRemoveIcalUrl(url)}>
+                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleRemoveIcalFeed(feed.id)}>
                   <Trash2 className="w-3 h-3 text-destructive" />
                 </Button>
               </div>
@@ -203,3 +228,4 @@ export function CalendarWidget() {
     </Card>
   );
 }
+

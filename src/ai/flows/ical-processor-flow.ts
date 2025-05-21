@@ -15,6 +15,7 @@ import ICAL from 'ical.js';
 
 const IcalProcessorInputSchema = z.object({
   icalUrl: z.string().url().describe('The URL of the iCalendar (.ics) feed.'),
+  label: z.string().optional().describe('An optional label for the calendar feed.'),
 });
 export type IcalProcessorInput = z.infer<typeof IcalProcessorInputSchema>;
 
@@ -58,7 +59,7 @@ const icalProcessorFlow = ai.defineFlow(
     inputSchema: IcalProcessorInputSchema,
     outputSchema: IcalProcessorOutputSchema,
   },
-  async ({ icalUrl }) => {
+  async ({ icalUrl, label: feedLabelInput }) => {
     try {
       const response = await fetch(icalUrl);
       if (!response.ok) {
@@ -69,7 +70,7 @@ const icalProcessorFlow = ai.defineFlow(
       const calendarComponent = new ICAL.Component(jcalData);
       const vevents = calendarComponent.getAllSubcomponents('vevent');
       
-      const processedEvents: IcalProcessorOutput = [];
+      const processedEvents: AppCalendarEvent[] = [];
       const feedColor = assignColor();
 
       const today = new Date();
@@ -82,22 +83,23 @@ const icalProcessorFlow = ai.defineFlow(
         const originalSummary = String(event.summary || 'Untitled Event');
         const originalUid = event.uid || event.startDate?.toUnixTime().toString() || Math.random().toString();
 
-        // Determine calendarSource from organizer (once per main event component)
+        let derivedCalendarSource = icalUrl; // Default
         const organizerProp = veventComponent.getFirstProperty('organizer');
-        let calendarSource = icalUrl; // Default
         if (organizerProp) {
           const cnParam = organizerProp.getParameter('cn');
           if (cnParam) {
-            calendarSource = cnParam;
+            derivedCalendarSource = cnParam;
           } else if (organizerProp.getValues().length > 0) {
             const mailto = String(organizerProp.getValues()[0]);
             if (mailto.toLowerCase().startsWith('mailto:')) {
-              calendarSource = mailto.substring(7);
+              derivedCalendarSource = mailto.substring(7);
             } else {
-              calendarSource = mailto;
+              derivedCalendarSource = mailto;
             }
           }
         }
+        
+        const finalCalendarSource = feedLabelInput || derivedCalendarSource;
 
         const processEventInstance = (
             instanceStartTime: ICAL.Time, 
@@ -117,22 +119,17 @@ const icalProcessorFlow = ai.defineFlow(
                   endTimeDate.getMinutes() === 0 && 
                   endTimeDate.getSeconds() === 0 &&
                   endTimeDate.getMilliseconds() === 0) {
-                // If end date is midnight, it means it spans the whole previous day.
-                // So set it to end of previous day for full-day representation.
                 endTimeDate = new Date(endTimeDate.getTime() - 1); 
               } else if (endTimeDate.getTime() === startTimeDate.getTime()) {
-                 // If no distinct end time or same as start, make it full day up to 23:59:59.999
                  endTimeDate = new Date(startTimeDate);
                  endTimeDate.setHours(23, 59, 59, 999);
               } else if (endTimeDate.getHours() === 0 && endTimeDate.getMinutes() === 0 && endTimeDate.getSeconds() === 0 && endTimeDate.getMilliseconds() === 0) {
-                // if it's an all day event that ends on a specific day at midnight, make it previous day at 23:59...
-                 endTimeDate = new Date(endTimeDate.getTime() -1); // effectively end of day prior
+                 endTimeDate = new Date(endTimeDate.getTime() -1);
               }
             }
             
-            // Ensure the event instance is within our desired window
             if (endTimeDate < today || startTimeDate >= expansionEndDate) {
-              return; // Skip event if it's entirely in the past or too far in the future
+              return; 
             }
 
             processedEvents.push({
@@ -140,7 +137,7 @@ const icalProcessorFlow = ai.defineFlow(
               title: instanceSummary,
               startTime: startTimeDate.toISOString(),
               endTime: endTimeDate.toISOString(),
-              calendarSource: calendarSource,
+              calendarSource: finalCalendarSource,
               color: feedColor,
               isAllDay: isAllDay,
             });
@@ -151,21 +148,21 @@ const icalProcessorFlow = ai.defineFlow(
           let nextOccurrenceTime: ICAL.Time | null;
 
           while ((nextOccurrenceTime = iterator.next()) && nextOccurrenceTime.toJSDate() < expansionEndDate) {
-            if (nextOccurrenceTime.toJSDate() >= today || event.endDate?.toJSDate() >= today) { //Also consider events that started in past but end in future
+            if (nextOccurrenceTime.toJSDate() >= today || event.endDate?.toJSDate() >= today) { 
               const occurrenceDetails = event.getOccurrenceDetails(nextOccurrenceTime);
               processEventInstance(
                 occurrenceDetails.startDate,
                 occurrenceDetails.endDate,
                 String(occurrenceDetails.item.summary || originalSummary),
-                originalUid, // Use base event UID for recurring series
-                occurrenceDetails.recurrenceId.toJSDate().toISOString() // Use recurrenceId to make the instance unique
+                originalUid, 
+                occurrenceDetails.recurrenceId.toJSDate().toISOString() 
               );
             }
           }
-        } else if (event.startDate) { // Single, non-recurring event
+        } else if (event.startDate) { 
             processEventInstance(
                 event.startDate,
-                event.endDate || event.startDate, // If no end date, assume same as start
+                event.endDate || event.startDate, 
                 originalSummary,
                 originalUid
             );
@@ -174,7 +171,6 @@ const icalProcessorFlow = ai.defineFlow(
       return processedEvents.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
     } catch (error) {
       console.error(`Error processing iCal feed ${icalUrl} with ical.js:`, error);
-      // Check if error is an instance of Error and has a message property
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw new Error(`Failed to process iCal feed ${icalUrl}: ${errorMessage}`);
     }
