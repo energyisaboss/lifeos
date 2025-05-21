@@ -4,7 +4,7 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { CalendarDays, LinkIcon, PlusCircle, Trash2, Pencil, Check, XCircle } from 'lucide-react';
+import { CalendarDays, LinkIcon, PlusCircle, Trash2, Pencil, Check, XCircle, Settings } from 'lucide-react';
 import type { CalendarEvent as AppCalendarEvent } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,7 @@ interface ParsedCalendarEvent extends Omit<AppCalendarEvent, 'startTime' | 'endT
 }
 
 export function CalendarWidget() {
+  const [showFeedManagement, setShowFeedManagement] = useState(false);
   const [icalFeeds, setIcalFeeds] = useState<IcalFeedItem[]>(() => {
     if (typeof window !== 'undefined') {
       const savedFeeds = localStorage.getItem('icalFeeds');
@@ -204,7 +205,17 @@ export function CalendarWidget() {
   return (
     <Card className="shadow-lg flex flex-col h-full">
       <CardHeader>
-        <SectionTitle icon={CalendarDays} title="Upcoming Events" />
+        <div className="flex justify-between items-center">
+          <SectionTitle icon={CalendarDays} title="Upcoming Events" />
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setShowFeedManagement(!showFeedManagement)}
+            aria-label="Manage iCal Feeds"
+          >
+            <Settings className="w-4 h-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="px-4 py-0 flex-grow overflow-hidden flex flex-col">
         <ScrollArea className="flex-1 pr-3">
@@ -232,74 +243,80 @@ export function CalendarWidget() {
           )}
         </ScrollArea>
       </CardContent>
-      <Separator className="mx-4" />
-      <CardFooter className="px-4 pt-3 pb-4 flex-col items-start">
-        <form onSubmit={handleFormSubmit} className="flex flex-col sm:flex-row gap-2 w-full items-start mt-2">
-          <Input
-            type="text"
-            placeholder="Label (e.g., Work)"
-            value={newIcalLabel}
-            onChange={(e) => setNewIcalLabel(e.target.value)}
-            className="h-9 text-xs sm:flex-1"
-            disabled={!editingFeedId && icalFeeds.length >= MAX_ICAL_FEEDS}
-          />
-          <div className="flex gap-2 w-full sm:w-auto">
-            <Input
-              type="url"
-              placeholder="iCal feed URL (.ics or webcal://)"
-              value={newIcalUrl}
-              onChange={(e) => setNewIcalUrl(e.target.value)}
-              className="h-9 text-xs flex-grow"
-              disabled={!editingFeedId && icalFeeds.length >= MAX_ICAL_FEEDS}
-              required
-            />
-            {editingFeedId ? (
-              <>
-                <Button type="submit" size="sm" variant="outline" className="h-9" disabled={isSaveDisabled}>
-                  <Check className="w-4 h-4" />
-                </Button>
-                <Button type="button" size="sm" variant="ghost" className="h-9" onClick={cancelEditFeed}>
-                  <XCircle className="w-4 h-4" />
-                </Button>
-              </>
-            ) : (
-              <Button type="submit" size="sm" variant="outline" className="h-9" disabled={isAddDisabled}>
-                <PlusCircle className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
-        </form>
-        {icalFeeds.length > 0 && (
-          <div className="w-full space-y-1 mt-3">
-            <p className="text-xs text-muted-foreground">Active Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS}):</p>
-            <ScrollArea className="h-auto max-h-[70px] pr-1">
-            {icalFeeds.map(feed => (
-              <div key={feed.id} className="flex w-full items-center text-xs bg-muted/50 p-1.5 rounded-sm mb-1 last:mb-0">
-                <span className="font-medium truncate mr-1.5" title={feed.label}>
-                  {feed.label}
-                </span>
-                <LinkIcon className="w-3 h-3 text-muted-foreground flex-shrink-0 mr-1.5" />
-                <span className="text-muted-foreground truncate flex-1 min-w-0" title={feed.url}>
-                  {feed.url}
-                </span>
-                <div className="flex items-center flex-shrink-0 ml-auto pl-1 space-x-1">
-                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => startEditFeed(feed)}>
-                    <Pencil className="w-3 h-3 text-primary" />
+      
+      {showFeedManagement && (
+        <>
+          <Separator className="mx-4" />
+          <CardFooter className="px-4 pt-3 pb-4 flex-col items-start">
+            <form onSubmit={handleFormSubmit} className="flex flex-col sm:flex-row gap-2 w-full items-start mt-2">
+              <Input
+                type="text"
+                placeholder="Label (e.g., Work)"
+                value={newIcalLabel}
+                onChange={(e) => setNewIcalLabel(e.target.value)}
+                className="h-9 text-xs sm:flex-1"
+                disabled={!editingFeedId && icalFeeds.length >= MAX_ICAL_FEEDS}
+              />
+              <div className="flex gap-2 w-full sm:w-auto">
+                <Input
+                  type="url"
+                  placeholder="iCal feed URL (.ics or webcal://)"
+                  value={newIcalUrl}
+                  onChange={(e) => setNewIcalUrl(e.target.value)}
+                  className="h-9 text-xs flex-grow"
+                  disabled={!editingFeedId && icalFeeds.length >= MAX_ICAL_FEEDS}
+                  required
+                />
+                {editingFeedId ? (
+                  <>
+                    <Button type="submit" size="sm" variant="outline" className="h-9" disabled={isSaveDisabled}>
+                      <Check className="w-4 h-4" />
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" className="h-9" onClick={cancelEditFeed}>
+                      <XCircle className="w-4 h-4" />
+                    </Button>
+                  </>
+                ) : (
+                  <Button type="submit" size="sm" variant="outline" className="h-9" disabled={isAddDisabled}>
+                    <PlusCircle className="w-4 h-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleRemoveIcalFeed(feed.id)}>
-                    <Trash2 className="w-3 h-3 text-destructive" />
-                  </Button>
-                </div>
+                )}
               </div>
-            ))}
-            </ScrollArea>
-          </div>
-        )}
-      </CardFooter>
+            </form>
+            {icalFeeds.length > 0 && (
+              <div className="w-full space-y-1 mt-3">
+                <p className="text-xs text-muted-foreground">Active Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS}):</p>
+                <ScrollArea className="h-auto max-h-[70px] pr-1">
+                {icalFeeds.map(feed => (
+                  <div key={feed.id} className="flex w-full items-center text-xs bg-muted/50 p-1.5 rounded-sm mb-1 last:mb-0">
+                    <span className="font-medium truncate mr-1.5" title={feed.label}>
+                      {feed.label}
+                    </span>
+                    <LinkIcon className="w-3 h-3 text-muted-foreground flex-shrink-0 mr-1.5" />
+                    <span className="text-muted-foreground truncate flex-1 min-w-0" title={feed.url}>
+                      {feed.url}
+                    </span>
+                    <div className="flex items-center flex-shrink-0 ml-auto pl-1 space-x-1">
+                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => startEditFeed(feed)}>
+                        <Pencil className="w-3 h-3 text-primary" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleRemoveIcalFeed(feed.id)}>
+                        <Trash2 className="w-3 h-3 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                </ScrollArea>
+              </div>
+            )}
+          </CardFooter>
+        </>
+      )}
     </Card>
   );
 }
     
 
       
+
 
