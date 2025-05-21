@@ -28,10 +28,21 @@ interface ParsedCalendarEvent extends Omit<AppCalendarEvent, 'startTime' | 'endT
 }
 
 export function CalendarWidget() {
-  const [icalFeeds, setIcalFeeds] = useState<IcalFeedItem[]>(() => {
+  const [icalFeeds, setIcalFeEDS] = useState<IcalFeedItem[]>(() => {
     if (typeof window !== 'undefined') {
       const savedFeeds = localStorage.getItem('icalFeeds');
-      return savedFeeds ? JSON.parse(savedFeeds) : [];
+      try {
+        const parsed = savedFeeds ? JSON.parse(savedFeeds) : [];
+        // Ensure all items have id, url, and label
+        return Array.isArray(parsed) ? parsed.map(item => ({
+          id: item.id || Date.now().toString() + Math.random(), // Ensure ID
+          url: item.url || '',
+          label: item.label || item.url || 'Unnamed Feed', // Ensure label
+        })).filter(item => item.url) : []; // Filter out items without URL
+      } catch (e) {
+        console.error("Failed to parse iCal feeds from localStorage", e);
+        return [];
+      }
     }
     return [];
   });
@@ -107,7 +118,7 @@ export function CalendarWidget() {
       toast({ title: "URL Required", description: "Please enter an iCal feed URL.", variant: "destructive" });
       return;
     }
-    if (!newIcalUrl.toLowerCase().endsWith('.ics') && !newIcalUrl.toLowerCase().startsWith('webcal://') && !newIcalUrl.toLowerCase().startsWith('http://') && !newIcalUrl.toLowerCase().startsWith('https://')) {
+     if (!newIcalUrl.toLowerCase().endsWith('.ics') && !newIcalUrl.toLowerCase().startsWith('webcal://') && !newIcalUrl.toLowerCase().startsWith('http://') && !newIcalUrl.toLowerCase().startsWith('https://')) {
        toast({
         title: "Invalid URL",
         description: "Please enter a valid iCalendar URL (ending in .ics, or starting with webcal://, http://, or https://).",
@@ -119,8 +130,7 @@ export function CalendarWidget() {
     const feedLabel = newIcalLabel.trim() || newIcalUrl;
 
     if (editingFeedId) {
-      // Editing existing feed
-      setIcalFeeds(prevFeeds => 
+      setIcalFeEDS(prevFeeds => 
         prevFeeds.map(feed => 
           feed.id === editingFeedId ? { ...feed, url: newIcalUrl, label: feedLabel } : feed
         )
@@ -128,7 +138,6 @@ export function CalendarWidget() {
       toast({ title: "Feed Updated", description: `Feed "${feedLabel}" has been updated.` });
       setEditingFeedId(null);
     } else {
-      // Adding new feed
       if (icalFeeds.length >= MAX_ICAL_FEEDS) {
         toast({
           title: "Feed Limit Reached",
@@ -141,7 +150,7 @@ export function CalendarWidget() {
         toast({ title: "Feed Exists", description: "This iCal feed URL and label combination has already been added.", variant: "destructive" });
         return;
       }
-      setIcalFeeds(prev => [...prev, { id: Date.now().toString(), url: newIcalUrl, label: feedLabel }]);
+      setIcalFeEDS(prev => [...prev, { id: Date.now().toString(), url: newIcalUrl, label: feedLabel }]);
       toast({ title: "Feed Added", description: `Feed "${feedLabel}" has been added.` });
     }
     setNewIcalUrl('');
@@ -149,8 +158,8 @@ export function CalendarWidget() {
   };
 
   const handleRemoveIcalFeed = (idToRemove: string) => {
-    setIcalFeeds(prev => prev.filter(feed => feed.id !== idToRemove));
-    if (editingFeedId === idToRemove) { // If removing the feed being edited, cancel edit mode
+    setIcalFeEDS(prev => prev.filter(feed => feed.id !== idToRemove));
+    if (editingFeedId === idToRemove) {
       setEditingFeedId(null);
       setNewIcalUrl('');
       setNewIcalLabel('');
@@ -266,19 +275,20 @@ export function CalendarWidget() {
             <p className="text-xs text-muted-foreground">Active Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS}):</p>
             <ScrollArea className="h-auto max-h-[70px] pr-1">
             {icalFeeds.map(feed => (
-              <div key={feed.id} className="flex items-center justify-between text-xs bg-muted/50 p-1.5 rounded-sm mb-1 last:mb-0">
-                <div className="flex items-center space-x-1 truncate">
-                  <LinkIcon className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                  <span className="truncate" title={feed.url}>{feed.label}</span>
-                </div>
-                <div className="flex items-center">
-                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => startEditFeed(feed)}>
-                    <Pencil className="w-3 h-3 text-primary" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleRemoveIcalFeed(feed.id)}>
-                    <Trash2 className="w-3 h-3 text-destructive" />
-                  </Button>
-                </div>
+              <div key={feed.id} className="flex w-full items-center text-xs bg-muted/50 p-1.5 rounded-sm mb-1 last:mb-0 space-x-1.5">
+                <span className="font-medium truncate" title={feed.label}>
+                  {feed.label}
+                </span>
+                <LinkIcon className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                <span className="text-muted-foreground truncate flex-1 min-w-0" title={feed.url}>
+                  {feed.url}
+                </span>
+                <Button variant="ghost" size="icon" className="h-5 w-5 flex-shrink-0" onClick={() => startEditFeed(feed)}>
+                  <Pencil className="w-3 h-3 text-primary" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-5 w-5 flex-shrink-0" onClick={() => handleRemoveIcalFeed(feed.id)}>
+                  <Trash2 className="w-3 h-3 text-destructive" />
+                </Button>
               </div>
             ))}
             </ScrollArea>
