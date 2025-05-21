@@ -28,17 +28,16 @@ interface ParsedCalendarEvent extends Omit<AppCalendarEvent, 'startTime' | 'endT
 }
 
 export function CalendarWidget() {
-  const [icalFeeds, setIcalFeEDS] = useState<IcalFeedItem[]>(() => {
+  const [icalFeeds, setIcalFeeds] = useState<IcalFeedItem[]>(() => {
     if (typeof window !== 'undefined') {
       const savedFeeds = localStorage.getItem('icalFeeds');
       try {
         const parsed = savedFeeds ? JSON.parse(savedFeeds) : [];
-        // Ensure all items have id, url, and label
         return Array.isArray(parsed) ? parsed.map(item => ({
-          id: item.id || Date.now().toString() + Math.random(), // Ensure ID
+          id: item.id || Date.now().toString() + Math.random(),
           url: item.url || '',
-          label: item.label || item.url || 'Unnamed Feed', // Ensure label
-        })).filter(item => item.url) : []; // Filter out items without URL
+          label: item.label || item.url || 'Unnamed Feed',
+        })).filter(item => item.url) : [];
       } catch (e) {
         console.error("Failed to parse iCal feeds from localStorage", e);
         return [];
@@ -130,7 +129,7 @@ export function CalendarWidget() {
     const feedLabel = newIcalLabel.trim() || newIcalUrl;
 
     if (editingFeedId) {
-      setIcalFeEDS(prevFeeds => 
+      setIcalFeeds(prevFeeds => 
         prevFeeds.map(feed => 
           feed.id === editingFeedId ? { ...feed, url: newIcalUrl, label: feedLabel } : feed
         )
@@ -150,7 +149,7 @@ export function CalendarWidget() {
         toast({ title: "Feed Exists", description: "This iCal feed URL and label combination has already been added.", variant: "destructive" });
         return;
       }
-      setIcalFeEDS(prev => [...prev, { id: Date.now().toString(), url: newIcalUrl, label: feedLabel }]);
+      setIcalFeeds(prev => [...prev, { id: Date.now().toString(), url: newIcalUrl, label: feedLabel }]);
       toast({ title: "Feed Added", description: `Feed "${feedLabel}" has been added.` });
     }
     setNewIcalUrl('');
@@ -158,7 +157,7 @@ export function CalendarWidget() {
   };
 
   const handleRemoveIcalFeed = (idToRemove: string) => {
-    setIcalFeEDS(prev => prev.filter(feed => feed.id !== idToRemove));
+    setIcalFeeds(prev => prev.filter(feed => feed.id !== idToRemove));
     if (editingFeedId === idToRemove) {
       setEditingFeedId(null);
       setNewIcalUrl('');
@@ -275,20 +274,22 @@ export function CalendarWidget() {
             <p className="text-xs text-muted-foreground">Active Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS}):</p>
             <ScrollArea className="h-auto max-h-[70px] pr-1">
             {icalFeeds.map(feed => (
-              <div key={feed.id} className="flex w-full items-center text-xs bg-muted/50 p-1.5 rounded-sm mb-1 last:mb-0 space-x-1.5">
-                <span className="font-medium truncate" title={feed.label}>
+              <div key={feed.id} className="flex w-full items-center text-xs bg-muted/50 p-1.5 rounded-sm mb-1 last:mb-0">
+                <span className="font-medium truncate mr-1.5" title={feed.label}>
                   {feed.label}
                 </span>
-                <LinkIcon className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                <span className="text-muted-foreground truncate flex-1 min-w-0" title={feed.url}>
+                <LinkIcon className="w-3 h-3 text-muted-foreground flex-shrink-0 mr-1.5" />
+                <span className="text-muted-foreground truncate flex-1 min-w-0 mr-1.5" title={feed.url}>
                   {feed.url}
                 </span>
-                <Button variant="ghost" size="icon" className="h-5 w-5 flex-shrink-0" onClick={() => startEditFeed(feed)}>
-                  <Pencil className="w-3 h-3 text-primary" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-5 w-5 flex-shrink-0" onClick={() => handleRemoveIcalFeed(feed.id)}>
-                  <Trash2 className="w-3 h-3 text-destructive" />
-                </Button>
+                <div className="flex items-center flex-shrink-0 space-x-1">
+                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => startEditFeed(feed)}>
+                    <Pencil className="w-3 h-3 text-primary" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleRemoveIcalFeed(feed.id)}>
+                    <Trash2 className="w-3 h-3 text-destructive" />
+                  </Button>
+                </div>
               </div>
             ))}
             </ScrollArea>
@@ -298,5 +299,6 @@ export function CalendarWidget() {
     </Card>
   );
 }
-
     
+
+      
