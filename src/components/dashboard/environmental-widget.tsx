@@ -12,6 +12,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal, MapPinOff } from "lucide-react";
 
 const IconComponent = ({ name, className, style, ...props }: { name: string, className?: string, style?: React.CSSProperties } & LucideIcons.LucideProps) => {
+  if (!name || typeof name !== 'string') { // Added check for name
+    console.warn(`IconComponent received invalid name: ${name}, falling back to HelpCircle`);
+    return <LucideIcons.HelpCircle className={className} style={style} {...props} />;
+  }
   const Icon = (LucideIcons as any)[name];
   if (!Icon) {
     console.warn(`Icon not found: ${name}, falling back to HelpCircle`);
@@ -83,9 +87,9 @@ export function EnvironmentalWidget() {
           } else if (errorMessage.includes("OPENWEATHER_API_KEY") && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
              setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your .env.local file and restart server.");
           } else if (errorMessage.includes("OPENUV_API_KEY") && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
-             setError("OpenUV API key for UV Index is missing. Please add OPENUV_API_KEY to .env.local and restart.");
+             setError("OpenUV API key for UV Index is missing. Please add OPENUV_API_KEY to .env.local and restart server. Note: OpenUV has low free tier limits.");
           } else if (errorMessage.includes("WEATHERAPI_COM_KEY") && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
-             setError("WeatherAPI.com key for Moon Phase is missing. Please add WEATHERAPI_COM_KEY to .env.local and restart.");
+             setError("WeatherAPI.com key for Moon Phase is missing. Please add WEATHERAPI_COM_KEY to .env.local and restart server. Note: WeatherAPI.com has low free tier limits.");
           } else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.includes("401")) {
               setError("Failed to fetch weather data: Unauthorized. Check your API keys (OpenWeatherMap, OpenUV, WeatherAPI.com), ensure they are active, and subscribed to necessary services.");
           }
@@ -209,6 +213,8 @@ export function EnvironmentalWidget() {
   
   const { locationName, moonPhase, uvIndex, currentWeather, weeklyWeather } = data;
   const moonIconStyle = getMoonIconStyle(moonPhase?.name);
+  const moonIconName = (moonPhase?.iconName && typeof moonPhase.iconName === 'string') ? moonPhase.iconName : "Moon";
+
 
   return (
     <Card className="shadow-lg">
@@ -239,7 +245,7 @@ export function EnvironmentalWidget() {
           {moonPhase ? (
             <div className="p-3 rounded-md bg-muted/30 min-h-[80px]">
               <div className="flex items-center text-sm text-muted-foreground mb-1">
-                 <IconComponent name={moonPhase.iconName} className="w-4 h-4 mr-2" style={moonIconStyle} />
+                 <IconComponent name={moonIconName} className="w-4 h-4 mr-2 text-primary" style={moonIconStyle} />
                 Moon Phase
               </div>
               <div className="flex items-center">
@@ -252,7 +258,7 @@ export function EnvironmentalWidget() {
           {uvIndex ? (
             <div className="p-3 rounded-md bg-muted/30 min-h-[80px]">
               <div className="flex items-center text-sm text-muted-foreground mb-1">
-                <LucideIcons.Sun className="w-4 h-4 mr-2" />
+                <LucideIcons.Sun className="w-4 h-4 mr-2 text-primary" />
                 UV Index
               </div>
               <p className="text-2xl font-semibold text-primary">{uvIndex.value}</p>
@@ -283,3 +289,6 @@ export function EnvironmentalWidget() {
     </Card>
   );
 }
+
+
+    
