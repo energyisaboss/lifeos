@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
 import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw, LinkIcon } from 'lucide-react';
@@ -49,7 +49,7 @@ export function CalendarWidget() {
         return Array.isArray(parsed) ? parsed.map((item: any, index: number) => ({
           id: item.id || Date.now().toString() + Math.random(),
           url: item.url || '',
-          label: item.label || item.url || `Feed ${index + 1}`,
+          label: item.label || `Feed ${index + 1}`,
           color: item.color || widgetPredefinedColors[index % widgetPredefinedColors.length],
         })).filter(item => typeof item.url === 'string' && typeof item.label === 'string' && typeof item.color === 'string') : [];
       } catch (e) {
@@ -64,6 +64,9 @@ export function CalendarWidget() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [triggerRefetch, setTriggerRefetch] = useState(0);
+  const feedListRef = useRef<HTMLDivElement>(null);
+  const [justAddedFeed, setJustAddedFeed] = useState<string | null>(null);
+
 
   const parseEventDatesAndSort = (eventsStrings: AppCalendarEvent[]): ParsedCalendarEvent[] => {
     return eventsStrings
@@ -80,6 +83,14 @@ export function CalendarWidget() {
       localStorage.setItem('icalFeedsLifeOS_v2', JSON.stringify(icalFeeds));
     }
   }, [icalFeeds]);
+
+  useEffect(() => {
+    if (justAddedFeed && feedListRef.current) {
+      feedListRef.current.scrollTop = feedListRef.current.scrollHeight;
+      setJustAddedFeed(null); 
+    }
+  }, [icalFeeds, justAddedFeed]);
+
 
   useEffect(() => {
     const fetchAndProcessEvents = async () => {
@@ -139,13 +150,15 @@ export function CalendarWidget() {
       });
       return;
     }
+    const newFeedId = Date.now().toString() + Math.random().toString(36).substring(2, 15);
     const newFeedColor = widgetPredefinedColors[icalFeeds.length % widgetPredefinedColors.length];
     setIcalFeeds(prev => [...prev, { 
-      id: Date.now().toString() + Math.random().toString(36).substring(2, 15), 
+      id: newFeedId,
       url: '', 
       label: `Feed ${prev.length + 1}`, 
       color: newFeedColor 
     }]);
+    setJustAddedFeed(newFeedId);
   };
 
   const handleFeedInputChange = (id: string, field: 'url' | 'label' | 'color', value: string) => {
@@ -164,15 +177,16 @@ export function CalendarWidget() {
       toast({ title: "URL Required", description: "Please enter an iCal feed URL.", variant: "destructive" });
       return;
     }
-    if (!feedToUpdate.url.toLowerCase().endsWith('.ics') && !feedToUpdate.url.toLowerCase().startsWith('webcal://') && !feedToUpdate.url.toLowerCase().startsWith('http://') && !feedToUpdate.url.toLowerCase().startsWith('https://')) {
-      toast({
-       title: "Invalid URL",
-       description: "Please enter a valid iCalendar URL (ending in .ics or starting with webcal://, http://, https://).",
-       variant: "destructive",
-     });
-     return;
-   }
+     if (!feedToUpdate.url.toLowerCase().endsWith('.ics') && !feedToUpdate.url.toLowerCase().startsWith('webcal://') && !feedToUpdate.url.toLowerCase().startsWith('http://') && !feedToUpdate.url.toLowerCase().startsWith('https://')) {
+       toast({
+        title: "Invalid URL",
+        description: "Please enter a valid iCalendar URL (ending in .ics or starting with webcal://, http://, https://).",
+        variant: "destructive",
+      });
+      return;
+    }
     
+    localStorage.setItem('icalFeedsLifeOS_v2', JSON.stringify(icalFeeds)); // Save all feeds, including edits
     setTriggerRefetch(prev => prev + 1);
     toast({ title: "Feed Updated", description: `Feed "${feedToUpdate.label || feedToUpdate.url}" settings saved. Events refreshing.` });
   };
@@ -226,9 +240,10 @@ export function CalendarWidget() {
               </Button>
             </div>
             
-            {icalFeeds.length > 0 && (
-              <ScrollArea className="h-auto max-h-[300px] pr-1 space-y-3"> {/* Increased max-h */}
-                {icalFeeds.map(feed => (
+            {/* List of feed cards */}
+            <ScrollArea className="h-auto max-h-[300px] pr-1">
+              <div ref={feedListRef} className="space-y-3">
+                {icalFeeds.map((feed) => (
                   <Card key={feed.id} className="p-3 bg-muted/30">
                     <div className="space-y-2">
                       <div>
@@ -256,7 +271,7 @@ export function CalendarWidget() {
                       </div>
                       <div>
                         <Label className="text-xs">Color</Label>
-                        <div className="flex flex-wrap gap-1.5 mt-1"> {/* Added flex-wrap and gap */}
+                        <div className="flex flex-wrap gap-1.5 mt-1">
                           {widgetPredefinedColors.map(colorValue => (
                             <button
                               key={colorValue}
@@ -273,7 +288,7 @@ export function CalendarWidget() {
                         </div>
                       </div>
                     </div>
-                    <div className="mt-3 flex flex-wrap justify-end gap-2"> {/* Added flex-wrap and gap */}
+                    <div className="mt-3 flex flex-wrap justify-end gap-2">
                       <Button variant="outline" size="sm" className="h-8" onClick={() => handleUpdateFeed(feed.id)}>
                         <RefreshCw className="w-3 h-3 mr-1.5" />
                         Update
@@ -285,8 +300,8 @@ export function CalendarWidget() {
                     </div>
                   </Card>
                 ))}
-              </ScrollArea>
-            )}
+              </div>
+            </ScrollArea>
              {icalFeeds.length === 0 && !isLoading && (
                 <p className="text-xs text-muted-foreground text-center py-2">No feeds added yet. Click "Add New Feed".</p>
              )}
@@ -321,5 +336,3 @@ export function CalendarWidget() {
     </Card>
   );
 }
-
-
