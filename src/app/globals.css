@@ -112,5 +112,16 @@ body {
   .calendar-feed-scroll-area > [data-orientation="vertical"] > [data-radix-scroll-area-thumb] {
     @apply !bg-[hsl(var(--sidebar-background))]; /* Darker scrollbar thumb using theme's sidebar-background color */
   }
-}
 
+  /* UV Progress Bar Colors */
+  /* Targets the inner indicator of the Progress component when the parent has these classes */
+  .uv-progress-low > div[role="progressbar"] {
+    @apply !bg-green-500;
+  }
+  .uv-progress-moderate > div[role="progressbar"] {
+    @apply !bg-yellow-500;
+  }
+  .uv-progress-high > div[role="progressbar"] {
+    @apply !bg-red-500;
+  }
+}
