@@ -96,7 +96,7 @@ const environmentalDataFlow = ai.defineFlow(
   async ({ latitude, longitude }) => {
     const openWeatherApiKey = process.env.OPENWEATHER_API_KEY;
     const openUvApiKey = process.env.OPENUV_API_KEY;
-    const weatherApiComKey = process.env.WEATHERAPI_COM_KEY; // Corrected variable name
+    const weatherApiComKey = process.env.WEATHERAPI_COM_KEY;
 
     let currentWeatherData: AppEnvironmentalData['currentWeather'] | undefined;
     let weeklyWeatherData: AppEnvironmentalData['weeklyWeather'] = [];
@@ -117,7 +117,10 @@ const environmentalDataFlow = ai.defineFlow(
         ]);
 
         if (!currentWeatherResponse.ok) {
-          errors.push(`OpenWeatherMap Current Weather API Error: ${currentWeatherResponse.status} ${await currentWeatherResponse.text()}`);
+          const errorText = await currentWeatherResponse.text();
+          const errorMessage = `OpenWeatherMap Current Weather API Error: ${currentWeatherResponse.status} ${errorText}`;
+          console.error(errorMessage);
+          errors.push(errorMessage);
         } else {
           const currentData = await currentWeatherResponse.json();
           currentWeatherData = {
@@ -131,7 +134,10 @@ const environmentalDataFlow = ai.defineFlow(
         }
 
         if (!forecastResponse.ok) {
-          errors.push(`OpenWeatherMap Forecast API Error: ${forecastResponse.status} ${await forecastResponse.text()}`);
+           const errorText = await forecastResponse.text();
+           const errorMessage = `OpenWeatherMap Forecast API Error: ${forecastResponse.status} ${errorText}`;
+           console.error(errorMessage);
+           errors.push(errorMessage);
         } else {
           const forecastData = await forecastResponse.json();
           const dailyForecasts: { [key: string]: { temps: number[], pops: number[], icons: string[] } } = {};
@@ -143,7 +149,7 @@ const environmentalDataFlow = ai.defineFlow(
             dailyForecasts[date].temps.push(item.main.temp_min, item.main.temp_max);
             dailyForecasts[date].pops.push(item.pop || 0);
             const hour = parseISO(item.dt_txt).getHours();
-            if (hour >= 11 && hour <= 14) { // Prioritize daytime icons for daily representation
+            if (hour >= 11 && hour <= 14) { 
                  if (!dailyForecasts[date].icons.find(i => i === item.weather[0].icon)) {
                     dailyForecasts[date].icons.unshift(item.weather[0].icon);
                  }
@@ -155,7 +161,7 @@ const environmentalDataFlow = ai.defineFlow(
             .slice(0, 7)
             .map(dateStr => {
               const dayData = dailyForecasts[dateStr];
-              const representativeIcon = dayData.icons[0] || (dayData.icons.length > 0 ? dayData.icons[0] : '03d'); // Fallback if no daytime icon found
+              const representativeIcon = dayData.icons[0] || (dayData.icons.length > 0 ? dayData.icons[0] : '03d');
               return {
                 day: format(parseISO(dateStr), 'EEE'),
                 iconName: mapOwmIconToLucideName(representativeIcon),
@@ -166,7 +172,9 @@ const environmentalDataFlow = ai.defineFlow(
             });
         }
       } catch (error) {
-        errors.push(`Failed to fetch OpenWeatherMap data: ${error instanceof Error ? error.message : String(error)}`);
+        const errorMessage = `Failed to fetch OpenWeatherMap data: ${error instanceof Error ? error.message : String(error)}`;
+        console.error(errorMessage);
+        errors.push(errorMessage);
       }
     } else {
       errors.push('OpenWeatherMap API key (OPENWEATHER_API_KEY) is not configured.');
@@ -178,7 +186,10 @@ const environmentalDataFlow = ai.defineFlow(
       try {
         const uvResponse = await fetch(openUvUrl, { headers: { 'x-access-token': openUvApiKey } });
         if (!uvResponse.ok) {
-          errors.push(`OpenUV API Error: ${uvResponse.status} ${await uvResponse.text()}`);
+          const errorText = await uvResponse.text();
+          const errorMessage = `OpenUV API Error: ${uvResponse.status} ${errorText}`;
+          console.error(errorMessage); // Explicit server log
+          errors.push(errorMessage);
         } else {
           const uvData = await uvResponse.json();
           if (uvData && uvData.result && typeof uvData.result.uv === 'number') {
@@ -187,14 +198,17 @@ const environmentalDataFlow = ai.defineFlow(
               description: getUvIndexDescription(uvData.result.uv),
             };
           } else {
-             errors.push('OpenUV API response format error or UV data missing.');
+             const formatError = 'OpenUV API response format error or UV data missing.';
+             console.error(formatError, uvData);
+             errors.push(formatError);
           }
         }
       } catch (error) {
-        errors.push(`Failed to fetch OpenUV data: ${error instanceof Error ? error.message : String(error)}`);
+        const errorMessage = `Failed to fetch OpenUV data: ${error instanceof Error ? error.message : String(error)}`;
+        console.error(errorMessage); // Explicit server log
+        errors.push(errorMessage);
       }
     } else {
-      // Not an error, just not configured
       console.log('OpenUV API key (OPENUV_API_KEY) not configured, skipping UV index.');
     }
 
@@ -204,7 +218,10 @@ const environmentalDataFlow = ai.defineFlow(
       try {
         const moonResponse = await fetch(weatherApiUrl);
         if (!moonResponse.ok) {
-          errors.push(`WeatherAPI.com Error: ${moonResponse.status} ${await moonResponse.text()}`);
+          const errorText = await moonResponse.text();
+          const errorMessage = `WeatherAPI.com Error: ${moonResponse.status} ${errorText}`;
+          console.error(errorMessage); // Explicit server log
+          errors.push(errorMessage);
         } else {
           const moonApiData = await moonResponse.json();
           if (moonApiData && moonApiData.astronomy && moonApiData.astronomy.astro) {
@@ -215,30 +232,31 @@ const environmentalDataFlow = ai.defineFlow(
               iconName: mapMoonPhaseToIconName(astro.moon_phase),
             };
           } else {
-            errors.push('WeatherAPI.com response format error or astronomy data missing.');
+            const formatError = 'WeatherAPI.com response format error or astronomy data missing.';
+            console.error(formatError, moonApiData);
+            errors.push(formatError);
           }
         }
       } catch (error) {
-        errors.push(`Failed to fetch WeatherAPI.com data: ${error instanceof Error ? error.message : String(error)}`);
+        const errorMessage = `Failed to fetch WeatherAPI.com data: ${error instanceof Error ? error.message : String(error)}`;
+        console.error(errorMessage); // Explicit server log
+        errors.push(errorMessage);
       }
     } else {
-       // Not an error, just not configured
-      console.log('WeatherAPI.com key (WEATHERAPI_COM_KEY) not configured, skipping moon phase.');
+       console.log('WeatherAPI.com key (WEATHERAPI_COM_KEY) not configured, skipping moon phase.');
     }
 
     if (!currentWeatherData && errors.length > 0) {
-        // If primary weather data failed and we have errors, throw the first one.
         const primaryError = errors.find(e => e.toLowerCase().includes('openweathermap'));
         throw new Error(primaryError || errors.join('; '));
     }
-     if (!currentWeatherData && errors.length === 0) { // Should ideally not happen if openWeatherApiKey is present
+     if (!currentWeatherData && errors.length === 0) { 
         throw new Error('Failed to fetch primary weather data from OpenWeatherMap for an unknown reason.');
     }
 
-
     return {
       locationName: locationNameData,
-      currentWeather: currentWeatherData!, // Assert non-null as we throw if it's missing
+      currentWeather: currentWeatherData!,
       weeklyWeather: weeklyWeatherData,
       uvIndex: uvIndexData,
       moonPhase: moonPhaseData,
