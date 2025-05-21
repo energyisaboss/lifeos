@@ -2,9 +2,9 @@
 "use client";
 
 import React, { useState, useEffect, FormEvent } from 'react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { CalendarDays, LinkIcon, PlusCircle, Trash2, Pencil, Settings, XCircle } from 'lucide-react';
+import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw } from 'lucide-react';
 import type { CalendarEvent as AppCalendarEvent } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -12,15 +12,6 @@ import { Button } from '@/components/ui/button';
 import { processIcalFeed } from '@/ai/flows/ical-processor-flow';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
 
 const MAX_ICAL_FEEDS = 5;
@@ -40,14 +31,14 @@ export function CalendarWidget() {
   const [showFeedManagement, setShowFeedManagement] = useState(false);
   const [icalFeeds, setIcalFeeds] = useState<IcalFeedItem[]>(() => {
     if (typeof window !== 'undefined') {
-      const savedFeeds = localStorage.getItem('icalFeeds');
+      const savedFeeds = localStorage.getItem('icalFeedsLifeOS'); // Changed localStorage key
       try {
         const parsed = savedFeeds ? JSON.parse(savedFeeds) : [];
         return Array.isArray(parsed) ? parsed.map(item => ({
           id: item.id || Date.now().toString() + Math.random(),
           url: item.url || '',
           label: item.label || item.url || 'Unnamed Feed',
-        })).filter(item => item.url) : [];
+        })).filter(item => item.url || item.label) : []; // Allow items with just a label initially
       } catch (e) {
         console.error("Failed to parse iCal feeds from localStorage", e);
         return [];
@@ -56,16 +47,11 @@ export function CalendarWidget() {
     return [];
   });
 
-  const [newIcalUrl, setNewIcalUrl] = useState('');
-  const [newIcalLabel, setNewIcalLabel] = useState('');
-  
-  const [editingFeed, setEditingFeed] = useState<IcalFeedItem | null>(null);
-  const [currentEditUrl, setCurrentEditUrl] = useState('');
-  const [currentEditLabel, setCurrentEditLabel] = useState('');
-
   const [allEvents, setAllEvents] = useState<ParsedCalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [triggerRefetch, setTriggerRefetch] = useState(0);
+
 
   const parseEventDatesAndSort = (eventsStrings: AppCalendarEvent[]): ParsedCalendarEvent[] => {
     return eventsStrings
@@ -79,40 +65,48 @@ export function CalendarWidget() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('icalFeeds', JSON.stringify(icalFeeds));
+      localStorage.setItem('icalFeedsLifeOS', JSON.stringify(icalFeeds.filter(feed => feed.url.trim() !== '' || feed.label.trim() !== '')));
     }
+  }, [icalFeeds]);
 
+
+  useEffect(() => {
     const fetchAndProcessEvents = async () => {
+      const validFeeds = icalFeeds.filter(feed => feed.url.trim().toLowerCase().startsWith('http') || feed.url.trim().toLowerCase().startsWith('webcal'));
+      if (validFeeds.length === 0) {
+        setAllEvents([]);
+        setIsLoading(false);
+        setError(null);
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
       
-      if (icalFeeds.length === 0) {
-        setAllEvents([]); 
-        setIsLoading(false);
-        return;
-      }
-      
       const results = await Promise.allSettled(
-        icalFeeds.map(feed => processIcalFeed({ icalUrl: feed.url, label: feed.label }))
+        validFeeds.map(feed => processIcalFeed({ icalUrl: feed.url, label: feed.label }))
       );
 
       const fetchedEventsStrings: AppCalendarEvent[] = [];
       let hasErrors = false;
       results.forEach((result, index) => {
-        const feed = icalFeeds[index];
+        const feed = validFeeds[index];
         if (result.status === 'fulfilled') {
           fetchedEventsStrings.push(...result.value);
         } else {
           console.error(`Error fetching/processing iCal feed ${feed.label} (${feed.url}):`, result.reason);
-          setError(prevError => prevError ? `${prevError}, Failed to load ${feed.label}` : `Failed to load ${feed.label}`);
+          setError(prevError => {
+            const newErrorMessage = `Failed to load ${feed.label || 'unlabeled feed'}`;
+            return prevError ? `${prevError}, ${newErrorMessage}` : newErrorMessage;
+          });
           hasErrors = true;
         }
       });
       
-      if (hasErrors) {
+      if (hasErrors && typeof window !== 'undefined') { // Ensure toast is called client-side
         toast({
-          title: "Error Loading Feeds",
-          description: "Some iCalendar feeds could not be loaded. Please check URLs and labels.",
+          title: "Error Loading Some Feeds",
+          description: "Some iCalendar feeds could not be loaded or processed. Please check their URLs and labels.",
           variant: "destructive",
         });
       }
@@ -123,23 +117,10 @@ export function CalendarWidget() {
     };
 
     fetchAndProcessEvents();
-  }, [icalFeeds]);
+  }, [icalFeeds, triggerRefetch]); // Trigger refetch also
 
-  const handleAddFeedFormSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!newIcalUrl.trim()) {
-      toast({ title: "URL Required", description: "Please enter an iCal feed URL.", variant: "destructive" });
-      return;
-    }
-     if (!newIcalUrl.toLowerCase().endsWith('.ics') && !newIcalUrl.toLowerCase().startsWith('webcal://') && !newIcalUrl.toLowerCase().startsWith('http://') && !newIcalUrl.toLowerCase().startsWith('https://')) {
-       toast({
-        title: "Invalid URL",
-        description: "Please enter a valid iCalendar URL (ending in .ics, or starting with webcal://, http://, or https://).",
-        variant: "destructive",
-      });
-      return;
-    }
 
+  const handleAddNewFeed = () => {
     if (icalFeeds.length >= MAX_ICAL_FEEDS) {
       toast({
         title: "Feed Limit Reached",
@@ -148,26 +129,26 @@ export function CalendarWidget() {
       });
       return;
     }
-
-    const feedLabel = newIcalLabel.trim() || newIcalUrl;
-
-    if (icalFeeds.some(feed => feed.url === newIcalUrl && feed.label === feedLabel)) {
-      toast({ title: "Feed Exists", description: "This iCal feed URL and label combination has already been added.", variant: "destructive" });
-      return;
-    }
-    setIcalFeeds(prev => [...prev, { id: Date.now().toString(), url: newIcalUrl, label: feedLabel }]);
-    toast({ title: "Feed Added", description: `Feed "${feedLabel}" has been added.` });
-    setNewIcalUrl('');
-    setNewIcalLabel('');
+    setIcalFeeds(prev => [...prev, { id: Date.now().toString(), url: '', label: '' }]);
   };
 
-  const handleEditFeedSubmit = () => {
-    if (!editingFeed) return;
-    if (!currentEditUrl.trim()) {
-      toast({ title: "URL Required", description: "Please enter an iCal feed URL for editing.", variant: "destructive" });
+  const handleFeedInputChange = (id: string, field: 'url' | 'label', value: string) => {
+    setIcalFeeds(prevFeeds =>
+      prevFeeds.map(feed =>
+        feed.id === id ? { ...feed, [field]: value } : feed
+      )
+    );
+  };
+
+  const handleUpdateFeed = (id: string) => {
+    const feedToUpdate = icalFeeds.find(feed => feed.id === id);
+    if (!feedToUpdate) return;
+
+    if (!feedToUpdate.url.trim()) {
+      toast({ title: "URL Required", description: "Please enter an iCal feed URL.", variant: "destructive" });
       return;
     }
-    if (!currentEditUrl.toLowerCase().endsWith('.ics') && !currentEditUrl.toLowerCase().startsWith('webcal://') && !currentEditUrl.toLowerCase().startsWith('http://') && !currentEditUrl.toLowerCase().startsWith('https://')) {
+    if (!feedToUpdate.url.toLowerCase().endsWith('.ics') && !feedToUpdate.url.toLowerCase().startsWith('webcal://') && !feedToUpdate.url.toLowerCase().startsWith('http://') && !feedToUpdate.url.toLowerCase().startsWith('https://')) {
       toast({
        title: "Invalid URL",
        description: "Please enter a valid iCalendar URL (ending in .ics, or starting with webcal://, http://, or https://).",
@@ -175,34 +156,21 @@ export function CalendarWidget() {
      });
      return;
    }
-    const newLabel = currentEditLabel.trim() || currentEditUrl;
-
-    setIcalFeeds(prevFeeds => 
-      prevFeeds.map(feed => 
-        feed.id === editingFeed.id ? { ...feed, url: currentEditUrl, label: newLabel } : feed
-      )
-    );
-    toast({ title: "Feed Updated", description: `Feed "${newLabel}" has been updated.` });
-    setEditingFeed(null);
+    
+    // The localStorage useEffect will handle saving.
+    // Trigger a refetch of all events.
+    setTriggerRefetch(prev => prev + 1);
+    toast({ title: "Feed Updated", description: `Feed "${feedToUpdate.label || feedToUpdate.url}" settings saved. Events refreshing.` });
   };
-
 
   const handleRemoveIcalFeed = (idToRemove: string) => {
     setIcalFeeds(prev => prev.filter(feed => feed.id !== idToRemove));
-    if (editingFeed && editingFeed.id === idToRemove) {
-      setEditingFeed(null);
-    }
+    // Events will re-fetch due to icalFeeds dependency in useEffect.
     toast({ title: "Feed Removed", description: "The iCal feed has been removed." });
-  };
-
-  const openEditDialog = (feedToEdit: IcalFeedItem) => {
-    setEditingFeed(feedToEdit);
-    setCurrentEditUrl(feedToEdit.url);
-    setCurrentEditLabel(feedToEdit.label);
   };
   
   const upcomingEvents = allEvents
-    .filter(event => event.startTime >= new Date(new Date().setHours(0,0,0,0))) 
+    .filter(event => event.endTime >= new Date(new Date().setHours(0,0,0,0))) 
     .slice(0, 15);
 
   const formatEventTime = (event: ParsedCalendarEvent) => {
@@ -219,8 +187,6 @@ export function CalendarWidget() {
   const formatEventDate = (event: ParsedCalendarEvent) => {
     return format(event.startTime, 'EEE, MMM d');
   }
-
-  const isAddDisabled = icalFeeds.length >= MAX_ICAL_FEEDS || !newIcalUrl.trim();
 
   return (
     <Card className="shadow-lg flex flex-col h-full">
@@ -240,69 +206,70 @@ export function CalendarWidget() {
       <CardContent className="px-4 py-0 flex-grow overflow-hidden flex flex-col">
         {showFeedManagement && (
           <div className="pt-3 pb-2 border-b border-border mb-2">
-            <form onSubmit={handleAddFeedFormSubmit} className="flex flex-col sm:flex-row gap-2 w-full items-start mb-3">
-              <Input
-                type="text"
-                placeholder="Label (e.g., Work)"
-                value={newIcalLabel}
-                onChange={(e) => setNewIcalLabel(e.target.value)}
-                className="h-9 text-xs sm:flex-1"
-                disabled={icalFeeds.length >= MAX_ICAL_FEEDS}
-              />
-              <div className="flex gap-2 w-full sm:w-auto">
-                <Input
-                  type="url"
-                  placeholder="iCal feed URL (.ics or webcal://)"
-                  value={newIcalUrl}
-                  onChange={(e) => setNewIcalUrl(e.target.value)}
-                  className="h-9 text-xs flex-grow"
-                  disabled={icalFeeds.length >= MAX_ICAL_FEEDS}
-                  required
-                />
-                <Button type="submit" size="sm" variant="outline" className="h-9" disabled={isAddDisabled}>
-                  <PlusCircle className="w-4 h-4" />
-                </Button>
-              </div>
-            </form>
+            <div className="flex justify-between items-center mb-3">
+              <h4 className="text-sm font-medium text-muted-foreground">Manage iCal Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS})</h4>
+              <Button size="sm" variant="outline" onClick={handleAddNewFeed} disabled={icalFeeds.length >= MAX_ICAL_FEEDS}>
+                <PlusCircle className="w-4 h-4 mr-2" /> Add New Feed
+              </Button>
+            </div>
+            
             {icalFeeds.length > 0 && (
-              <div className="w-full space-y-1">
-                <p className="text-xs text-muted-foreground">Active Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS}):</p>
-                <ScrollArea className="h-auto max-h-[160px] pr-1"> {/* Increased max-h here */}
+              <ScrollArea className="h-auto max-h-[240px] pr-1 space-y-3"> {/* Increased max-h */}
                 {icalFeeds.map(feed => (
-                  <div key={feed.id} className="bg-muted/50 p-1.5 rounded-sm mb-1 text-xs last:mb-0 flex flex-col">
-                    <div className="flex w-full items-center">
-                      <span className="font-medium truncate mr-1.5" title={feed.label}>
-                        {feed.label}
-                      </span>
-                      <LinkIcon className="w-3 h-3 text-muted-foreground flex-shrink-0 mr-1.5" />
-                      <span className="text-muted-foreground truncate flex-1 min-w-0" title={feed.url}>
-                        {feed.url}
-                      </span>
+                  <Card key={feed.id} className="p-3 bg-muted/30">
+                    <div className="space-y-2">
+                      <div>
+                        <Label htmlFor={`label-${feed.id}`} className="text-xs">Label</Label>
+                        <Input
+                          id={`label-${feed.id}`}
+                          type="text"
+                          placeholder="e.g., Work Calendar"
+                          value={feed.label}
+                          onChange={(e) => handleFeedInputChange(feed.id, 'label', e.target.value)}
+                          className="h-8 text-xs mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor={`url-${feed.id}`} className="text-xs">URL</Label>
+                        <Input
+                          id={`url-${feed.id}`}
+                          type="url"
+                          placeholder="iCal feed URL (.ics or webcal://)"
+                          value={feed.url}
+                          onChange={(e) => handleFeedInputChange(feed.id, 'url', e.target.value)}
+                          className="h-8 text-xs mt-1"
+                          required
+                        />
+                      </div>
                     </div>
-                    <div className="flex justify-end space-x-1 mt-1 self-end"> {/* Ensure this div is visible */}
-                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => openEditDialog(feed)}>
-                        <Pencil className="w-3 h-3 text-primary" />
+                    <div className="mt-3 flex justify-end space-x-2">
+                      <Button variant="outline" size="sm" className="h-8" onClick={() => handleUpdateFeed(feed.id)}>
+                        <RefreshCw className="w-3 h-3 mr-1.5" />
+                        Update
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleRemoveIcalFeed(feed.id)}>
-                        <Trash2 className="w-3 h-3 text-destructive" />
+                      <Button variant="destructive" size="sm" className="h-8" onClick={() => handleRemoveIcalFeed(feed.id)}>
+                        <Trash2 className="w-3 h-3 mr-1.5" />
+                        Delete
                       </Button>
                     </div>
-                  </div>
+                  </Card>
                 ))}
-                </ScrollArea>
-              </div>
+              </ScrollArea>
             )}
+             {icalFeeds.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-2">No feeds added yet. Click "Add New Feed".</p>
+             )}
           </div>
         )}
 
         <ScrollArea className="flex-1 pr-3">
           {isLoading && <p className="text-sm text-muted-foreground p-2">Loading events...</p>}
           {!isLoading && error && <p className="text-sm text-destructive p-2">{error}</p>}
-          {!isLoading && !error && upcomingEvents.length === 0 && icalFeeds.length === 0 && (
-             <p className="text-sm text-muted-foreground p-2 py-2">No upcoming events. Click the settings icon to add an iCal feed.</p>
+          {!isLoading && !error && upcomingEvents.length === 0 && icalFeeds.filter(f => f.url.trim()).length === 0 && (
+             <p className="text-sm text-muted-foreground p-2 py-2">No upcoming events. Click the settings icon to add and update an iCal feed.</p>
           )}
-           {!isLoading && !error && upcomingEvents.length === 0 && icalFeeds.length > 0 && (
-             <p className="text-sm text-muted-foreground p-2 py-2">No upcoming events from active feeds for the next 30 days.</p>
+           {!isLoading && !error && upcomingEvents.length === 0 && icalFeeds.filter(f => f.url.trim()).length > 0 && (
+             <p className="text-sm text-muted-foreground p-2 py-2">No upcoming events from active feeds for the next 30 days, or feeds might need updating.</p>
           )}
           {!isLoading && !error && upcomingEvents.length > 0 && (
             <ul className="space-y-3 py-2">
@@ -320,55 +287,6 @@ export function CalendarWidget() {
           )}
         </ScrollArea>
       </CardContent>
-
-      {editingFeed && (
-        <Dialog open={!!editingFeed} onOpenChange={(isOpen) => { if (!isOpen) setEditingFeed(null); }}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit iCal Feed</DialogTitle>
-              <DialogDescription>
-                Update the URL and label for your iCalendar feed.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-label" className="text-right">
-                  Label
-                </Label>
-                <Input
-                  id="edit-label"
-                  value={currentEditLabel}
-                  onChange={(e) => setCurrentEditLabel(e.target.value)}
-                  className="col-span-3"
-                  placeholder="e.g., Work Calendar"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-url" className="text-right">
-                  URL
-                </Label>
-                <Input
-                  id="edit-url"
-                  value={currentEditUrl}
-                  onChange={(e) => setCurrentEditUrl(e.target.value)}
-                  className="col-span-3"
-                  placeholder="https://..."
-                  required
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline" onClick={() => setEditingFeed(null)}>
-                  Cancel
-                </Button>
-              </DialogClose>
-              <Button type="button" onClick={handleEditFeedSubmit}>Save Changes</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
     </Card>
   );
 }
-
