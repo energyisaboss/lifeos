@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, FormEvent } from 'react';
-import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
 import { CalendarDays, LinkIcon, PlusCircle, Trash2, Pencil, Check, XCircle, Settings } from 'lucide-react';
 import type { CalendarEvent as AppCalendarEvent } from '@/lib/types';
@@ -218,37 +218,9 @@ export function CalendarWidget() {
         </div>
       </CardHeader>
       <CardContent className="px-4 py-0 flex-grow overflow-hidden flex flex-col">
-        <ScrollArea className="flex-1 pr-3">
-          {isLoading && <p className="text-sm text-muted-foreground p-2">Loading events...</p>}
-          {!isLoading && error && <p className="text-sm text-destructive p-2">{error}</p>}
-          {!isLoading && !error && upcomingEvents.length === 0 && icalFeeds.length === 0 && (
-             <p className="text-sm text-muted-foreground p-2">No upcoming events. Add an iCal feed below.</p>
-          )}
-           {!isLoading && !error && upcomingEvents.length === 0 && icalFeeds.length > 0 && (
-             <p className="text-sm text-muted-foreground p-2">No upcoming events from active feeds for the next 30 days.</p>
-          )}
-          {!isLoading && !error && upcomingEvents.length > 0 && (
-            <ul className="space-y-3 py-2">
-              {upcomingEvents.map((event) => (
-                <li key={event.id} className="flex items-start space-x-3 pb-2 border-b border-border last:border-b-0">
-                  <div className="flex-shrink-0 w-2 h-6 mt-1 rounded-full" style={{ backgroundColor: event.color }} />
-                  <div>
-                    <p className="font-medium text-card-foreground">{event.title}</p>
-                    <p className="text-xs text-muted-foreground">{formatEventDate(event)} - {formatEventTime(event)}</p>
-                    <p className="text-xs text-muted-foreground italic truncate max-w-[200px] sm:max-w-xs" title={event.calendarSource}>{event.calendarSource}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </ScrollArea>
-      </CardContent>
-      
-      {showFeedManagement && (
-        <>
-          <Separator className="mx-4" />
-          <CardFooter className="px-4 pt-3 pb-4 flex-col items-start">
-            <form onSubmit={handleFormSubmit} className="flex flex-col sm:flex-row gap-2 w-full items-start mt-2">
+        {showFeedManagement && (
+          <div className="pt-3 pb-4 border-b border-border mb-2">
+            <form onSubmit={handleFormSubmit} className="flex flex-col sm:flex-row gap-2 w-full items-start">
               <Input
                 type="text"
                 placeholder="Label (e.g., Work)"
@@ -309,14 +281,35 @@ export function CalendarWidget() {
                 </ScrollArea>
               </div>
             )}
-          </CardFooter>
-        </>
-      )}
+          </div>
+        )}
+
+        <ScrollArea className="flex-1 pr-3"> {/* Event list ScrollArea */}
+          {isLoading && <p className="text-sm text-muted-foreground p-2">Loading events...</p>}
+          {!isLoading && error && <p className="text-sm text-destructive p-2">{error}</p>}
+          {!isLoading && !error && upcomingEvents.length === 0 && icalFeeds.length === 0 && (
+             <p className="text-sm text-muted-foreground p-2">No upcoming events. Click the settings icon to add an iCal feed.</p>
+          )}
+           {!isLoading && !error && upcomingEvents.length === 0 && icalFeeds.length > 0 && (
+             <p className="text-sm text-muted-foreground p-2">No upcoming events from active feeds for the next 30 days.</p>
+          )}
+          {!isLoading && !error && upcomingEvents.length > 0 && (
+            <ul className="space-y-3 py-2">
+              {upcomingEvents.map((event) => (
+                <li key={event.id} className="flex items-start space-x-3 pb-2 border-b border-border last:border-b-0">
+                  <div className="flex-shrink-0 w-2 h-6 mt-1 rounded-full" style={{ backgroundColor: event.color }} />
+                  <div>
+                    <p className="font-medium text-card-foreground">{event.title}</p>
+                    <p className="text-xs text-muted-foreground">{formatEventDate(event)} - {formatEventTime(event)}</p>
+                    <p className="text-xs text-muted-foreground italic truncate max-w-[200px] sm:max-w-xs" title={event.calendarSource}>{event.calendarSource}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </ScrollArea>
+      </CardContent>
     </Card>
   );
 }
     
-
-      
-
-
