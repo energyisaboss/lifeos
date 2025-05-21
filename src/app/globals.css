@@ -114,14 +114,14 @@ body {
   }
 
   /* UV Progress Bar Colors */
-  /* Targets the inner indicator of the Progress component when the parent has these classes */
-  .uv-bar-low > div[role="progressbar"] {
+  /* Targets the inner indicator (direct child div) of the Progress component when the parent has these classes */
+  .uv-bar-low > div {
     @apply !bg-green-500;
   }
-  .uv-bar-moderate > div[role="progressbar"] {
+  .uv-bar-moderate > div {
     @apply !bg-yellow-500;
   }
-  .uv-bar-high > div[role="progressbar"] {
+  .uv-bar-high > div {
     @apply !bg-red-500;
   }
 }
