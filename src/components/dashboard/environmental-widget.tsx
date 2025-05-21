@@ -14,7 +14,6 @@ import { Terminal } from "lucide-react";
 const IconComponent = ({ name, ...props }: { name: string } & LucideIcons.LucideProps) => {
   const Icon = (LucideIcons as any)[name];
   if (!Icon) {
-    // Fallback icon if the name is not found
     return <LucideIcons.HelpCircle {...props} />;
   }
   return <Icon {...props} />;
@@ -26,7 +25,6 @@ export function EnvironmentalWidget() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Default location (e.g., San Francisco) - you might want to make this dynamic later
   const latitude = 37.7749;
   const longitude = -122.4194;
 
@@ -42,8 +40,8 @@ export function EnvironmentalWidget() {
         const errorMessage = err instanceof Error ? err.message : String(err);
         if (errorMessage.includes("OpenWeatherMap API key is not configured")) {
              setError("OpenWeatherMap API key is missing. Please add it to your .env.local file (OPENWEATHER_API_KEY=your_key) and restart the development server.");
-        } else if (errorMessage.includes("401") || errorMessage.toLowerCase().includes("unauthorized")) {
-            setError("Failed to fetch weather data: Invalid API Key or Unauthorized. Please check your OpenWeatherMap API key, ensure it's active, and that you're subscribed to the One Call API 3.0 plan.");
+        } else if (errorMessage.includes("401") || errorMessage.toLowerCase().includes("unauthorized") || errorMessage.toLowerCase().includes("invalid api key")) {
+            setError("Failed to fetch weather data: Invalid API Key or Unauthorized. Please check your OpenWeatherMap API key, ensure it's active, and that you're subscribed to the necessary API services (Current Weather & 5-day Forecast).");
         }
         else {
              setError(`Failed to load environmental data. ${errorMessage}`);
@@ -63,8 +61,8 @@ export function EnvironmentalWidget() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" /> {/* Moon Phase / UV Placeholder */}
+            <Skeleton className="h-20 w-full" /> {/* UV Index / Placeholder */}
           </div>
           <div>
             <Skeleton className="h-8 w-1/3 mb-2" />
@@ -74,7 +72,7 @@ export function EnvironmentalWidget() {
               ))}
             </div>
           </div>
-           <div className="p-3 rounded-md bg-muted/30">
+           <div className="p-3 rounded-md bg-muted/30"> {/* Current Weather Placeholder */}
              <Skeleton className="h-8 w-1/2 mb-2" />
              <Skeleton className="h-6 w-full" />
              <Skeleton className="h-4 w-3/4 mt-1" />
@@ -123,7 +121,7 @@ export function EnvironmentalWidget() {
       <CardHeader>
         <SectionTitle icon={LucideIcons.Cloud} title={locationName ? `Environment - ${locationName}`: "Environment"} />
          {currentWeather && (
-          <div className="flex items-center gap-4 text-sm text-muted-foreground pt-1">
+          <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground pt-1">
             <div className="flex items-center">
               <IconComponent name={currentWeather.iconName} className="w-5 h-5 mr-1 text-primary" /> 
               <span>{currentWeather.temp}°C, {currentWeather.description}</span>
@@ -138,43 +136,49 @@ export function EnvironmentalWidget() {
         )}
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-3 rounded-md bg-muted/30">
-            <div className="flex items-center text-sm text-muted-foreground mb-1">
-              <IconComponent name={moonPhase.iconName} className="w-4 h-4 mr-2" />
-              Moon Phase
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {moonPhase ? (
+            <div className="p-3 rounded-md bg-muted/30">
+              <div className="flex items-center text-sm text-muted-foreground mb-1">
+                <IconComponent name={moonPhase.iconName} className="w-4 h-4 mr-2" />
+                Moon Phase
+              </div>
+              <div className="flex items-center">
+                <p className="text-lg font-medium text-card-foreground">{moonPhase.name}</p>
+              </div>
             </div>
-            <div className="flex items-center">
-              <p className="text-lg font-medium text-card-foreground">{moonPhase.name}</p>
-            </div>
-          </div>
+          ) : <div className="p-3 rounded-md bg-muted/30"><p className="text-sm text-muted-foreground">Moon phase data N/A</p></div>}
 
-          <div className="p-3 rounded-md bg-muted/30">
-            <div className="flex items-center text-sm text-muted-foreground mb-1">
-              <LucideIcons.Sun className="w-4 h-4 mr-2" />
-              UV Index
+          {uvIndex ? (
+            <div className="p-3 rounded-md bg-muted/30">
+              <div className="flex items-center text-sm text-muted-foreground mb-1">
+                <LucideIcons.Sun className="w-4 h-4 mr-2" />
+                UV Index
+              </div>
+              <p className="text-2xl font-semibold text-primary">{uvIndex.value}</p>
+              <p className="text-sm text-card-foreground">{uvIndex.description}</p>
             </div>
-            <p className="text-2xl font-semibold text-primary">{uvIndex.value}</p>
-            <p className="text-sm text-card-foreground">{uvIndex.description}</p>
-          </div>
+          ) : <div className="p-3 rounded-md bg-muted/30"><p className="text-sm text-muted-foreground">UV index data N/A</p></div>}
         </div>
         
-        <div>
-          <h4 className="text-sm font-medium text-muted-foreground mb-2">Weekly Weather</h4>
-          <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 text-center">
-            {weeklyWeather.map((dayWeather) => (
-              <div key={dayWeather.day} className="p-2 rounded-md bg-muted/30 flex flex-col items-center justify-between min-h-[90px]">
-                <p className="text-xs font-medium text-card-foreground">{dayWeather.day}</p>
-                <IconComponent name={dayWeather.iconName} className="my-1 text-2xl text-primary" />
-                <p className="text-xs text-card-foreground">{dayWeather.tempHigh}° / {dayWeather.tempLow}°</p>
-                <div className="flex items-center text-xs text-muted-foreground mt-1">
-                  <LucideIcons.Droplets className="w-3 h-3 mr-1" />
-                  <span>{dayWeather.rainPercentage}%</span>
+        {weeklyWeather && weeklyWeather.length > 0 && (
+          <div>
+            <h4 className="text-sm font-medium text-muted-foreground mb-2">Weekly Weather</h4>
+            <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 text-center">
+              {weeklyWeather.map((dayWeather) => (
+                <div key={dayWeather.day} className="p-2 rounded-md bg-muted/30 flex flex-col items-center justify-between min-h-[90px]">
+                  <p className="text-xs font-medium text-card-foreground">{dayWeather.day}</p>
+                  <IconComponent name={dayWeather.iconName} className="my-1 text-2xl text-primary" />
+                  <p className="text-xs text-card-foreground">{dayWeather.tempHigh}° / {dayWeather.tempLow}°</p>
+                  <div className="flex items-center text-xs text-muted-foreground mt-1">
+                    <LucideIcons.Droplets className="w-3 h-3 mr-1" />
+                    <span>{dayWeather.rainPercentage}%</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );

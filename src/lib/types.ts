@@ -21,18 +21,18 @@ export interface CalendarEvent {
 
 export interface EnvironmentalData {
   locationName?: string;
-  moonPhase: {
+  moonPhase?: { // Made optional
     name: string;
-    iconName: string; // Changed from React.ReactNode
+    iconName: string;
   };
-  uvIndex: {
+  uvIndex?: { // Made optional
     value: number;
     description: string; 
   };
   currentWeather: {
     temp: number;
     description: string;
-    iconName: string; // Changed from React.ReactNode
+    iconName: string;
     humidity: number;
     windSpeed: number;
   };
@@ -41,7 +41,7 @@ export interface EnvironmentalData {
 
 export interface WeatherDay {
   day: string; 
-  iconName: string; // Changed from React.ReactNode
+  iconName: string;
   tempHigh: number;
   tempLow: number;
   rainPercentage: number;
@@ -69,3 +69,4 @@ export interface AssetPortfolio {
   totalProfitLoss: number;
   totalProfitLossPercentage: number;
 }
+
