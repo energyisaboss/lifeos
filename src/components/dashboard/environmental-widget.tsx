@@ -11,13 +11,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal, MapPinOff } from "lucide-react";
 
-const IconComponent = ({ name, ...props }: { name: string } & LucideIcons.LucideProps) => {
+const IconComponent = ({ name, className, style, ...props }: { name: string, className?: string, style?: React.CSSProperties } & LucideIcons.LucideProps) => {
   const Icon = (LucideIcons as any)[name];
   if (!Icon) {
     console.warn(`Icon not found: ${name}, falling back to HelpCircle`);
-    return <LucideIcons.HelpCircle {...props} />;
+    return <LucideIcons.HelpCircle className={className} style={style} {...props} />;
   }
-  return <Icon {...props} />;
+  return <Icon className={className} style={style} {...props} />;
 };
 
 
@@ -30,7 +30,7 @@ export function EnvironmentalWidget() {
   const [locationError, setLocationError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (navigator.geolocation) {
+    if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setLatitude(position.coords.latitude);
@@ -67,20 +67,24 @@ export function EnvironmentalWidget() {
         try {
           const result = await getEnvironmentalData({ latitude, longitude });
           setData(result);
-          if (locationError && result.locationName) {
+          if (locationError && result.locationName && !result.locationName.toLowerCase().includes("san francisco")) {
             setLocationError(`Could not get your location. Showing data for ${result.locationName}. Please enable location services for local data.`);
+          } else if (locationError && result.locationName && result.locationName.toLowerCase().includes("san francisco")) {
+             // Keep existing locationError about default location if it's SF
+          } else if (!locationError) {
+            setLocationError(null); // Clear any previous location error if successful and not a fallback
           }
         } catch (err) {
           console.error("Failed to fetch environmental data:", err);
           const errorMessage = err instanceof Error ? err.message : String(err);
           
-          if (errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("GOOGLE_API_KEY")) {
+          if (errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("GOOGLE_API_KEY") || errorMessage.includes("FAILED_PRECONDITION")) {
              setError("Google AI API key is missing. Please add GOOGLE_API_KEY or GEMINI_API_KEY to your .env.local file and restart the server. See https://firebase.google.com/docs/genkit/plugins/google-genai for details.");
-          } else if (errorMessage.includes("OPENWEATHER_API_KEY") && errorMessage.toLowerCase().includes("not configured")) {
+          } else if (errorMessage.includes("OPENWEATHER_API_KEY") && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
              setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your .env.local file and restart server.");
-          } else if (errorMessage.includes("OPENUV_API_KEY") && errorMessage.toLowerCase().includes("not configured")) {
+          } else if (errorMessage.includes("OPENUV_API_KEY") && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
              setError("OpenUV API key for UV Index is missing. Please add OPENUV_API_KEY to .env.local and restart.");
-          } else if (errorMessage.includes("WEATHERAPI_COM_KEY") && errorMessage.toLowerCase().includes("not configured")) {
+          } else if (errorMessage.includes("WEATHERAPI_COM_KEY") && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
              setError("WeatherAPI.com key for Moon Phase is missing. Please add WEATHERAPI_COM_KEY to .env.local and restart.");
           } else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.includes("401")) {
               setError("Failed to fetch weather data: Unauthorized. Check your API keys (OpenWeatherMap, OpenUV, WeatherAPI.com), ensure they are active, and subscribed to necessary services.");
@@ -94,7 +98,17 @@ export function EnvironmentalWidget() {
       }
     };
     fetchData();
-  }, [latitude, longitude]); // Removed locationError from dependencies here as it was causing re-fetches on its own update
+  }, [latitude, longitude, locationError]); // locationError re-added to allow resetting it if location fetch succeeds later
+
+  const getMoonIconStyle = (phaseName?: string): React.CSSProperties => {
+    if (!phaseName) return {};
+    const lowerPhase = phaseName.toLowerCase();
+    if (lowerPhase.includes('last quarter') || lowerPhase.includes('waning crescent') || lowerPhase.includes('waning gibbous')) {
+      return { transform: 'scaleX(-1)' };
+    }
+    return {};
+  };
+
 
   if (isLoading && (latitude === null || longitude === null) && !locationError) {
     return (
@@ -111,7 +125,7 @@ export function EnvironmentalWidget() {
     );
   }
   
-  if (locationError && !data && !error) { 
+  if (locationError && !data && !error && !(latitude && longitude)) { 
     return (
       <Card className="shadow-lg">
         <CardHeader>
@@ -194,6 +208,7 @@ export function EnvironmentalWidget() {
   }
   
   const { locationName, moonPhase, uvIndex, currentWeather, weeklyWeather } = data;
+  const moonIconStyle = getMoonIconStyle(moonPhase?.name);
 
   return (
     <Card className="shadow-lg">
@@ -224,7 +239,7 @@ export function EnvironmentalWidget() {
           {moonPhase ? (
             <div className="p-3 rounded-md bg-muted/30 min-h-[80px]">
               <div className="flex items-center text-sm text-muted-foreground mb-1">
-                <IconComponent name={moonPhase.iconName} className="w-4 h-4 mr-2" />
+                 <IconComponent name={moonPhase.iconName} className="w-4 h-4 mr-2" style={moonIconStyle} />
                 Moon Phase
               </div>
               <div className="flex items-center">
@@ -268,4 +283,3 @@ export function EnvironmentalWidget() {
     </Card>
   );
 }
-

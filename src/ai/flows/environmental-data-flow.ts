@@ -74,11 +74,12 @@ function getUvIndexDescription(uv: number): string {
 
 function mapMoonPhaseToIconName(phaseName: string): string {
     const lowerPhase = phaseName.toLowerCase();
-    if (lowerPhase.includes('full moon')) return 'Sun'; // Represent full moon as bright
-    if (lowerPhase.includes('new moon')) return 'Moon'; // Could be styled darker on client
-    if (lowerPhase.includes('crescent')) return 'Moon';
-    if (lowerPhase.includes('quarter')) return 'CircleHalf'; // Represents a quarter
-    if (lowerPhase.includes('gibbous')) return 'Moon'; // Could be more specific if icons allow
+    if (lowerPhase.includes('new moon')) return 'Eclipse';
+    if (lowerPhase.includes('full moon')) return 'Sun';
+    if (lowerPhase.includes('first quarter') || lowerPhase.includes('last quarter')) return 'CircleHalf';
+    // For Crescents and Gibbous, 'Moon' (which is a crescent shape in Lucide) will be used.
+    // Client-side logic will flip it for waning phases.
+    if (lowerPhase.includes('crescent') || lowerPhase.includes('gibbous')) return 'Moon';
     return 'Moon'; // Default
 }
 
@@ -188,7 +189,7 @@ const environmentalDataFlow = ai.defineFlow(
         if (!uvResponse.ok) {
           const errorText = await uvResponse.text();
           const errorMessage = `OpenUV API Error: ${uvResponse.status} ${errorText}`;
-          console.error(errorMessage); // Explicit server log
+          console.error(`OpenUV API Error: ${uvResponse.status} ${await uvResponse.text()}`);
           errors.push(errorMessage);
         } else {
           const uvData = await uvResponse.json();
@@ -205,7 +206,7 @@ const environmentalDataFlow = ai.defineFlow(
         }
       } catch (error) {
         const errorMessage = `Failed to fetch OpenUV data: ${error instanceof Error ? error.message : String(error)}`;
-        console.error(errorMessage); // Explicit server log
+        console.error(`Failed to fetch OpenUV data: ${error}`);
         errors.push(errorMessage);
       }
     } else {
@@ -220,7 +221,7 @@ const environmentalDataFlow = ai.defineFlow(
         if (!moonResponse.ok) {
           const errorText = await moonResponse.text();
           const errorMessage = `WeatherAPI.com Error: ${moonResponse.status} ${errorText}`;
-          console.error(errorMessage); // Explicit server log
+          console.error(`WeatherAPI.com Error: ${moonResponse.status} ${await moonResponse.text()}`);
           errors.push(errorMessage);
         } else {
           const moonApiData = await moonResponse.json();
@@ -239,7 +240,7 @@ const environmentalDataFlow = ai.defineFlow(
         }
       } catch (error) {
         const errorMessage = `Failed to fetch WeatherAPI.com data: ${error instanceof Error ? error.message : String(error)}`;
-        console.error(errorMessage); // Explicit server log
+        console.error(`Failed to fetch WeatherAPI.com data: ${error}`);
         errors.push(errorMessage);
       }
     } else {
