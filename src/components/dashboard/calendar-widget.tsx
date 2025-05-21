@@ -11,10 +11,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { processIcalFeed } from '@/ai/flows/ical-processor-flow';
 import { format } from 'date-fns';
-import { Separator } from '../ui/separator';
 import { toast } from '@/hooks/use-toast';
 
-const MAX_ICAL_FEEDS = 3;
+const MAX_ICAL_FEEDS = 5; // Increased from 3 to 5
 
 interface IcalFeedItem {
   id: string;
@@ -200,7 +199,6 @@ export function CalendarWidget() {
 
   const isAddDisabled = !editingFeedId && (icalFeeds.length >= MAX_ICAL_FEEDS || !newIcalUrl.trim());
   const isSaveDisabled = !!editingFeedId && !newIcalUrl.trim();
-
 
   return (
     <Card className="shadow-lg flex flex-col h-full">
