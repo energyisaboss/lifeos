@@ -30,12 +30,10 @@ const MAX_ICAL_FEEDS = 5;
 const predefinedNamedColors: { name: string, value: string }[] = [
   { name: 'Red', value: '#F44336' },
   { name: 'Blue', value: '#2196F3' },
-  { name: 'Green', value: '#4CAF50' },
   { name: 'Orange', value: '#FF9800' },
+  { name: 'Yellow', value: '#FFEB3B' }, // Using a brighter yellow
+  { name: 'Green', value: '#4CAF50' },
   { name: 'Purple', value: '#9C27B0' },
-  { name: 'Yellow', value: '#FFC107' }, // Amber for better contrast than pure yellow
-  { name: 'Teal', value: '#009688' },
-  { name: 'Pink', value: '#E91E63' },
 ];
 
 

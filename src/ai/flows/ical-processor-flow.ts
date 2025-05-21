@@ -35,12 +35,10 @@ export type IcalProcessorOutput = z.infer<typeof IcalProcessorOutputSchema>;
 const predefinedHexColors = [
   '#F44336', // Red
   '#2196F3', // Blue
-  '#4CAF50', // Green
   '#FF9800', // Orange
+  '#FFEB3B', // Yellow
+  '#4CAF50', // Green
   '#9C27B0', // Purple
-  '#FFC107', // Yellow (Amber)
-  '#009688', // Teal
-  '#E91E63', // Pink
 ];
 let colorIndex = 0;
 
