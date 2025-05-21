@@ -10,6 +10,7 @@ import { getEnvironmentalData } from '@/ai/flows/environmental-data-flow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal, MapPinOff } from "lucide-react";
+import { cn } from '@/lib/utils';
 
 const IconComponent = ({ name, className, style, ...props }: { name: string, className?: string, style?: React.CSSProperties } & LucideIcons.LucideProps) => {
   if (!name || typeof name !== 'string') { 
@@ -22,6 +23,15 @@ const IconComponent = ({ name, className, style, ...props }: { name: string, cla
     return <LucideIcons.HelpCircle className={className} style={style} {...props} />;
   }
   return <Icon className={className} style={style} {...props} />;
+};
+
+const getUvIndexColor = (description?: string): string => {
+  if (!description) return 'text-primary';
+  const lowerDesc = description.toLowerCase();
+  if (lowerDesc === 'low') return 'text-green-500';
+  if (lowerDesc === 'moderate') return 'text-yellow-500';
+  if (lowerDesc === 'high' || lowerDesc === 'very high' || lowerDesc === 'extreme') return 'text-red-500';
+  return 'text-primary'; // Default color if description is unexpected
 };
 
 
@@ -81,8 +91,8 @@ export function EnvironmentalWidget() {
           console.error("Failed to fetch environmental data:", err);
           const errorMessage = err instanceof Error ? err.message : String(err);
           
-          if (errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("GOOGLE_API_KEY") || errorMessage.toLowerCase().includes("failed_precondition")) {
-             setError("Google AI API key is missing. Please add GOOGLE_API_KEY or GEMINI_API_KEY to your .env.local file and restart the server. See https://firebase.google.com/docs/genkit/plugins/google-genai for details.");
+          if (errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("GOOGLE_API_KEY") || errorMessage.toLowerCase().includes("failed_precondition") || errorMessage.toLowerCase().includes("api key not valid")) {
+             setError("Google AI API key is missing or invalid. Please add GOOGLE_API_KEY or GEMINI_API_KEY to your .env.local file and restart the server. See https://firebase.google.com/docs/genkit/plugins/google-genai for details.");
           } else if (errorMessage.includes("OPENWEATHER_API_KEY") && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
              setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your .env.local file and restart server.");
           } else if (errorMessage.includes("OPENUV_API_KEY") && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
@@ -212,7 +222,7 @@ export function EnvironmentalWidget() {
   
   const { locationName, moonPhase, uvIndex, currentWeather, weeklyWeather } = data;
   const moonIconStyle = getMoonIconStyle(moonPhase?.name);
-  const moonIconName = (moonPhase?.iconName && typeof moonPhase.iconName === 'string') ? moonPhase.iconName : "HelpCircle";
+  const moonIconName = (moonPhase?.iconName && typeof moonPhase.iconName === 'string') ? moonPhase.iconName : "Moon";
 
 
   return (
@@ -255,7 +265,7 @@ export function EnvironmentalWidget() {
                 <LucideIcons.Sun className="w-4 h-4 mr-2 text-primary" />
                 UV Index
               </div>
-              <p className="text-2xl font-semibold text-primary">{uvIndex.value}</p>
+              <p className={cn("text-2xl font-semibold", getUvIndexColor(uvIndex.description))}>{uvIndex.value}</p>
               <p className="text-sm text-card-foreground">{uvIndex.description}</p>
             </div>
           ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">UV index data N/A</p></div>}
