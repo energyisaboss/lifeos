@@ -110,7 +110,7 @@ body {
     @apply !w-[5px]; /* Thinner scrollbar track (5px) */
   }
   .calendar-feed-scroll-area > [data-orientation="vertical"] > [data-radix-scroll-area-thumb] {
-    @apply !bg-muted; /* Darker scrollbar thumb using theme's muted color */
+    @apply !bg-[hsl(var(--sidebar-background))]; /* Darker scrollbar thumb using theme's sidebar-background color */
   }
 }
 
