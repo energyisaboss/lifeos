@@ -4,7 +4,7 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { CalendarDays, LinkIcon, PlusCircle, Trash2, Pencil, Settings } from 'lucide-react';
+import { CalendarDays, LinkIcon, PlusCircle, Trash2, Pencil, Settings, XCircle } from 'lucide-react';
 import type { CalendarEvent as AppCalendarEvent } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -59,7 +59,7 @@ export function CalendarWidget() {
   const [newIcalUrl, setNewIcalUrl] = useState('');
   const [newIcalLabel, setNewIcalLabel] = useState('');
   
-  const [editingFeed, setEditingFeed] = useState<IcalFeedItem | null>(null);
+  const [editingFeed, setEditingFeed] = useState<IcalFeedItem | null>(null); // Changed from editingFeedId
   const [currentEditUrl, setCurrentEditUrl] = useState('');
   const [currentEditLabel, setCurrentEditLabel] = useState('');
 
@@ -240,7 +240,7 @@ export function CalendarWidget() {
       </CardHeader>
       <CardContent className="px-4 py-0 flex-grow overflow-hidden flex flex-col">
         {showFeedManagement && (
-          <div className="pt-3 pb-4 border-b border-border mb-2">
+          <div className="pt-3 pb-2 border-b border-border mb-2">
             <form onSubmit={handleAddFeedFormSubmit} className="flex flex-col sm:flex-row gap-2 w-full items-start mb-3">
               <Input
                 type="text"
@@ -270,15 +270,17 @@ export function CalendarWidget() {
                 <p className="text-xs text-muted-foreground">Active Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS}):</p>
                 <ScrollArea className="h-auto max-h-[70px] pr-1">
                 {icalFeeds.map(feed => (
-                  <div key={feed.id} className="flex w-full items-center text-xs bg-muted/50 p-1.5 rounded-sm mb-1 last:mb-0">
-                    <span className="font-medium truncate mr-1.5" title={feed.label}>
-                      {feed.label}
-                    </span>
-                    <LinkIcon className="w-3 h-3 text-muted-foreground flex-shrink-0 mr-1.5" />
-                    <span className="text-muted-foreground truncate flex-1 min-w-0" title={feed.url}>
-                      {feed.url}
-                    </span>
-                    <div className="flex items-center flex-shrink-0 ml-auto pl-1 space-x-1">
+                  <div key={feed.id} className="bg-muted/50 p-1.5 rounded-sm mb-1 text-xs last:mb-0">
+                    <div className="flex w-full items-center">
+                      <span className="font-medium truncate mr-1.5" title={feed.label}>
+                        {feed.label}
+                      </span>
+                      <LinkIcon className="w-3 h-3 text-muted-foreground flex-shrink-0 mr-1.5" />
+                      <span className="text-muted-foreground truncate flex-1 min-w-0" title={feed.url}>
+                        {feed.url}
+                      </span>
+                    </div>
+                    <div className="flex justify-end space-x-1 mt-1">
                       <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => openEditDialog(feed)}>
                         <Pencil className="w-3 h-3 text-primary" />
                       </Button>
@@ -298,10 +300,10 @@ export function CalendarWidget() {
           {isLoading && <p className="text-sm text-muted-foreground p-2">Loading events...</p>}
           {!isLoading && error && <p className="text-sm text-destructive p-2">{error}</p>}
           {!isLoading && !error && upcomingEvents.length === 0 && icalFeeds.length === 0 && (
-             <p className="text-sm text-muted-foreground p-2">No upcoming events. Click the settings icon to add an iCal feed.</p>
+             <p className="text-sm text-muted-foreground p-2 py-2">No upcoming events. Click the settings icon to add an iCal feed.</p>
           )}
            {!isLoading && !error && upcomingEvents.length === 0 && icalFeeds.length > 0 && (
-             <p className="text-sm text-muted-foreground p-2">No upcoming events from active feeds for the next 30 days.</p>
+             <p className="text-sm text-muted-foreground p-2 py-2">No upcoming events from active feeds for the next 30 days.</p>
           )}
           {!isLoading && !error && upcomingEvents.length > 0 && (
             <ul className="space-y-3 py-2">
