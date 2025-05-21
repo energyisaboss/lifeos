@@ -14,13 +14,13 @@ import { cn } from '@/lib/utils';
 
 const IconComponent = ({ name, className, style, ...props }: { name: string, className?: string, style?: React.CSSProperties } & LucideIcons.LucideProps) => {
   if (!name || typeof name !== 'string') { 
-    console.warn(`IconComponent received invalid name: ${name}, falling back to HelpCircle`);
-    return <LucideIcons.HelpCircle className={className} style={style} {...props} />;
+    console.warn(`IconComponent received invalid name: ${name}, falling back to Moon`);
+    return <LucideIcons.Moon className={className} style={style} {...props} />;
   }
   const Icon = (LucideIcons as any)[name];
   if (!Icon) {
-    console.warn(`Icon not found: ${name}, falling back to HelpCircle`);
-    return <LucideIcons.HelpCircle className={className} style={style} {...props} />;
+    console.warn(`Icon not found: ${name}, falling back to Moon`);
+    return <LucideIcons.Moon className={className} style={style} {...props} />;
   }
   return <Icon className={className} style={style} {...props} />;
 };
@@ -260,7 +260,7 @@ export function EnvironmentalWidget() {
           ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Moon phase data N/A</p></div>}
 
           {uvIndex ? (
-            <div className="p-3 rounded-md bg-muted/30 min-h-[80px]">
+            <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
               <div className="flex items-center text-sm text-muted-foreground mb-1">
                 <LucideIcons.Sun className="w-4 h-4 mr-2 text-primary" />
                 UV Index
@@ -296,3 +296,4 @@ export function EnvironmentalWidget() {
     
 
     
+
