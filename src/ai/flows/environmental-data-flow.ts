@@ -96,7 +96,7 @@ const environmentalDataFlow = ai.defineFlow(
   async ({ latitude, longitude }) => {
     const openWeatherApiKey = process.env.OPENWEATHER_API_KEY;
     const openUvApiKey = process.env.OPENUV_API_KEY;
-    const weatherApiComKey = process.env.WEATHERAPI_API_KEY;
+    const weatherApiComKey = process.env.WEATHERAPI_COM_KEY; // Corrected variable name
 
     let currentWeatherData: AppEnvironmentalData['currentWeather'] | undefined;
     let weeklyWeatherData: AppEnvironmentalData['weeklyWeather'] = [];
@@ -143,7 +143,7 @@ const environmentalDataFlow = ai.defineFlow(
             dailyForecasts[date].temps.push(item.main.temp_min, item.main.temp_max);
             dailyForecasts[date].pops.push(item.pop || 0);
             const hour = parseISO(item.dt_txt).getHours();
-            if (hour >= 11 && hour <= 14) {
+            if (hour >= 11 && hour <= 14) { // Prioritize daytime icons for daily representation
                  if (!dailyForecasts[date].icons.find(i => i === item.weather[0].icon)) {
                     dailyForecasts[date].icons.unshift(item.weather[0].icon);
                  }
@@ -155,7 +155,7 @@ const environmentalDataFlow = ai.defineFlow(
             .slice(0, 7)
             .map(dateStr => {
               const dayData = dailyForecasts[dateStr];
-              const representativeIcon = dayData.icons[0] || (dayData.icons.length > 0 ? dayData.icons[0] : '03d');
+              const representativeIcon = dayData.icons[0] || (dayData.icons.length > 0 ? dayData.icons[0] : '03d'); // Fallback if no daytime icon found
               return {
                 day: format(parseISO(dateStr), 'EEE'),
                 iconName: mapOwmIconToLucideName(representativeIcon),
@@ -169,7 +169,7 @@ const environmentalDataFlow = ai.defineFlow(
         errors.push(`Failed to fetch OpenWeatherMap data: ${error instanceof Error ? error.message : String(error)}`);
       }
     } else {
-      errors.push('OpenWeatherMap API key is not configured.');
+      errors.push('OpenWeatherMap API key (OPENWEATHER_API_KEY) is not configured.');
     }
 
     // Fetch UV Index from OpenUV
@@ -195,7 +195,7 @@ const environmentalDataFlow = ai.defineFlow(
       }
     } else {
       // Not an error, just not configured
-      console.log('OpenUV API key not configured, skipping UV index.');
+      console.log('OpenUV API key (OPENUV_API_KEY) not configured, skipping UV index.');
     }
 
     // Fetch Moon Phase from WeatherAPI.com
@@ -223,7 +223,7 @@ const environmentalDataFlow = ai.defineFlow(
       }
     } else {
        // Not an error, just not configured
-      console.log('WeatherAPI.com key not configured, skipping moon phase.');
+      console.log('WeatherAPI.com key (WEATHERAPI_COM_KEY) not configured, skipping moon phase.');
     }
 
     if (!currentWeatherData && errors.length > 0) {
@@ -231,7 +231,7 @@ const environmentalDataFlow = ai.defineFlow(
         const primaryError = errors.find(e => e.toLowerCase().includes('openweathermap'));
         throw new Error(primaryError || errors.join('; '));
     }
-     if (!currentWeatherData && errors.length === 0) {
+     if (!currentWeatherData && errors.length === 0) { // Should ideally not happen if openWeatherApiKey is present
         throw new Error('Failed to fetch primary weather data from OpenWeatherMap for an unknown reason.');
     }
 

@@ -80,12 +80,12 @@ export function EnvironmentalWidget() {
         } catch (err) {
           console.error("Failed to fetch environmental data:", err);
           const errorMessage = err instanceof Error ? err.message : String(err);
-          if (errorMessage.includes("OpenWeatherMap API key is not configured")) {
+          if (errorMessage.includes("OPENWEATHER_API_KEY") && errorMessage.toLowerCase().includes("not configured")) {
                setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your .env.local file and restart server.");
-          } else if (errorMessage.includes("OpenUV API key not configured") || errorMessage.includes("OPENUV_API_KEY")) {
+          } else if (errorMessage.includes("OPENUV_API_KEY") && errorMessage.toLowerCase().includes("not configured")) {
                setError("OpenUV API key for UV Index is missing. Please add OPENUV_API_KEY to .env.local and restart.");
-          } else if (errorMessage.includes("WeatherAPI.com key not configured") || errorMessage.includes("WEATHERAPI_API_KEY")) {
-               setError("WeatherAPI.com key for Moon Phase is missing. Please add WEATHERAPI_API_KEY to .env.local and restart.");
+          } else if (errorMessage.includes("WEATHERAPI_COM_KEY") && errorMessage.toLowerCase().includes("not configured")) { // Corrected key name
+               setError("WeatherAPI.com key for Moon Phase is missing. Please add WEATHERAPI_COM_KEY to .env.local and restart.");
           } else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.includes("401")) {
               setError("Failed to fetch weather data: Unauthorized. Check your API keys (OpenWeatherMap, OpenUV, WeatherAPI.com), ensure they are active, and subscribed to necessary services.");
           }
@@ -273,4 +273,3 @@ export function EnvironmentalWidget() {
     </Card>
   );
 }
-
