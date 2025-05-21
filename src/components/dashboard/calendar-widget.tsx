@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card'
 import { SectionTitle } from './section-title';
 import { CalendarDays, LinkIcon, PlusCircle, Trash2 } from 'lucide-react';
 import type { CalendarEvent } from '@/lib/types'; // CalendarEvent now has string dates
-import { mockCalendarEvents } from '@/lib/mock-data.tsx'; // mockCalendarEvents now have string dates
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -51,11 +50,8 @@ export function CalendarWidget() {
       setIsLoading(true);
       setError(null);
       
-      // Parse mock events
-      const parsedMockEvents = mockCalendarEvents.map(parseEventDates);
-
       if (icalUrls.length === 0) {
-        setAllEvents(parsedMockEvents);
+        setAllEvents([]); // No mock events, so set to empty if no URLs
         setIsLoading(false);
         return;
       }
@@ -85,7 +81,7 @@ export function CalendarWidget() {
       }
 
       const parsedFetchedEvents = fetchedEventsStrings.map(parseEventDates);
-      setAllEvents([...parsedMockEvents, ...parsedFetchedEvents]);
+      setAllEvents(parsedFetchedEvents); // Only display fetched events
       setIsLoading(false);
     };
 
@@ -95,10 +91,10 @@ export function CalendarWidget() {
   const handleAddIcalUrl = async (e: FormEvent) => {
     e.preventDefault();
     if (newIcalUrl && !icalUrls.includes(newIcalUrl) && icalUrls.length < MAX_ICAL_FEEDS) {
-      if (!newIcalUrl.toLowerCase().endsWith('.ics') && !newIcalUrl.toLowerCase().startsWith('webcal://')) {
+      if (!newIcalUrl.toLowerCase().endsWith('.ics') && !newIcalUrl.toLowerCase().startsWith('webcal://') && !newIcalUrl.toLowerCase().startsWith('http://') && !newIcalUrl.toLowerCase().startsWith('https://')) {
          toast({
           title: "Invalid URL",
-          description: "Please enter a valid iCalendar URL (ending in .ics or starting with webcal://).",
+          description: "Please enter a valid iCalendar URL (ending in .ics, or starting with webcal://, http://, or https://).",
           variant: "destructive",
         });
         return;
@@ -161,7 +157,7 @@ export function CalendarWidget() {
               ))}
             </ul>
           ) : (
-            !isLoading && <p className="text-sm text-muted-foreground">No upcoming events.</p>
+            !isLoading && <p className="text-sm text-muted-foreground">No upcoming events. Add an iCal feed below.</p>
           )}
         </ScrollArea>
       </CardContent>
