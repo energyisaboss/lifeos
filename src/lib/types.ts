@@ -12,28 +12,36 @@ export interface NewsArticle {
 export interface CalendarEvent {
   id: string;
   title: string;
-  startTime: string; // Changed from Date
-  endTime: string;   // Changed from Date
-  calendarSource: string; // e.g., 'Google Calendar', 'Outlook'
-  color: string; // Hex color for visual distinction
+  startTime: string; 
+  endTime: string;   
+  calendarSource: string; 
+  color: string; 
   isAllDay?: boolean;
 }
 
 export interface EnvironmentalData {
+  locationName?: string;
   moonPhase: {
     name: string;
-    icon?: React.ReactNode; // Could be an emoji or an SVG component
+    iconName: string; // Changed from React.ReactNode
   };
   uvIndex: {
     value: number;
-    description: string; // e.g., 'Low', 'Moderate', 'High'
+    description: string; 
+  };
+  currentWeather: {
+    temp: number;
+    description: string;
+    iconName: string; // Changed from React.ReactNode
+    humidity: number;
+    windSpeed: number;
   };
   weeklyWeather: WeatherDay[];
 }
 
 export interface WeatherDay {
-  day: string; // e.g., 'Mon', 'Tue'
-  icon: React.ReactNode; // Icon component for weather condition
+  day: string; 
+  iconName: string; // Changed from React.ReactNode
   tempHigh: number;
   tempLow: number;
   rainPercentage: number;
