@@ -9,7 +9,7 @@ import type { EnvironmentalData } from '@/lib/types';
 import { getEnvironmentalData } from '@/ai/flows/environmental-data-flow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal } from "lucide-react";
+import { Terminal, MapPinOff } from "lucide-react";
 
 const IconComponent = ({ name, ...props }: { name: string } & LucideIcons.LucideProps) => {
   const Icon = (LucideIcons as any)[name];
@@ -25,39 +25,115 @@ export function EnvironmentalWidget() {
   const [data, setData] = useState<EnvironmentalData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Default to San Francisco, CA
-  const latitude = 37.7749;
-  const longitude = -122.4194;
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLatitude(position.coords.latitude);
+          setLongitude(position.coords.longitude);
+          setLocationError(null); // Clear any previous location error
+        },
+        (err) => {
+          console.error("Error getting geolocation:", err);
+          setLocationError("Could not get your location. Please enable location services in your browser or OS. Showing data for a default location (San Francisco).");
+          // Fallback to a default location if geolocation fails
+          setLatitude(37.7749); // San Francisco
+          setLongitude(-122.4194);
+          setIsLoading(false); // Stop loading if location fails immediately
+        }
+      );
+    } else {
+      setLocationError("Geolocation is not supported by your browser. Showing data for a default location (San Francisco).");
+      // Fallback to a default location if geolocation is not supported
+      setLatitude(37.7749); // San Francisco
+      setLongitude(-122.4194);
+      setIsLoading(false); // Stop loading if location not supported
+    }
+  }, []);
+
+  useEffect(() => {
+    if (latitude === null || longitude === null) {
+      // Don't fetch data until we have coordinates (or fallback has been set)
+      // If locationError is already set, we are in a fallback state and might proceed below.
+      if (!locationError) {
+          setIsLoading(true); // Keep loading if we are still waiting for initial coordinates
+          return;
+      }
+    }
+
     const fetchData = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const result = await getEnvironmentalData({ latitude, longitude });
-        setData(result);
-      } catch (err) {
-        console.error("Failed to fetch environmental data:", err);
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        if (errorMessage.includes("OpenWeatherMap API key is not configured")) {
-             setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your .env.local file and restart server.");
-        } else if (errorMessage.includes("OpenUV API key not configured") || errorMessage.includes("OPENUV_API_KEY")) {
-             setError("OpenUV API key for UV Index is missing. Please add OPENUV_API_KEY to .env.local and restart.");
-        } else if (errorMessage.includes("WeatherAPI.com key not configured") || errorMessage.includes("WEATHERAPI_API_KEY")) {
-             setError("WeatherAPI.com key for Moon Phase is missing. Please add WEATHERAPI_API_KEY to .env.local and restart.");
-        } else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.includes("401")) {
-            setError("Failed to fetch weather data: Unauthorized. Check your API keys (OpenWeatherMap, OpenUV, WeatherAPI.com), ensure they are active, and subscribed to necessary services.");
+      // If we have coordinates, proceed to fetch weather
+      if (latitude !== null && longitude !== null) {
+        setIsLoading(true);
+        setError(null); // Clear previous weather errors
+        try {
+          const result = await getEnvironmentalData({ latitude, longitude });
+          setData(result);
+          if (locationError && result.locationName) {
+            // If we had a location error but successfully fetched fallback data, update the error to be informative.
+            setLocationError(`Could not get your location. Showing data for ${result.locationName}. Please enable location services for local data.`);
+          }
+        } catch (err) {
+          console.error("Failed to fetch environmental data:", err);
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          if (errorMessage.includes("OpenWeatherMap API key is not configured")) {
+               setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your .env.local file and restart server.");
+          } else if (errorMessage.includes("OpenUV API key not configured") || errorMessage.includes("OPENUV_API_KEY")) {
+               setError("OpenUV API key for UV Index is missing. Please add OPENUV_API_KEY to .env.local and restart.");
+          } else if (errorMessage.includes("WeatherAPI.com key not configured") || errorMessage.includes("WEATHERAPI_API_KEY")) {
+               setError("WeatherAPI.com key for Moon Phase is missing. Please add WEATHERAPI_API_KEY to .env.local and restart.");
+          } else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.includes("401")) {
+              setError("Failed to fetch weather data: Unauthorized. Check your API keys (OpenWeatherMap, OpenUV, WeatherAPI.com), ensure they are active, and subscribed to necessary services.");
+          }
+          else {
+               setError(`Failed to load environmental data. ${errorMessage.substring(0,300)}`); // Truncate long messages
+          }
+        } finally {
+          setIsLoading(false);
         }
-        else {
-             setError(`Failed to load environmental data. ${errorMessage.substring(0,300)}`); // Truncate long messages
-        }
-      } finally {
-        setIsLoading(false);
       }
     };
     fetchData();
-  }, [latitude, longitude]);
+  }, [latitude, longitude, locationError]); // Re-run if coordinates or locationError (implying fallback) change
+
+  if (isLoading && !locationError && (latitude === null || longitude === null)) { // Initial loading for geolocation
+    return (
+      <Card className="shadow-lg">
+        <CardHeader>
+          <SectionTitle icon={LucideIcons.LocateFixed} title="Fetching Location..." />
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+  
+  if (locationError && !data && !error) { // Show location error prominently if no data yet and no weather error
+    return (
+      <Card className="shadow-lg">
+        <CardHeader>
+          <SectionTitle icon={MapPinOff} title="Location Error" />
+        </CardHeader>
+        <CardContent>
+           <Alert variant="destructive">
+            <Terminal className="h-4 w-4" />
+            <AlertTitle>Location Access Denied/Unavailable</AlertTitle>
+            <AlertDescription className="break-words text-xs">
+              {locationError}
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
 
   if (isLoading) {
     return (
@@ -97,9 +173,10 @@ export function EnvironmentalWidget() {
         <CardContent>
            <Alert variant="destructive">
             <Terminal className="h-4 w-4" />
-            <AlertTitle>Error Loading Data</AlertTitle>
+            <AlertTitle>Error Loading Weather Data</AlertTitle>
             <AlertDescription className="break-words text-xs">
               {error}
+              {locationError && <div className="mt-2 opacity-80">{locationError}</div>}
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -114,7 +191,8 @@ export function EnvironmentalWidget() {
           <SectionTitle icon={LucideIcons.Cloud} title="Environment" />
         </CardHeader>
         <CardContent>
-          <p>No environmental data available or primary weather fetch failed.</p>
+          <p className="text-sm text-muted-foreground">No environmental data available or primary weather fetch failed.</p>
+           {locationError && <p className="text-xs text-destructive mt-2">{locationError}</p>}
         </CardContent>
       </Card>
     );
@@ -126,6 +204,11 @@ export function EnvironmentalWidget() {
     <Card className="shadow-lg">
       <CardHeader>
         <SectionTitle icon={LucideIcons.Cloud} title={locationName ? `Environment - ${locationName}`: "Environment"} />
+         {locationError && !error && ( // Show location error subtly if weather data did load (fallback)
+            <p className="text-xs text-amber-600 dark:text-amber-500 mt-1 flex items-center">
+                <MapPinOff size={14} className="mr-1.5 flex-shrink-0" /> {locationError}
+            </p>
+        )}
          {currentWeather && (
           <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground pt-1">
             <div className="flex items-center">
@@ -190,3 +273,4 @@ export function EnvironmentalWidget() {
     </Card>
   );
 }
+
