@@ -35,62 +35,58 @@ export function EnvironmentalWidget() {
         (position) => {
           setLatitude(position.coords.latitude);
           setLongitude(position.coords.longitude);
-          setLocationError(null); // Clear any previous location error
+          setLocationError(null); 
         },
         (err) => {
           console.error("Error getting geolocation:", err);
-          setLocationError("Could not get your location. Please enable location services in your browser or OS. Showing data for a default location (San Francisco).");
-          // Fallback to a default location if geolocation fails
-          setLatitude(37.7749); // San Francisco
+          setLocationError("Could not get your location. Please enable location services. Showing data for a default location (San Francisco).");
+          setLatitude(37.7749); 
           setLongitude(-122.4194);
-          setIsLoading(false); // Stop loading if location fails immediately
         }
       );
     } else {
       setLocationError("Geolocation is not supported by your browser. Showing data for a default location (San Francisco).");
-      // Fallback to a default location if geolocation is not supported
-      setLatitude(37.7749); // San Francisco
+      setLatitude(37.7749); 
       setLongitude(-122.4194);
-      setIsLoading(false); // Stop loading if location not supported
     }
   }, []);
 
   useEffect(() => {
     if (latitude === null || longitude === null) {
-      // Don't fetch data until we have coordinates (or fallback has been set)
-      // If locationError is already set, we are in a fallback state and might proceed below.
-      if (!locationError) {
-          setIsLoading(true); // Keep loading if we are still waiting for initial coordinates
+      if (!locationError) { // Still waiting for initial geolocation
+          setIsLoading(true); 
           return;
       }
+      // If locationError is set, it means we've fallen back, so proceed with default coords
     }
 
     const fetchData = async () => {
-      // If we have coordinates, proceed to fetch weather
       if (latitude !== null && longitude !== null) {
         setIsLoading(true);
-        setError(null); // Clear previous weather errors
+        setError(null); 
         try {
           const result = await getEnvironmentalData({ latitude, longitude });
           setData(result);
           if (locationError && result.locationName) {
-            // If we had a location error but successfully fetched fallback data, update the error to be informative.
             setLocationError(`Could not get your location. Showing data for ${result.locationName}. Please enable location services for local data.`);
           }
         } catch (err) {
           console.error("Failed to fetch environmental data:", err);
           const errorMessage = err instanceof Error ? err.message : String(err);
-          if (errorMessage.includes("OPENWEATHER_API_KEY") && errorMessage.toLowerCase().includes("not configured")) {
-               setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your .env.local file and restart server.");
+          
+          if (errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("GOOGLE_API_KEY")) {
+             setError("Google AI API key is missing. Please add GOOGLE_API_KEY or GEMINI_API_KEY to your .env.local file and restart the server. See https://firebase.google.com/docs/genkit/plugins/google-genai for details.");
+          } else if (errorMessage.includes("OPENWEATHER_API_KEY") && errorMessage.toLowerCase().includes("not configured")) {
+             setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your .env.local file and restart server.");
           } else if (errorMessage.includes("OPENUV_API_KEY") && errorMessage.toLowerCase().includes("not configured")) {
-               setError("OpenUV API key for UV Index is missing. Please add OPENUV_API_KEY to .env.local and restart.");
-          } else if (errorMessage.includes("WEATHERAPI_COM_KEY") && errorMessage.toLowerCase().includes("not configured")) { // Corrected key name
-               setError("WeatherAPI.com key for Moon Phase is missing. Please add WEATHERAPI_COM_KEY to .env.local and restart.");
+             setError("OpenUV API key for UV Index is missing. Please add OPENUV_API_KEY to .env.local and restart.");
+          } else if (errorMessage.includes("WEATHERAPI_COM_KEY") && errorMessage.toLowerCase().includes("not configured")) {
+             setError("WeatherAPI.com key for Moon Phase is missing. Please add WEATHERAPI_COM_KEY to .env.local and restart.");
           } else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.includes("401")) {
               setError("Failed to fetch weather data: Unauthorized. Check your API keys (OpenWeatherMap, OpenUV, WeatherAPI.com), ensure they are active, and subscribed to necessary services.");
           }
           else {
-               setError(`Failed to load environmental data. ${errorMessage.substring(0,300)}`); // Truncate long messages
+               setError(`Failed to load environmental data. ${errorMessage.substring(0,300)}`);
           }
         } finally {
           setIsLoading(false);
@@ -98,9 +94,9 @@ export function EnvironmentalWidget() {
       }
     };
     fetchData();
-  }, [latitude, longitude, locationError]); // Re-run if coordinates or locationError (implying fallback) change
+  }, [latitude, longitude]); // Removed locationError from dependencies here as it was causing re-fetches on its own update
 
-  if (isLoading && !locationError && (latitude === null || longitude === null)) { // Initial loading for geolocation
+  if (isLoading && (latitude === null || longitude === null) && !locationError) {
     return (
       <Card className="shadow-lg">
         <CardHeader>
@@ -115,7 +111,7 @@ export function EnvironmentalWidget() {
     );
   }
   
-  if (locationError && !data && !error) { // Show location error prominently if no data yet and no weather error
+  if (locationError && !data && !error) { 
     return (
       <Card className="shadow-lg">
         <CardHeader>
@@ -134,7 +130,6 @@ export function EnvironmentalWidget() {
     );
   }
 
-
   if (isLoading) {
     return (
       <Card className="shadow-lg">
@@ -143,10 +138,10 @@ export function EnvironmentalWidget() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
-            <Skeleton className="h-20 w-full" /> {/* Moon Phase Placeholder */}
-            <Skeleton className="h-20 w-full" /> {/* UV Index Placeholder */}
+            <Skeleton className="h-20 w-full" /> 
+            <Skeleton className="h-20 w-full" /> 
           </div>
-           <div className="p-3 rounded-md bg-muted/30"> {/* Current Weather Placeholder */}
+           <div className="p-3 rounded-md bg-muted/30"> 
              <Skeleton className="h-8 w-1/2 mb-2" />
              <Skeleton className="h-6 w-full" />
              <Skeleton className="h-4 w-3/4 mt-1" />
@@ -173,7 +168,7 @@ export function EnvironmentalWidget() {
         <CardContent>
            <Alert variant="destructive">
             <Terminal className="h-4 w-4" />
-            <AlertTitle>Error Loading Weather Data</AlertTitle>
+            <AlertTitle>Error Loading Environmental Data</AlertTitle>
             <AlertDescription className="break-words text-xs">
               {error}
               {locationError && <div className="mt-2 opacity-80">{locationError}</div>}
@@ -184,7 +179,7 @@ export function EnvironmentalWidget() {
     );
   }
 
-  if (!data || !data.currentWeather) { // Ensure currentWeather is present
+  if (!data || !data.currentWeather) { 
     return (
        <Card className="shadow-lg">
         <CardHeader>
@@ -204,7 +199,7 @@ export function EnvironmentalWidget() {
     <Card className="shadow-lg">
       <CardHeader>
         <SectionTitle icon={LucideIcons.Cloud} title={locationName ? `Environment - ${locationName}`: "Environment"} />
-         {locationError && !error && ( // Show location error subtly if weather data did load (fallback)
+         {locationError && !error && ( 
             <p className="text-xs text-amber-600 dark:text-amber-500 mt-1 flex items-center">
                 <MapPinOff size={14} className="mr-1.5 flex-shrink-0" /> {locationError}
             </p>
@@ -273,3 +268,4 @@ export function EnvironmentalWidget() {
     </Card>
   );
 }
+
