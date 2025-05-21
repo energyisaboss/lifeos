@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal, MapPinOff } from "lucide-react";
 
 const IconComponent = ({ name, className, style, ...props }: { name: string, className?: string, style?: React.CSSProperties } & LucideIcons.LucideProps) => {
-  if (!name || typeof name !== 'string') { // Added check for name
+  if (!name || typeof name !== 'string') { 
     console.warn(`IconComponent received invalid name: ${name}, falling back to HelpCircle`);
     return <LucideIcons.HelpCircle className={className} style={style} {...props} />;
   }
@@ -57,11 +57,10 @@ export function EnvironmentalWidget() {
 
   useEffect(() => {
     if (latitude === null || longitude === null) {
-      if (!locationError) { // Still waiting for initial geolocation
+      if (!locationError) { 
           setIsLoading(true); 
           return;
       }
-      // If locationError is set, it means we've fallen back, so proceed with default coords
     }
 
     const fetchData = async () => {
@@ -76,13 +75,13 @@ export function EnvironmentalWidget() {
           } else if (locationError && result.locationName && result.locationName.toLowerCase().includes("san francisco")) {
              // Keep existing locationError about default location if it's SF
           } else if (!locationError) {
-            setLocationError(null); // Clear any previous location error if successful and not a fallback
+            setLocationError(null); 
           }
         } catch (err) {
           console.error("Failed to fetch environmental data:", err);
           const errorMessage = err instanceof Error ? err.message : String(err);
           
-          if (errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("GOOGLE_API_KEY") || errorMessage.includes("FAILED_PRECONDITION")) {
+          if (errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("GOOGLE_API_KEY") || errorMessage.toLowerCase().includes("failed_precondition")) {
              setError("Google AI API key is missing. Please add GOOGLE_API_KEY or GEMINI_API_KEY to your .env.local file and restart the server. See https://firebase.google.com/docs/genkit/plugins/google-genai for details.");
           } else if (errorMessage.includes("OPENWEATHER_API_KEY") && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
              setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your .env.local file and restart server.");
@@ -102,7 +101,7 @@ export function EnvironmentalWidget() {
       }
     };
     fetchData();
-  }, [latitude, longitude, locationError]); // locationError re-added to allow resetting it if location fetch succeeds later
+  }, [latitude, longitude, locationError]); 
 
   const getMoonIconStyle = (phaseName?: string): React.CSSProperties => {
     if (!phaseName) return {};
@@ -213,7 +212,7 @@ export function EnvironmentalWidget() {
   
   const { locationName, moonPhase, uvIndex, currentWeather, weeklyWeather } = data;
   const moonIconStyle = getMoonIconStyle(moonPhase?.name);
-  const moonIconName = (moonPhase?.iconName && typeof moonPhase.iconName === 'string') ? moonPhase.iconName : "Moon";
+  const moonIconName = (moonPhase?.iconName && typeof moonPhase.iconName === 'string') ? moonPhase.iconName : "HelpCircle";
 
 
   return (
@@ -243,15 +242,10 @@ export function EnvironmentalWidget() {
       <CardContent className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {moonPhase ? (
-            <div className="p-3 rounded-md bg-muted/30 min-h-[80px]">
-              <div className="flex items-center text-sm text-muted-foreground mb-1">
-                 <IconComponent name={moonIconName} className="w-4 h-4 mr-2 text-primary" style={moonIconStyle} />
-                Moon Phase
-              </div>
-              <div className="flex items-center">
-                <p className="text-lg font-medium text-card-foreground">{moonPhase.name}</p>
-              </div>
-              <p className="text-xs text-muted-foreground">Illumination: {moonPhase.illumination}%</p>
+            <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
+              <IconComponent name={moonIconName} className="w-8 h-8 mb-1 text-primary" style={moonIconStyle} />
+              <p className="text-md font-medium text-card-foreground">{moonPhase.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Illumination: {moonPhase.illumination}%</p>
             </div>
           ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Moon phase data N/A</p></div>}
 
@@ -289,6 +283,6 @@ export function EnvironmentalWidget() {
     </Card>
   );
 }
-
+    
 
     
