@@ -21,13 +21,14 @@ export interface CalendarEvent {
 
 export interface EnvironmentalData {
   locationName?: string;
-  moonPhase?: { // Made optional
-    name: string;
-    iconName: string;
+  moonPhase?: {
+    name: string; // e.g., "Waxing Crescent"
+    illumination: number; // Moon illumination percentage
+    iconName: string; // Lucide icon name, e.g., "Moon" or "Sun" for full moon
   };
-  uvIndex?: { // Made optional
+  uvIndex?: {
     value: number;
-    description: string; 
+    description: string; // e.g., "Low", "Moderate", "High"
   };
   currentWeather: {
     temp: number;
@@ -69,4 +70,3 @@ export interface AssetPortfolio {
   totalProfitLoss: number;
   totalProfitLossPercentage: number;
 }
-
