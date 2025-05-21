@@ -32,15 +32,15 @@ const getUvIndexTextColor = (description?: string): string => {
   if (lowerDesc === 'low') return 'text-green-500';
   if (lowerDesc === 'moderate') return 'text-yellow-500';
   if (lowerDesc === 'high' || lowerDesc === 'very high' || lowerDesc === 'extreme') return 'text-red-500';
-  return 'text-primary'; 
+  return 'text-primary';
 };
 
-const getUvProgressClass = (description?: string): string => {
+const getUvBarClass = (description?: string): string => {
   if (!description) return '';
   const lowerDesc = description.toLowerCase();
-  if (lowerDesc === 'low') return 'uv-progress-low';
-  if (lowerDesc === 'moderate') return 'uv-progress-moderate';
-  if (lowerDesc === 'high' || lowerDesc === 'very high' || lowerDesc === 'extreme') return 'uv-progress-high';
+  if (lowerDesc === 'low') return 'uv-bar-low';
+  if (lowerDesc === 'moderate') return 'uv-bar-moderate';
+  if (lowerDesc === 'high' || lowerDesc === 'very high' || lowerDesc === 'extreme') return 'uv-bar-high';
   return '';
 };
 
@@ -102,7 +102,7 @@ export function EnvironmentalWidget() {
           const errorMessage = err instanceof Error ? err.message : String(err);
 
           if (errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("GOOGLE_API_KEY") || errorMessage.toLowerCase().includes("failed_precondition") || errorMessage.toLowerCase().includes("api key not valid")) {
-             setError("Google AI API key is missing or invalid. Please add GOOGLE_API_KEY or GEMINI_API_KEY to your .env.local file and restart the server. See https://firebase.google.com/docs/genkit/plugins/google-genai for details.");
+             setError("Google AI API key is missing. Please add GOOGLE_API_KEY or GEMINI_API_KEY to your .env.local file and restart the server. See https://firebase.google.com/docs/genkit/plugins/google-genai for details.");
           } else if (errorMessage.includes("OPENWEATHER_API_KEY") && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
              setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your .env.local file and restart server.");
           } else if (errorMessage.includes("OPENUV_API_KEY") && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
@@ -248,7 +248,7 @@ export function EnvironmentalWidget() {
          {currentWeather && (
           <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground pt-1">
             <div className="flex items-center">
-              <IconComponent name={currentWeather.iconName} className="w-5 h-5 mr-1 text-primary" />
+              <IconComponent name={currentWeather.iconName || "Cloud"} className="w-5 h-5 mr-1 text-primary" />
               <span>{currentWeather.temp}°C, {currentWeather.description}</span>
             </div>
             <div className="flex items-center">
@@ -278,9 +278,9 @@ export function EnvironmentalWidget() {
               </div>
               <p className={cn("text-2xl font-semibold", getUvIndexTextColor(uvIndex.description))}>{uvIndex.value}</p>
               <p className="text-sm text-card-foreground">{uvIndex.description}</p>
-              <Progress 
-                value={uvProgressValue} 
-                className={cn("h-2 w-3/4 mt-1", getUvProgressClass(uvIndex.description))}
+              <Progress
+                value={uvProgressValue}
+                className={cn("h-2 w-3/4 mt-1", getUvBarClass(uvIndex.description))}
                 aria-label={`UV Index level: ${uvIndex.description}, value ${uvIndex.value}`}
               />
             </div>
@@ -294,7 +294,7 @@ export function EnvironmentalWidget() {
               {weeklyWeather.map((dayWeather) => (
                 <div key={dayWeather.day} className="p-2 rounded-md bg-muted/30 flex flex-col items-center justify-between min-h-[90px]">
                   <p className="text-xs font-medium text-card-foreground">{dayWeather.day}</p>
-                  <IconComponent name={dayWeather.iconName} className="my-1 text-2xl text-primary" />
+                  <IconComponent name={dayWeather.iconName || "Cloud"} className="my-1 text-2xl text-primary" />
                   <p className="text-xs text-card-foreground">{dayWeather.tempHigh}° / {dayWeather.tempLow}°</p>
                   <div className="flex items-center text-xs text-muted-foreground mt-1">
                     <LucideIcons.Droplets className="w-3 h-3 mr-1" />
