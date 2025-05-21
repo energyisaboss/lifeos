@@ -1,11 +1,11 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
 import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw, LinkIcon } from 'lucide-react';
-import type { CalendarEvent as AppCalendarEvent } from '@/lib/types';
+import type { CalendarEvent as AppCalendarEvent } from '@/lib/types'; // String dates
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -43,7 +43,7 @@ export function CalendarWidget() {
   const [showFeedManagement, setShowFeedManagement] = useState(false);
   const [icalFeeds, setIcalFeeds] = useState<IcalFeedItem[]>(() => {
     if (typeof window !== 'undefined') {
-      const savedFeeds = localStorage.getItem('icalFeedsLifeOS_v2'); // Changed key for new structure
+      const savedFeeds = localStorage.getItem('icalFeedsLifeOS_v2');
       try {
         const parsed = savedFeeds ? JSON.parse(savedFeeds) : [];
         return Array.isArray(parsed) ? parsed.map((item: any, index: number) => ({
@@ -51,7 +51,7 @@ export function CalendarWidget() {
           url: item.url || '',
           label: item.label || item.url || `Feed ${index + 1}`,
           color: item.color || widgetPredefinedColors[index % widgetPredefinedColors.length],
-        })).filter(item => item.url || item.label) : [];
+        })).filter(item => typeof item.url === 'string' && typeof item.label === 'string' && typeof item.color === 'string') : [];
       } catch (e) {
         console.error("Failed to parse iCal feeds from localStorage", e);
         return [];
@@ -77,7 +77,7 @@ export function CalendarWidget() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('icalFeedsLifeOS_v2', JSON.stringify(icalFeeds.filter(feed => feed.url.trim() !== '' || feed.label.trim() !== '')));
+      localStorage.setItem('icalFeedsLifeOS_v2', JSON.stringify(icalFeeds));
     }
   }, [icalFeeds]);
 
@@ -141,7 +141,7 @@ export function CalendarWidget() {
     }
     const newFeedColor = widgetPredefinedColors[icalFeeds.length % widgetPredefinedColors.length];
     setIcalFeeds(prev => [...prev, { 
-      id: Date.now().toString(), 
+      id: Date.now().toString() + Math.random().toString(36).substring(2, 15), 
       url: '', 
       label: `Feed ${prev.length + 1}`, 
       color: newFeedColor 
@@ -167,13 +167,13 @@ export function CalendarWidget() {
     if (!feedToUpdate.url.toLowerCase().endsWith('.ics') && !feedToUpdate.url.toLowerCase().startsWith('webcal://') && !feedToUpdate.url.toLowerCase().startsWith('http://') && !feedToUpdate.url.toLowerCase().startsWith('https://')) {
       toast({
        title: "Invalid URL",
-       description: "Please enter a valid iCalendar URL.",
+       description: "Please enter a valid iCalendar URL (ending in .ics or starting with webcal://, http://, https://).",
        variant: "destructive",
      });
      return;
    }
     
-    setTriggerRefetch(prev => prev + 1); // This will trigger the useEffect to process feeds
+    setTriggerRefetch(prev => prev + 1);
     toast({ title: "Feed Updated", description: `Feed "${feedToUpdate.label || feedToUpdate.url}" settings saved. Events refreshing.` });
   };
 
@@ -227,7 +227,7 @@ export function CalendarWidget() {
             </div>
             
             {icalFeeds.length > 0 && (
-              <ScrollArea className="h-auto max-h-[240px] pr-1 space-y-3">
+              <ScrollArea className="h-auto max-h-[300px] pr-1 space-y-3"> {/* Increased max-h */}
                 {icalFeeds.map(feed => (
                   <Card key={feed.id} className="p-3 bg-muted/30">
                     <div className="space-y-2">
@@ -256,7 +256,7 @@ export function CalendarWidget() {
                       </div>
                       <div>
                         <Label className="text-xs">Color</Label>
-                        <div className="flex space-x-1.5 mt-1">
+                        <div className="flex flex-wrap gap-1.5 mt-1"> {/* Added flex-wrap and gap */}
                           {widgetPredefinedColors.map(colorValue => (
                             <button
                               key={colorValue}
@@ -273,7 +273,7 @@ export function CalendarWidget() {
                         </div>
                       </div>
                     </div>
-                    <div className="mt-3 flex justify-end space-x-2">
+                    <div className="mt-3 flex flex-wrap justify-end gap-2"> {/* Added flex-wrap and gap */}
                       <Button variant="outline" size="sm" className="h-8" onClick={() => handleUpdateFeed(feed.id)}>
                         <RefreshCw className="w-3 h-3 mr-1.5" />
                         Update
@@ -294,8 +294,8 @@ export function CalendarWidget() {
         )}
 
         <ScrollArea className="flex-1 pr-3">
-          {isLoading && <p className="text-sm text-muted-foreground p-2">Loading events...</p>}
-          {!isLoading && error && <p className="text-sm text-destructive p-2">{error}</p>}
+          {isLoading && <p className="text-sm text-muted-foreground p-2 py-2">Loading events...</p>}
+          {!isLoading && error && <p className="text-sm text-destructive p-2 py-2">{error}</p>}
           {!isLoading && !error && upcomingEvents.length === 0 && icalFeeds.filter(f => f.url.trim()).length === 0 && (
              <p className="text-sm text-muted-foreground p-2 py-2">No upcoming events. Click the settings icon to add and update an iCal feed.</p>
           )}
@@ -321,3 +321,5 @@ export function CalendarWidget() {
     </Card>
   );
 }
+
+
