@@ -35,11 +35,15 @@ export function CalendarWidget() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const parseEventDates = (event: AppCalendarEvent): ParsedCalendarEvent => ({
-    ...event,
-    startTime: new Date(event.startTime),
-    endTime: new Date(event.endTime),
-  });
+  const parseEventDatesAndSort = (eventsStrings: AppCalendarEvent[]): ParsedCalendarEvent[] => {
+    return eventsStrings
+      .map(event => ({
+        ...event,
+        startTime: new Date(event.startTime),
+        endTime: new Date(event.endTime),
+      }))
+      .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -67,7 +71,8 @@ export function CalendarWidget() {
           fetchedEventsStrings.push(...result.value);
         } else {
           console.error(`Error fetching/processing iCal feed ${icalUrls[index]}:`, result.reason);
-          setError(prevError => prevError ? `${prevError}, Failed to load ${icalUrls[index].substring(0,30)}...` : `Failed to load ${icalUrls[index].substring(0,30)}...`);
+          const shortUrl = icalUrls[index].length > 30 ? `${icalUrls[index].substring(0,30)}...` : icalUrls[index];
+          setError(prevError => prevError ? `${prevError}, Failed to load ${shortUrl}` : `Failed to load ${shortUrl}`);
           hasErrors = true;
         }
       });
@@ -75,13 +80,13 @@ export function CalendarWidget() {
       if (hasErrors) {
         toast({
           title: "Error Loading Feeds",
-          description: "Some iCalendar feeds could not be loaded. Please check the URLs and try again.",
+          description: "Some iCalendar feeds could not be loaded. Please check URLs.",
           variant: "destructive",
         });
       }
 
-      const parsedFetchedEvents = fetchedEventsStrings.map(parseEventDates);
-      setAllEvents(parsedFetchedEvents); 
+      const parsedAndSortedEvents = parseEventDatesAndSort(fetchedEventsStrings);
+      setAllEvents(parsedAndSortedEvents); 
       setIsLoading(false);
     };
 
@@ -116,7 +121,6 @@ export function CalendarWidget() {
   
   const upcomingEvents = allEvents
     .filter(event => event.startTime >= new Date(new Date().setHours(0,0,0,0))) 
-    .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
     .slice(0, 15);
 
   const formatEventTime = (event: ParsedCalendarEvent) => {
@@ -139,12 +143,15 @@ export function CalendarWidget() {
       <CardHeader>
         <SectionTitle icon={CalendarDays} title="Upcoming Events" />
       </CardHeader>
-      <CardContent className="flex-grow overflow-hidden flex flex-col pb-0">
-        <ScrollArea className="flex-1 pr-3"> {/* Removed mb-4 */}
-          {isLoading && <p className="text-sm text-muted-foreground">Loading events...</p>}
-          {!isLoading && error && <p className="text-sm text-destructive">{error}</p>}
-          {!isLoading && upcomingEvents.length > 0 ? (
-            <ul className="space-y-3">
+      <CardContent className="px-4 py-0 flex-grow overflow-hidden flex flex-col">
+        <ScrollArea className="flex-1 pr-3">
+          {isLoading && <p className="text-sm text-muted-foreground p-2">Loading events...</p>}
+          {!isLoading && error && <p className="text-sm text-destructive p-2">{error}</p>}
+          {!isLoading && !error && upcomingEvents.length === 0 && (
+             <p className="text-sm text-muted-foreground p-2">No upcoming events. Add an iCal feed below.</p>
+          )}
+          {!isLoading && !error && upcomingEvents.length > 0 && (
+            <ul className="space-y-3 py-2">
               {upcomingEvents.map((event) => (
                 <li key={event.id} className="flex items-start space-x-3 pb-2 border-b border-border last:border-b-0">
                   <div className="flex-shrink-0 w-2 h-6 mt-1 rounded-full" style={{ backgroundColor: event.color }} />
@@ -156,14 +163,12 @@ export function CalendarWidget() {
                 </li>
               ))}
             </ul>
-          ) : (
-            !isLoading && <p className="text-sm text-muted-foreground">No upcoming events. Add an iCal feed below.</p>
           )}
         </ScrollArea>
       </CardContent>
-      <Separator />
-      <CardFooter className="px-4 pt-0 pb-4 flex-col items-start space-y-3">
-        <form onSubmit={handleAddIcalUrl} className="flex gap-2 w-full mt-2">
+      <Separator className="mx-4" />
+      <CardFooter className="px-4 pt-3 pb-4 flex-col items-start">
+        <form onSubmit={handleAddIcalUrl} className="flex gap-2 w-full">
           <Input
             type="url"
             placeholder="Add iCal feed URL (.ics or webcal://)"
@@ -177,7 +182,7 @@ export function CalendarWidget() {
           </Button>
         </form>
         {icalUrls.length > 0 && (
-          <div className="w-full space-y-1">
+          <div className="w-full space-y-1 mt-3">
             <p className="text-xs text-muted-foreground">Active Feeds ({icalUrls.length}/{MAX_ICAL_FEEDS}):</p>
             <ScrollArea className="h-auto max-h-[60px]">
             {icalUrls.map(url => (
@@ -198,4 +203,3 @@ export function CalendarWidget() {
     </Card>
   );
 }
-
