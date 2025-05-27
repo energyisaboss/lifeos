@@ -2,9 +2,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Added CardTitle
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { Newspaper, Settings, PlusCircle, Trash2, LinkIcon, RefreshCw, Tag, Edit3, FolderPlus, FolderMinus, FilePlus, CheckCircle, GripVertical } from 'lucide-react';
+import { Newspaper, Settings, PlusCircle, Trash2, LinkIcon, RefreshCw, Tag, Edit3, FolderPlus, FolderMinus, FilePlus, CheckCircle, XCircle } from 'lucide-react'; // Removed GripVertical as it's no longer used here
 import type { NewsArticle as AppNewsArticle } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -99,7 +99,7 @@ export function NewsWidget() {
 
     setIsLoading(true);
     setError(null);
-    let currentError = null; // Local error accumulation
+    let currentError = null; 
     
     const articlePromises = allFeedsWithCategory.map(async ({ categoryId, feed }) => {
       try {
@@ -137,7 +137,7 @@ export function NewsWidget() {
     
     setAllArticles(fetchedArticles.slice(0, MAX_ARTICLES_DISPLAY_TOTAL));
     setIsLoading(false);
-    setError(currentError); // Set accumulated errors
+    setError(currentError); 
 
     if (currentError && typeof window !== 'undefined') {
       toast({
@@ -183,7 +183,7 @@ export function NewsWidget() {
     const newName = editingCategoryState[categoryId];
     if (!newName || !newName.trim()) {
       toast({ title: "Category Name Required", variant: "destructive" });
-      setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, isEditingName: false } : cat)); // Revert isEditingName
+      setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, isEditingName: false } : cat)); 
       return;
     }
     setCategories(prev => prev.map(cat =>
@@ -253,7 +253,7 @@ export function NewsWidget() {
 
   return (
     <React.Fragment>
-      <div className="flex justify-between items-center mb-4"> {/* Replaces CardHeader */}
+      <div className="flex justify-between items-center mb-4">
         <SectionTitle icon={Newspaper} title="Categorized News" className="mb-0" />
         <Button 
           variant="ghost" 
@@ -383,47 +383,61 @@ export function NewsWidget() {
         </div>
       )}
 
-      {isLoading && (
-         <div className="space-y-4 p-2">
-            {Array.from({length: 3}).map((_, i) => (
-              <Card key={i} className="mb-4 p-4">
-                <Skeleton className="h-5 w-1/3 mb-3" />
-                <div className="pb-2 border-b border-border last:border-b-0">
-                    <Skeleton className="h-5 w-3/4 mb-1.5" />
-                    <Skeleton className="h-3 w-1/2 mb-2" />
-                    <Skeleton className="h-4 w-full mb-1" />
-                    <Skeleton className="h-4 w-5/6" />
-                </div>
+      {isLoading && !showFeedManagement && (
+         <div className="space-y-4">
+            {Array.from({length: 2}).map((_, i) => (
+              <Card key={i} className="mb-4 shadow-md">
+                <CardHeader><Skeleton className="h-6 w-1/3 mb-1" /></CardHeader>
+                <CardContent className="px-4 py-0">
+                  <div className="pb-2 border-b border-border last:border-b-0">
+                      <Skeleton className="h-5 w-3/4 mb-1.5" />
+                      <Skeleton className="h-3 w-1/2 mb-2" />
+                      <Skeleton className="h-4 w-full mb-1" />
+                      <Skeleton className="h-4 w-5/6" />
+                  </div>
+                </CardContent>
               </Card>
             ))}
          </div>
       )}
       {!isLoading && error && <p className="text-sm text-destructive p-2 py-2">Error loading articles: {error}</p>}
-      {!isLoading && !error && allArticles.length === 0 && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length === 0 && (
-         <p className="text-sm text-muted-foreground p-2 py-2">No news articles. Add categories and RSS feeds in settings.</p>
+      
+      {!isLoading && !error && categories.length === 0 && !showFeedManagement && (
+         <p className="text-sm text-muted-foreground p-2 py-2">No news articles. Add categories and RSS feeds in settings <Settings className="inline h-4 w-4" />.</p>
       )}
-       {!isLoading && !error && allArticles.length === 0 && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
+       {!isLoading && !error && allArticles.length === 0 && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && !showFeedManagement && (
          <p className="text-sm text-muted-foreground p-2 py-2">No articles found from active feeds, or feeds might need updating/checking.</p>
       )}
 
-      {!isLoading && !error && allArticles.length > 0 && (
-        <div className="space-y-6">
+
+      {!isLoading && !error && (
+        <div className={cn("space-y-6", showFeedManagement ? "mt-6" : "")}>
           {categories.map(category => {
             const categoryArticles = articlesByCategoryId(category.id);
-            if (categoryArticles.length === 0 && !isLoading && !showFeedManagement) return null; // Don't render empty category cards unless settings are open (or loading)
-             if (categoryArticles.length === 0 && isLoading) return null; // Don't render empty category cards if loading
+            if (categoryArticles.length === 0 && !isLoading && !showFeedManagement && !categories.find(c => c.feeds.some(f => f.url.trim()))) return null;
+            if (categoryArticles.length === 0 && !isLoading && !category.feeds.some(f => f.url.trim())) return null;
 
             return (
               <Card key={category.id} className="shadow-md mb-6">
                 <CardHeader>
                   <CardTitle className="text-xl flex items-center">
-                    <GripVertical className="mr-2 h-5 w-5 text-muted-foreground" /> {/* Optional: for a "draggable" look */}
+                    <Newspaper className="mr-2 h-5 w-5 text-muted-foreground" />
                     {category.name}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-4 py-0">
                   {categoryArticles.length === 0 && !isLoading && (
-                     <p className="text-sm text-muted-foreground py-4 px-2">No articles for this category.</p>
+                     <p className="text-sm text-muted-foreground py-4 px-2 text-center">
+                      {category.feeds.some(f=>f.url.trim()) ? "No articles for this category." : "No feeds configured for this category."}
+                     </p>
+                  )}
+                  {isLoading && categoryArticles.length === 0 && ( // Skeleton specific to category card
+                     <div className="py-2">
+                        <Skeleton className="h-5 w-3/4 mb-1.5" />
+                        <Skeleton className="h-3 w-1/2 mb-2" />
+                        <Skeleton className="h-4 w-full mb-1" />
+                        <Skeleton className="h-4 w-5/6" />
+                     </div>
                   )}
                   {categoryArticles.length > 0 && (
                     <ScrollArea className="h-[300px] pr-3 py-2">
@@ -436,7 +450,7 @@ export function NewsWidget() {
                                       src={article.imageUrl}
                                       alt={article.title || 'Article image'}
                                       width={300}
-                                      height={169} // Approximate 16:9 aspect ratio
+                                      height={169} 
                                       className="object-cover w-full h-full hover:scale-105 transition-transform duration-200"
                                       data-ai-hint="news article"
                                       onError={(e) => (e.currentTarget.style.display = 'none')}
