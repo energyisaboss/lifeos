@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { Newspaper, Settings, PlusCircle, Trash2, LinkIcon, RefreshCw, Tag, Edit3, FolderPlus, FolderMinus, FilePlus, CheckCircle, XCircle } from 'lucide-react'; // Removed GripVertical as it's no longer used here
+import { Newspaper, Settings, PlusCircle, Trash2, LinkIcon, RefreshCw, Tag, Edit3, FolderPlus, FolderMinus, FilePlus, CheckCircle, XCircle } from 'lucide-react';
 import type { NewsArticle as AppNewsArticle } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -98,8 +98,8 @@ export function NewsWidget() {
     }
 
     setIsLoading(true);
-    setError(null);
-    let currentError = null; 
+    setError(null); // Clear previous errors at the start of a fetch
+    let collectedErrorMessages: string[] = [];
     
     const articlePromises = allFeedsWithCategory.map(async ({ categoryId, feed }) => {
       try {
@@ -111,11 +111,26 @@ export function NewsWidget() {
           categoryId: categoryId,
         }));
       } catch (err) {
-        console.error(`Error processing RSS feed ${feed.userLabel} (${feed.url}):`, err);
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        const newErrorMsg = `Failed for ${feed.userLabel || 'feed'}`;
-        currentError = currentError ? `${currentError}; ${newErrorMsg}` : newErrorMsg;
-        return [];
+        console.error(`Error processing RSS feed ${feed.userLabel || 'feed'} (${feed.url}):`, err);
+        let detail = "Failed to fetch or parse feed.";
+        if (err instanceof Error) {
+           // Check if the error message already contains "Failed to process RSS feed"
+           // to avoid redundant messaging from the flow.
+           if (err.message.startsWith('Failed to process RSS feed')) {
+             detail = err.message;
+           } else {
+             detail = `Error for ${feed.userLabel || feed.url.split('/').pop() || 'feed'}: ${err.message}`;
+           }
+        } else if (typeof err === 'string') {
+          detail = err;
+        }
+        
+        // Collect unique error messages to avoid spamming if multiple feeds fail similarly
+        const feedIdentifier = feed.userLabel || feed.url;
+        if (collectedErrorMessages.length < 3 && !collectedErrorMessages.some(msg => msg.includes(feedIdentifier))) {
+            collectedErrorMessages.push(detail.substring(0, 150) + (detail.length > 150 ? '...' : ''));
+        }
+        return []; // Return empty for this failed feed
       }
     });
 
@@ -136,16 +151,22 @@ export function NewsWidget() {
     });
     
     setAllArticles(fetchedArticles.slice(0, MAX_ARTICLES_DISPLAY_TOTAL));
-    setIsLoading(false);
-    setError(currentError); 
-
-    if (currentError && typeof window !== 'undefined') {
-      toast({
-        title: "Error Loading Some Feeds",
-        description: "Some RSS feeds couldn't be loaded. Check settings & URLs.",
-        variant: "destructive",
-      });
+    
+    if (collectedErrorMessages.length > 0) {
+      const fullErrorMessage = collectedErrorMessages.join('; ');
+      setError(fullErrorMessage); 
+      if (typeof window !== 'undefined') {
+        toast({
+          title: "RSS Feed Issues",
+          description: `Could not load all articles. Details: ${fullErrorMessage.substring(0,250)}${fullErrorMessage.length > 250 ? '...' : ''}`,
+          variant: "destructive",
+          duration: 8000,
+        });
+      }
+    } else {
+      setError(null); 
     }
+    setIsLoading(false);
   }, [categories]); 
 
   useEffect(() => {
@@ -334,9 +355,9 @@ export function NewsWidget() {
                            onChange={(e) => setEditingCategoryState(prev => ({...prev, [category.id]: e.target.value}))}
                            className="h-8 text-sm flex-grow"
                            onKeyDown={(e) => e.key === 'Enter' && handleSaveCategoryName(category.id)}
-                           onBlur={() => handleSaveCategoryName(category.id)}
+                           onBlur={() => handleSaveCategoryName(category.id)} // Save on blur as well
                          />
-                         <Button size="sm" variant="ghost" onClick={() => handleSaveCategoryName(category.id)}><CheckCircle size={16}/></Button>
+                         <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleSaveCategoryName(category.id)}><CheckCircle size={16}/></Button>
                       </div>
                     ) : (
                       <h5 className="text-sm font-semibold text-card-foreground truncate flex-grow cursor-pointer hover:underline" onClick={() => handleToggleEditCategoryName(category.id)} title="Click to edit name">
@@ -383,13 +404,13 @@ export function NewsWidget() {
         </div>
       )}
 
-      {isLoading && !showFeedManagement && (
+      {isLoading && !showFeedManagement && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
          <div className="space-y-4">
-            {Array.from({length: 2}).map((_, i) => (
-              <Card key={i} className="mb-4 shadow-md">
+            {Array.from({length: Math.min(2, categories.length || 1)}).map((_, i) => (
+              <Card key={`skel-cat-${i}`} className="mb-4 shadow-md">
                 <CardHeader><Skeleton className="h-6 w-1/3 mb-1" /></CardHeader>
                 <CardContent className="px-4 py-0">
-                  <div className="pb-2 border-b border-border last:border-b-0">
+                  <div className="py-2 border-b border-border last:border-b-0">
                       <Skeleton className="h-5 w-3/4 mb-1.5" />
                       <Skeleton className="h-3 w-1/2 mb-2" />
                       <Skeleton className="h-4 w-full mb-1" />
@@ -400,9 +421,9 @@ export function NewsWidget() {
             ))}
          </div>
       )}
-      {!isLoading && error && <p className="text-sm text-destructive p-2 py-2">Error loading articles: {error}</p>}
+      {error && <p className="text-sm text-destructive p-2 py-2">Error loading articles: {error}</p>}
       
-      {!isLoading && !error && categories.length === 0 && !showFeedManagement && (
+      {!isLoading && categories.length === 0 && !showFeedManagement && (
          <p className="text-sm text-muted-foreground p-2 py-2">No news articles. Add categories and RSS feeds in settings <Settings className="inline h-4 w-4" />.</p>
       )}
        {!isLoading && !error && allArticles.length === 0 && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && !showFeedManagement && (
@@ -414,8 +435,7 @@ export function NewsWidget() {
         <div className={cn("space-y-6", showFeedManagement ? "mt-6" : "")}>
           {categories.map(category => {
             const categoryArticles = articlesByCategoryId(category.id);
-            if (categoryArticles.length === 0 && !isLoading && !showFeedManagement && !categories.find(c => c.feeds.some(f => f.url.trim()))) return null;
-            if (categoryArticles.length === 0 && !isLoading && !category.feeds.some(f => f.url.trim())) return null;
+             if (categoryArticles.length === 0 && !isLoading && !showFeedManagement && !category.feeds.some(f=>f.url.trim())) return null;
 
             return (
               <Card key={category.id} className="shadow-md mb-6">
@@ -426,18 +446,18 @@ export function NewsWidget() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-4 py-0">
-                  {categoryArticles.length === 0 && !isLoading && (
-                     <p className="text-sm text-muted-foreground py-4 px-2 text-center">
-                      {category.feeds.some(f=>f.url.trim()) ? "No articles for this category." : "No feeds configured for this category."}
-                     </p>
-                  )}
-                  {isLoading && categoryArticles.length === 0 && ( // Skeleton specific to category card
+                  {isLoading && categoryArticles.length === 0 && category.feeds.some(f => f.url.trim()) && ( 
                      <div className="py-2">
                         <Skeleton className="h-5 w-3/4 mb-1.5" />
                         <Skeleton className="h-3 w-1/2 mb-2" />
                         <Skeleton className="h-4 w-full mb-1" />
                         <Skeleton className="h-4 w-5/6" />
                      </div>
+                  )}
+                  {!isLoading && categoryArticles.length === 0 && (
+                     <p className="text-sm text-muted-foreground py-4 px-2 text-center">
+                      {category.feeds.some(f=>f.url.trim()) ? "No articles for this category currently." : "No feeds configured for this category."}
+                     </p>
                   )}
                   {categoryArticles.length > 0 && (
                     <ScrollArea className="h-[300px] pr-3 py-2">
@@ -487,3 +507,4 @@ export function NewsWidget() {
     </React.Fragment>
   );
 }
+
