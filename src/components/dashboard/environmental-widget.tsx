@@ -174,14 +174,14 @@ export function EnvironmentalWidget() {
           <SectionTitle icon={LucideIcons.Cloud} title="Environment" />
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
-          </div>
            <div className="p-3 rounded-md bg-muted/30">
              <Skeleton className="h-8 w-1/2 mb-2" />
              <Skeleton className="h-6 w-full" />
              <Skeleton className="h-4 w-3/4 mt-1" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
           </div>
           <div>
             <Skeleton className="h-8 w-1/3 mb-2" />
@@ -245,20 +245,6 @@ export function EnvironmentalWidget() {
                 <MapPinOff size={14} className="mr-1.5 flex-shrink-0" /> {locationError}
             </p>
         )}
-         {currentWeather && (
-          <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground pt-1">
-            <div className="flex items-center">
-              <IconComponent name={currentWeather.iconName || "Cloud"} className="w-5 h-5 mr-1 text-primary" />
-              <span>{currentWeather.temp}°C, {currentWeather.description}</span>
-            </div>
-            <div className="flex items-center">
-                <LucideIcons.Droplets className="w-4 h-4 mr-1" /> {currentWeather.humidity}%
-            </div>
-             <div className="flex items-center">
-                <LucideIcons.Wind className="w-4 h-4 mr-1" /> {currentWeather.windSpeed} km/h
-            </div>
-          </div>
-        )}
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -286,6 +272,26 @@ export function EnvironmentalWidget() {
             </div>
           ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">UV index data N/A</p></div>}
         </div>
+        
+        {currentWeather && (
+          <div className="p-4 rounded-md bg-muted/30 shadow-md">
+            <div className="flex flex-col sm:flex-row items-center justify-between mb-2">
+              <div className="flex items-center mb-2 sm:mb-0">
+                <IconComponent name={currentWeather.iconName || "Cloud"} className="w-12 h-12 mr-3 text-primary" />
+                <span className="text-5xl font-semibold">{currentWeather.temp}°C</span>
+              </div>
+              <span className="text-lg text-card-foreground capitalize text-center sm:text-right">{currentWeather.description}</span>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center justify-around text-sm text-muted-foreground space-y-1 sm:space-y-0 sm:space-x-4 mt-3 pt-3 border-t border-border/50">
+              <div className="flex items-center">
+                <LucideIcons.Droplets className="w-4 h-4 mr-1.5" /> Humidity: {currentWeather.humidity}%
+              </div>
+              <div className="flex items-center">
+                <LucideIcons.Wind className="w-4 h-4 mr-1.5" /> Wind: {currentWeather.windSpeed} km/h
+              </div>
+            </div>
+          </div>
+        )}
 
         {weeklyWeather && weeklyWeather.length > 0 && (
           <div>
@@ -309,3 +315,5 @@ export function EnvironmentalWidget() {
     </Card>
   );
 }
+
+
