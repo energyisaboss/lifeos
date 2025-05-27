@@ -53,8 +53,7 @@ function calculateAssetPortfolio(
       currentValue = asset.quantity * currentPricePerUnit;
     }
 
-    const profitLoss = typeof currentPricePerUnit === 'number' ? currentValue - initialCost : 0 - initialCost;
-    const profitLossPercentage = initialCost === 0 ? 0 : (profitLoss / initialCost) * 100;
+    const profitLoss = typeof currentPricePerUnit === 'number' ? currentValue - initialCost : 0 - initialCost; // If price not fetched, PL is based on 0 current value for that asset.
 
     totalPortfolioValue += currentValue;
     totalInitialCost += initialCost;
@@ -64,7 +63,7 @@ function calculateAssetPortfolio(
       currentPricePerUnit: currentPricePerUnit === undefined ? null : currentPricePerUnit,
       totalValue: currentValue,
       profitLoss,
-      profitLossPercentage,
+      profitLossPercentage: initialCost === 0 && profitLoss > 0 ? Infinity : (initialCost === 0 ? 0 : (profitLoss / initialCost) * 100),
     };
   });
 
@@ -194,13 +193,13 @@ export function AssetTrackerWidget() {
 
   const handleSymbolBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
     const symbol = e.target.value.trim();
-    if (symbol && assetFormData.type === 'stock') { // Only fetch for stocks and if symbol is present
+    if (symbol && assetFormData.type === 'stock') { 
       setIsFetchingName(true);
       try {
         const profile = await getAssetProfile({ symbol });
         if (profile.assetName) {
           setAssetFormData(prev => ({ ...prev, name: profile.assetName! }));
-        } else if (!assetFormData.name) { // Only clear if name wasn't already manually set
+        } else if (!assetFormData.name) { 
           setAssetFormData(prev => ({ ...prev, name: '' }));
         }
       } catch (error) {
@@ -208,8 +207,6 @@ export function AssetTrackerWidget() {
         if (!assetFormData.name) {
              setAssetFormData(prev => ({ ...prev, name: '' }));
         }
-        // Optionally, show a toast error for name fetching failure
-        // toast({ title: "Could not fetch asset name", description: "Please enter manually.", variant: "default" });
       } finally {
         setIsFetchingName(false);
       }
@@ -222,9 +219,6 @@ export function AssetTrackerWidget() {
 
   const validateForm = () => {
     if (!assetFormData.name.trim() && assetFormData.type === 'stock' && !isFetchingName) {
-      // If name is still being fetched for a stock, don't block submission yet,
-      // but if it's not being fetched and name is empty for stock, show error.
-      // For non-stocks, name is less critical if symbol is there.
       toast({ title: "Validation Error", description: "Asset name is required for stocks.", variant: "destructive" });
       return false;
     }
@@ -247,14 +241,16 @@ export function AssetTrackerWidget() {
     if (!validateForm()) return;
 
     if (editingAsset) {
-      setAssets(assets.map(asset => asset.id === editingAsset.id ? { ...editingAsset, ...assetFormData } : asset));
+      setAssets(assets.map(asset => 
+        asset.id === editingAsset.id ? { id: editingAsset.id, ...assetFormData } : asset
+      ));
       toast({ title: "Asset Updated", description: `"${assetFormData.name || assetFormData.symbol}" has been updated.` });
     } else {
-      const newAsset: Asset = { ...assetFormData, id: Date.now().toString() + Math.random().toString(36).substring(2, 9) };
-      // If name is empty but symbol is not, use symbol for name as a fallback
-      if (!newAsset.name && newAsset.symbol) {
-        newAsset.name = newAsset.symbol.toUpperCase();
-      }
+      const newAsset: Asset = { 
+        ...assetFormData, 
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
+        name: (assetFormData.name.trim() || assetFormData.symbol.toUpperCase()) // Fallback for name
+      };
       setAssets([...assets, newAsset]);
       toast({ title: "Asset Added", description: `"${newAsset.name}" has been added.` });
     }
@@ -300,6 +296,9 @@ export function AssetTrackerWidget() {
   };
 
   const formatPercentage = (value: number) => {
+    if (value === Infinity) return "+∞%";
+    if (value === -Infinity) return "-∞%";
+    if (isNaN(value)) return "N/A %";
     return `${value.toFixed(2)}%`;
   };
 
@@ -522,3 +521,5 @@ export function AssetTrackerWidget() {
     </React.Fragment>
   );
 }
+
+    
