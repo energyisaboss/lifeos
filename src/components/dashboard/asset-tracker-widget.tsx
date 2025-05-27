@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, RefreshCw, AlertCircle, Loader2 } from 'lucide-react';
+import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, RefreshCw, AlertCircle, Loader2, Search } from 'lucide-react';
 import type { Asset, AssetPortfolio, AssetHolding } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { getAssetPrice } from '@/ai/flows/asset-price-flow';
+import { getAssetProfile } from '@/ai/flows/asset-profile-flow';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const initialAssetFormState: Omit<Asset, 'id'> = {
@@ -44,17 +45,12 @@ function calculateAssetPortfolio(
   let totalInitialCost = 0;
 
   const holdings: AssetHolding[] = assets.map(asset => {
-    const currentPricePerUnit = fetchedPrices[asset.id]; // This might be null if fetch failed or not applicable
+    const currentPricePerUnit = fetchedPrices[asset.id];
     const initialCost = asset.quantity * asset.purchasePrice;
     
     let currentValue = 0;
-    // Only calculate current value if price is a valid number
     if (typeof currentPricePerUnit === 'number') {
       currentValue = asset.quantity * currentPricePerUnit;
-    } else {
-      // If price is null or undefined, treat current value as 0 for sum, but P/L will be based on initial cost.
-      // Or, one might argue to use purchasePrice if currentPrice is null, but that can be misleading.
-      // For now, if current price is unknown, its market value contribution is 0.
     }
 
     const profitLoss = typeof currentPricePerUnit === 'number' ? currentValue - initialCost : 0 - initialCost;
@@ -65,7 +61,7 @@ function calculateAssetPortfolio(
 
     return {
       ...asset,
-      currentPricePerUnit: currentPricePerUnit === undefined ? null : currentPricePerUnit, // Ensure it's explicitly null if undefined
+      currentPricePerUnit: currentPricePerUnit === undefined ? null : currentPricePerUnit,
       totalValue: currentValue,
       profitLoss,
       profitLossPercentage,
@@ -90,8 +86,8 @@ export function AssetTrackerWidget() {
   const [assetFormData, setAssetFormData] = useState<Omit<Asset, 'id'>>(initialAssetFormState);
   const [isFetchingPrices, setIsFetchingPrices] = useState(false);
   const [priceFetchError, setPriceFetchError] = useState<string | null>(null);
+  const [isFetchingName, setIsFetchingName] = useState(false);
 
-  // Load assets from localStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedAssets = localStorage.getItem('userAssetsLifeOS_v2');
@@ -116,7 +112,6 @@ export function AssetTrackerWidget() {
     }
   }, []);
 
-  // Save assets to localStorage when they change
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('userAssetsLifeOS_v2', JSON.stringify(assets));
@@ -140,10 +135,9 @@ export function AssetTrackerWidget() {
       if (asset.type === 'stock' && asset.symbol) {
         try {
           const priceData = await getAssetPrice({ symbol: asset.symbol });
-          prices[asset.id] = priceData.currentPrice; // This can be null if flow returns null
+          prices[asset.id] = priceData.currentPrice;
           if (priceData.currentPrice === null) {
             console.warn(`Price not found or unavailable for stock symbol ${asset.symbol}`);
-            // anErrorOccurred is not set here, as null is a valid return from flow for "not found"
           }
         } catch (err) {
           console.error(`Error fetching price for ${asset.symbol}:`, err);
@@ -160,13 +154,13 @@ export function AssetTrackerWidget() {
           }
         }
       } else {
-        prices[asset.id] = null; // For non-stocks or missing symbols, no price fetched
+        prices[asset.id] = null;
       }
     }
     setFetchedPrices(prices);
     setIsFetchingPrices(false);
     if (anErrorOccurred) {
-      setPriceFetchError(specificErrorMessage); // Use the more specific message
+      setPriceFetchError(specificErrorMessage);
        toast({
           title: "Price Fetching Issue",
           description: specificErrorMessage,
@@ -176,7 +170,6 @@ export function AssetTrackerWidget() {
     }
   }, []);
 
-  // Fetch prices when assets change
   useEffect(() => {
     if (assets.length > 0) {
       fetchAllAssetPrices(assets);
@@ -186,9 +179,8 @@ export function AssetTrackerWidget() {
     }
   }, [assets, fetchAllAssetPrices]);
 
-  // Recalculate portfolio when assets or fetched prices change
   useEffect(() => {
-    if (assets.length > 0 || Object.keys(fetchedPrices).length > 0) { // Recalculate even if assets are empty but prices were just cleared
+    if (assets.length > 0 || Object.keys(fetchedPrices).length > 0) {
       setPortfolio(calculateAssetPortfolio(assets, fetchedPrices));
     } else {
       setPortfolio(null);
@@ -200,16 +192,43 @@ export function AssetTrackerWidget() {
     setAssetFormData(prev => ({ ...prev, [name]: name === 'quantity' || name === 'purchasePrice' ? parseFloat(value) || 0 : value }));
   };
 
+  const handleSymbolBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
+    const symbol = e.target.value.trim();
+    if (symbol && assetFormData.type === 'stock') { // Only fetch for stocks and if symbol is present
+      setIsFetchingName(true);
+      try {
+        const profile = await getAssetProfile({ symbol });
+        if (profile.assetName) {
+          setAssetFormData(prev => ({ ...prev, name: profile.assetName! }));
+        } else if (!assetFormData.name) { // Only clear if name wasn't already manually set
+          setAssetFormData(prev => ({ ...prev, name: '' }));
+        }
+      } catch (error) {
+        console.error("Error fetching asset profile:", error);
+        if (!assetFormData.name) {
+             setAssetFormData(prev => ({ ...prev, name: '' }));
+        }
+        // Optionally, show a toast error for name fetching failure
+        // toast({ title: "Could not fetch asset name", description: "Please enter manually.", variant: "default" });
+      } finally {
+        setIsFetchingName(false);
+      }
+    }
+  };
+
   const handleTypeChange = (value: 'stock' | 'fund' | 'crypto') => {
     setAssetFormData(prev => ({ ...prev, type: value }));
   };
 
   const validateForm = () => {
-    if (!assetFormData.name.trim()) {
-      toast({ title: "Validation Error", description: "Asset name is required.", variant: "destructive" });
+    if (!assetFormData.name.trim() && assetFormData.type === 'stock' && !isFetchingName) {
+      // If name is still being fetched for a stock, don't block submission yet,
+      // but if it's not being fetched and name is empty for stock, show error.
+      // For non-stocks, name is less critical if symbol is there.
+      toast({ title: "Validation Error", description: "Asset name is required for stocks.", variant: "destructive" });
       return false;
     }
-    if (!assetFormData.symbol.trim()) {
+     if (!assetFormData.symbol.trim()) {
       toast({ title: "Validation Error", description: "Asset symbol/ticker is required.", variant: "destructive" });
       return false;
     }
@@ -229,9 +248,13 @@ export function AssetTrackerWidget() {
 
     if (editingAsset) {
       setAssets(assets.map(asset => asset.id === editingAsset.id ? { ...editingAsset, ...assetFormData } : asset));
-      toast({ title: "Asset Updated", description: `"${assetFormData.name}" has been updated.` });
+      toast({ title: "Asset Updated", description: `"${assetFormData.name || assetFormData.symbol}" has been updated.` });
     } else {
       const newAsset: Asset = { ...assetFormData, id: Date.now().toString() + Math.random().toString(36).substring(2, 9) };
+      // If name is empty but symbol is not, use symbol for name as a fallback
+      if (!newAsset.name && newAsset.symbol) {
+        newAsset.name = newAsset.symbol.toUpperCase();
+      }
       setAssets([...assets, newAsset]);
       toast({ title: "Asset Added", description: `"${newAsset.name}" has been added.` });
     }
@@ -420,23 +443,43 @@ export function AssetTrackerWidget() {
         if (!isOpen) {
           setEditingAsset(null);
           setAssetFormData(initialAssetFormState);
+          setIsFetchingName(false);
         }
       }}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>{editingAsset ? 'Edit Asset' : 'Add New Asset'}</DialogTitle>
             <DialogDescription>
-              {editingAsset ? 'Update the details of your asset.' : 'Enter the details of the asset you want to track. Current price will be fetched automatically for supported types.'}
+              {editingAsset ? 'Update the details of your asset.' : 'Enter the details of the asset. Name for stocks will be fetched automatically from symbol.'}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">Name</Label>
-              <Input id="name" name="name" value={assetFormData.name} onChange={handleInputChange} className="col-span-3" placeholder="e.g., Apple Inc." />
+              <Label htmlFor="symbol" className="text-right">Symbol</Label>
+              <Input 
+                id="symbol" 
+                name="symbol" 
+                value={assetFormData.symbol} 
+                onChange={handleInputChange} 
+                onBlur={handleSymbolBlur}
+                className="col-span-3" 
+                placeholder="e.g., AAPL" 
+              />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="symbol" className="text-right">Symbol</Label>
-              <Input id="symbol" name="symbol" value={assetFormData.symbol} onChange={handleInputChange} className="col-span-3" placeholder="e.g., AAPL" />
+              <Label htmlFor="name" className="text-right">Name</Label>
+              <div className="col-span-3 flex items-center">
+                <Input 
+                  id="name" 
+                  name="name" 
+                  value={assetFormData.name} 
+                  onChange={handleInputChange} 
+                  className="flex-1" 
+                  placeholder="e.g., Apple Inc." 
+                  readOnly={isFetchingName && assetFormData.type === 'stock'}
+                />
+                {isFetchingName && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+              </div>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="quantity" className="text-right">Quantity</Label>
@@ -461,7 +504,7 @@ export function AssetTrackerWidget() {
             </div>
             {assetFormData.type !== 'stock' && (
                 <p className="col-span-4 text-xs text-muted-foreground text-center px-2 py-1 bg-muted/50 rounded-md">
-                    Automatic price fetching is currently optimized for stocks. Prices for funds and crypto may not be available or accurate with the current setup.
+                    Automatic price fetching is currently optimized for stocks. Prices for funds and crypto may not be available or accurate.
                 </p>
             )}
           </div>
@@ -469,8 +512,9 @@ export function AssetTrackerWidget() {
             <DialogClose asChild>
               <Button type="button" variant="outline">Cancel</Button>
             </DialogClose>
-            <Button type="button" onClick={handleSubmitAsset}>
-              <Save className="mr-2 h-4 w-4" /> {editingAsset ? 'Save Changes' : 'Add Asset'}
+            <Button type="button" onClick={handleSubmitAsset} disabled={isFetchingName}>
+              {isFetchingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" /> }
+              {editingAsset ? 'Save Changes' : 'Add Asset'}
             </Button>
           </DialogFooter>
         </DialogContent>
