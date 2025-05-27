@@ -44,18 +44,20 @@ function calculateAssetPortfolio(
   let totalInitialCost = 0;
 
   const holdings: AssetHolding[] = assets.map(asset => {
-    const currentPricePerUnit = fetchedPrices[asset.id];
+    const currentPricePerUnit = fetchedPrices[asset.id]; // This might be null if fetch failed or not applicable
     const initialCost = asset.quantity * asset.purchasePrice;
     
     let currentValue = 0;
-    if (currentPricePerUnit !== null && currentPricePerUnit !== undefined) {
+    // Only calculate current value if price is a valid number
+    if (typeof currentPricePerUnit === 'number') {
       currentValue = asset.quantity * currentPricePerUnit;
     } else {
-      // Fallback or indicate missing price - for now, treat as 0 for calculations
-      // Or, we could use purchasePrice as a fallback if desired
+      // If price is null or undefined, treat current value as 0 for sum, but P/L will be based on initial cost.
+      // Or, one might argue to use purchasePrice if currentPrice is null, but that can be misleading.
+      // For now, if current price is unknown, its market value contribution is 0.
     }
 
-    const profitLoss = currentPricePerUnit !== null && currentPricePerUnit !== undefined ? currentValue - initialCost : 0 - initialCost;
+    const profitLoss = typeof currentPricePerUnit === 'number' ? currentValue - initialCost : 0 - initialCost;
     const profitLossPercentage = initialCost === 0 ? 0 : (profitLoss / initialCost) * 100;
 
     totalPortfolioValue += currentValue;
@@ -63,7 +65,7 @@ function calculateAssetPortfolio(
 
     return {
       ...asset,
-      currentPricePerUnit: currentPricePerUnit === undefined ? null : currentPricePerUnit,
+      currentPricePerUnit: currentPricePerUnit === undefined ? null : currentPricePerUnit, // Ensure it's explicitly null if undefined
       totalValue: currentValue,
       profitLoss,
       profitLossPercentage,
@@ -92,7 +94,7 @@ export function AssetTrackerWidget() {
   // Load assets from localStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const savedAssets = localStorage.getItem('userAssetsLifeOS_v2'); // Updated key
+      const savedAssets = localStorage.getItem('userAssetsLifeOS_v2');
       if (savedAssets) {
         try {
           const parsedAssets = JSON.parse(savedAssets);
@@ -125,26 +127,37 @@ export function AssetTrackerWidget() {
     if (currentAssets.length === 0) {
       setFetchedPrices({});
       setIsFetchingPrices(false);
+      setPriceFetchError(null);
       return;
     }
     setIsFetchingPrices(true);
     setPriceFetchError(null);
     const prices: Record<string, number | null> = {};
     let anErrorOccurred = false;
+    let specificErrorMessage = "Could not fetch prices for some assets. Ensure symbols are correct and Finnhub API key is set in .env.local.";
 
     for (const asset of currentAssets) {
-      // For now, only fetch for stocks. Expand later for 'fund' and 'crypto' if APIs differ.
       if (asset.type === 'stock' && asset.symbol) {
         try {
           const priceData = await getAssetPrice({ symbol: asset.symbol });
-          prices[asset.id] = priceData.currentPrice;
+          prices[asset.id] = priceData.currentPrice; // This can be null if flow returns null
           if (priceData.currentPrice === null) {
-            console.warn(`Price not found for symbol ${asset.symbol}`);
+            console.warn(`Price not found or unavailable for stock symbol ${asset.symbol}`);
+            // anErrorOccurred is not set here, as null is a valid return from flow for "not found"
           }
         } catch (err) {
           console.error(`Error fetching price for ${asset.symbol}:`, err);
-          prices[asset.id] = null; // Mark as error or unable to fetch
+          prices[asset.id] = null; 
           anErrorOccurred = true;
+          if (err instanceof Error) {
+            if (err.message.includes('FINNHUB_API_KEY_NOT_CONFIGURED')) {
+              specificErrorMessage = "Finnhub API Key is not configured. Please set FINNHUB_API_KEY in your .env.local file and restart the server.";
+            } else if (err.message.startsWith('FINNHUB_API_ERROR')) {
+              specificErrorMessage = `Finnhub API error for ${asset.symbol}: ${err.message.replace('FINNHUB_API_ERROR: ', '')}. Check symbol or API limits.`;
+            } else if (err.message.startsWith('FETCH_ERROR')) {
+               specificErrorMessage = `Network error fetching price for ${asset.symbol}. Check connection or Finnhub status.`;
+            }
+          }
         }
       } else {
         prices[asset.id] = null; // For non-stocks or missing symbols, no price fetched
@@ -153,10 +166,10 @@ export function AssetTrackerWidget() {
     setFetchedPrices(prices);
     setIsFetchingPrices(false);
     if (anErrorOccurred) {
-      setPriceFetchError("Could not fetch prices for some assets. Check symbols or API key.");
+      setPriceFetchError(specificErrorMessage); // Use the more specific message
        toast({
           title: "Price Fetching Issue",
-          description: "Could not fetch prices for some assets. Ensure symbols are correct and Finnhub API key is set in .env.local.",
+          description: specificErrorMessage,
           variant: "destructive",
           duration: 7000,
         });
@@ -168,13 +181,14 @@ export function AssetTrackerWidget() {
     if (assets.length > 0) {
       fetchAllAssetPrices(assets);
     } else {
-      setFetchedPrices({}); // Clear prices if no assets
+      setFetchedPrices({}); 
+      setPortfolio(null); 
     }
   }, [assets, fetchAllAssetPrices]);
 
   // Recalculate portfolio when assets or fetched prices change
   useEffect(() => {
-    if (assets.length > 0) {
+    if (assets.length > 0 || Object.keys(fetchedPrices).length > 0) { // Recalculate even if assets are empty but prices were just cleared
       setPortfolio(calculateAssetPortfolio(assets, fetchedPrices));
     } else {
       setPortfolio(null);
@@ -241,7 +255,6 @@ export function AssetTrackerWidget() {
   const handleRemoveAsset = (assetId: string) => {
     const assetToRemove = assets.find(a => a.id === assetId);
     setAssets(assets.filter(asset => asset.id !== assetId));
-     // Also remove its price from fetchedPrices
     setFetchedPrices(prevPrices => {
         const newPrices = {...prevPrices};
         delete newPrices[assetId];
@@ -273,10 +286,10 @@ export function AssetTrackerWidget() {
         <SectionTitle icon={TrendingUp} title="Asset Tracker" className="mb-0" />
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => fetchAllAssetPrices(assets)} disabled={isFetchingPrices || assets.length === 0}>
-            <RefreshCw className={cn("mr-2", isFetchingPrices && "animate-spin")} /> Refresh Prices
+            <RefreshCw className={cn("mr-2 h-4 w-4", isFetchingPrices && "animate-spin")} /> Refresh Prices
           </Button>
           <Button size="sm" onClick={openAddForm}>
-            <PlusCircle className="mr-2" /> Add Asset
+            <PlusCircle className="mr-2 h-4 w-4" /> Add Asset
           </Button>
         </div>
       </div>
@@ -326,8 +339,14 @@ export function AssetTrackerWidget() {
                         <TableCell className="text-right">{asset.quantity}</TableCell>
                         <TableCell className="text-right">{formatCurrency(asset.purchasePrice)}</TableCell>
                         <TableCell className="text-right">
-                          {isFetchingPrices && fetchedPrices[asset.id] === undefined ? <Skeleton className="h-4 w-16 inline-block" /> : formatCurrency(asset.currentPricePerUnit, 'N/A')}
-                          {fetchedPrices[asset.id] === null && !isFetchingPrices && <AlertCircle className="w-3 h-3 inline-block ml-1 text-destructive" title="Price unavailable"/>}
+                          {isFetchingPrices && fetchedPrices[asset.id] === undefined ? (
+                            <Skeleton className="h-4 w-16 inline-block" />
+                          ) : (
+                            formatCurrency(asset.currentPricePerUnit, 'N/A')
+                          )}
+                          {asset.currentPricePerUnit === null && asset.type === 'stock' && !isFetchingPrices && (
+                            <AlertCircle className="w-3 h-3 inline-block ml-1 text-destructive" title="Price data unavailable for this stock."/>
+                          )}
                         </TableCell>
                         <TableCell className="text-right">{formatCurrency(asset.totalValue)}</TableCell>
                         <TableCell className={cn(
@@ -375,12 +394,22 @@ export function AssetTrackerWidget() {
                   </TableBody>
                 </Table>
               </ScrollArea>
-               {priceFetchError && <p className="text-xs text-destructive mt-2 text-center">{priceFetchError}</p>}
+               {priceFetchError && !isFetchingPrices && <p className="text-xs text-destructive mt-2 text-center">{priceFetchError}</p>}
             </>
           ) : (
             <div className="text-center py-10 text-muted-foreground">
-              <p>No assets tracked yet.</p>
-              <p className="text-sm">Click "Add Asset" to get started.</p>
+              {isFetchingPrices ? (
+                <>
+                  <Loader2 className="mx-auto h-8 w-8 animate-spin mb-2" />
+                  <p>Loading assets and prices...</p>
+                </>
+              ) : (
+                <>
+                  <p>No assets tracked yet.</p>
+                  <p className="text-sm">Click "Add Asset" to get started.</p>
+                </>
+              )}
+               {priceFetchError && !isFetchingPrices && <p className="text-xs text-destructive mt-4">{priceFetchError}</p>}
             </div>
           )}
         </CardContent>

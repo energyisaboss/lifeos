@@ -13,7 +13,6 @@ import { z } from 'genkit';
 
 const AssetPriceInputSchema = z.object({
   symbol: z.string().describe('The stock/asset symbol (e.g., AAPL, MSFT).'),
-  // We might add 'type' here later if different APIs/endpoints are needed for stocks, crypto, funds
 });
 export type AssetPriceInput = z.infer<typeof AssetPriceInputSchema>;
 
@@ -36,24 +35,20 @@ const assetPriceFlow = ai.defineFlow(
     const finnhubApiKey = process.env.FINNHUB_API_KEY;
 
     if (!finnhubApiKey) {
-      console.error('Finnhub API key (FINNHUB_API_KEY) is not configured.');
-      // It's important not to throw here if we want to allow partial data loading in the widget
-      // The widget should handle the null price.
-      return { currentPrice: null };
+      const errorMsg = 'Finnhub API key (FINNHUB_API_KEY) is not configured in .env.local. Cannot fetch asset prices.';
+      console.error(errorMsg);
+      throw new Error('FINNHUB_API_KEY_NOT_CONFIGURED');
     }
 
-    // For stocks, Finnhub uses a simple symbol. For crypto, it's often like 'BINANCE:BTCUSDT'.
-    // For this initial version, we'll assume stock symbols.
-    // TODO: Add logic to handle different asset types (stock, crypto, fund) if necessary,
-    // possibly by using different Finnhub endpoints or symbol formatting.
     const apiUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol.toUpperCase()}&token=${finnhubApiKey}`;
 
     try {
       const response = await fetch(apiUrl);
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`Finnhub API Error for symbol ${symbol}: ${response.status} ${errorText}`);
-        return { currentPrice: null };
+        const detailedErrorMsg = `Finnhub API Error for symbol ${symbol}: ${response.status} ${errorText}`;
+        console.error(detailedErrorMsg);
+        throw new Error(`FINNHUB_API_ERROR: ${response.status} for ${symbol}`);
       }
       const data = await response.json();
 
@@ -62,12 +57,18 @@ const assetPriceFlow = ai.defineFlow(
         return { currentPrice: data.c };
       } else {
         console.warn(`Finnhub: Current price (c) not found or not a number for symbol ${symbol}. Data:`, data);
-        return { currentPrice: null };
+        return { currentPrice: null }; // Symbol might be valid, but no price data (e.g., delisted, or no recent trade)
       }
     } catch (error) {
+      // Handle errors already thrown (like API key or Finnhub API error)
+      if (error instanceof Error && (error.message.startsWith('FINNHUB_API_KEY_NOT_CONFIGURED') || error.message.startsWith('FINNHUB_API_ERROR'))) {
+        throw error; // Re-throw to be caught by the widget
+      }
+      // Handle generic fetch errors (network issues, etc.)
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`Failed to fetch price for symbol ${symbol} from Finnhub: ${errorMessage}`);
-      return { currentPrice: null };
+      console.error(`Failed to fetch price for symbol ${symbol} from Finnhub (generic catch): ${errorMessage}`);
+      throw new Error(`FETCH_ERROR: Could not fetch price for ${symbol} from Finnhub.`);
     }
   }
 );
+
