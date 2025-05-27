@@ -2,9 +2,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, RefreshCw, AlertCircle, Loader2, Search } from 'lucide-react';
+import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, RefreshCw, AlertCircle, Loader2, Settings } from 'lucide-react';
 import type { Asset, AssetPortfolio, AssetHolding } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -53,7 +53,7 @@ function calculateAssetPortfolio(
       currentValue = asset.quantity * currentPricePerUnit;
     }
 
-    const profitLoss = typeof currentPricePerUnit === 'number' ? currentValue - initialCost : 0 - initialCost; // If price not fetched, PL is based on 0 current value for that asset.
+    const profitLoss = typeof currentPricePerUnit === 'number' ? currentValue - initialCost : 0 - initialCost; 
 
     totalPortfolioValue += currentValue;
     totalInitialCost += initialCost;
@@ -86,6 +86,7 @@ export function AssetTrackerWidget() {
   const [isFetchingPrices, setIsFetchingPrices] = useState(false);
   const [priceFetchError, setPriceFetchError] = useState<string | null>(null);
   const [isFetchingName, setIsFetchingName] = useState(false);
+  const [showAssetManagement, setShowAssetManagement] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -249,7 +250,7 @@ export function AssetTrackerWidget() {
       const newAsset: Asset = { 
         ...assetFormData, 
         id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
-        name: (assetFormData.name.trim() || assetFormData.symbol.toUpperCase()) // Fallback for name
+        name: (assetFormData.name.trim() || assetFormData.symbol.toUpperCase()) 
       };
       setAssets([...assets, newAsset]);
       toast({ title: "Asset Added", description: `"${newAsset.name}" has been added.` });
@@ -310,11 +311,24 @@ export function AssetTrackerWidget() {
           <Button size="sm" variant="outline" onClick={() => fetchAllAssetPrices(assets)} disabled={isFetchingPrices || assets.length === 0}>
             <RefreshCw className={cn("mr-2 h-4 w-4", isFetchingPrices && "animate-spin")} /> Refresh Prices
           </Button>
-          <Button size="sm" onClick={openAddForm}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Add Asset
+          <Button 
+            size="sm" 
+            variant="ghost" 
+            onClick={() => setShowAssetManagement(!showAssetManagement)}
+            aria-label="Manage Assets"
+          >
+            <Settings className="h-4 w-4" />
           </Button>
         </div>
       </div>
+
+      {showAssetManagement && (
+        <div className="mb-4 p-3 border rounded-lg bg-muted/10 shadow-sm">
+            <Button size="sm" onClick={openAddForm} className="w-full">
+                <PlusCircle className="mr-2 h-4 w-4" /> Add New Asset
+            </Button>
+        </div>
+      )}
 
       <Card className="shadow-lg">
         <CardContent className="pt-6">
@@ -348,7 +362,7 @@ export function AssetTrackerWidget() {
                       <TableHead className="text-right">Total Value</TableHead>
                       <TableHead className="text-right">P/L</TableHead>
                       <TableHead className="text-right">P/L %</TableHead>
-                      <TableHead className="text-center">Actions</TableHead>
+                      {showAssetManagement && <TableHead className="text-center">Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -383,34 +397,36 @@ export function AssetTrackerWidget() {
                         )}>
                           {formatPercentage(asset.profitLossPercentage)}
                         </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex justify-center items-center gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditAsset(asset)} aria-label="Edit asset">
-                              <Edit3 className="w-4 h-4" />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive h-7 w-7" aria-label="Delete asset">
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete the asset "{asset.name}".
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleRemoveAsset(asset.id)} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </TableCell>
+                        {showAssetManagement && (
+                          <TableCell className="text-center">
+                            <div className="flex justify-center items-center gap-1">
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditAsset(asset)} aria-label="Edit asset">
+                                <Edit3 className="w-4 h-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive h-7 w-7" aria-label="Delete asset">
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This action cannot be undone. This will permanently delete the asset "{asset.name}".
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleRemoveAsset(asset.id)} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -428,7 +444,7 @@ export function AssetTrackerWidget() {
               ) : (
                 <>
                   <p>No assets tracked yet.</p>
-                  <p className="text-sm">Click "Add Asset" to get started.</p>
+                  <p className="text-sm">Click the settings icon <Settings className="inline h-3 w-3 align-middle" /> then "Add New Asset" to get started.</p>
                 </>
               )}
                {priceFetchError && !isFetchingPrices && <p className="text-xs text-destructive mt-4">{priceFetchError}</p>}
@@ -521,5 +537,3 @@ export function AssetTrackerWidget() {
     </React.Fragment>
   );
 }
-
-    
