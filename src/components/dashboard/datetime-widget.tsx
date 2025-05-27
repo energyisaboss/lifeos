@@ -35,8 +35,8 @@ export function DateTimeWidget() {
     : 'Loading date...'; // Placeholder for initial render
 
   return (
-    <Card className="shadow-lg h-full">
-      <CardContent className="flex flex-col items-center justify-center h-full p-6">
+    <Card className="shadow-lg">
+      <CardContent className="flex flex-col items-center justify-center p-6">
         <p className="text-3xl font-semibold text-primary">{formattedTime}</p>
         <p className="text-base text-muted-foreground mt-1">{formattedDate}</p>
       </CardContent>
