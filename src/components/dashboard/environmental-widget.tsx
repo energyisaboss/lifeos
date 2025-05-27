@@ -121,7 +121,7 @@ export function EnvironmentalWidget() {
       }
     };
     fetchData();
-  }, [latitude, longitude, locationError]);
+  }, [latitude, longitude, locationError]); // locationError dependency to re-fetch when it changes (e.g., user enables location)
 
   const getMoonIconStyle = (phaseName?: string): React.CSSProperties => {
     if (!phaseName) return {};
@@ -231,7 +231,7 @@ export function EnvironmentalWidget() {
     );
   }
 
-  const { locationName, moonPhase, uvIndex, airQuality, currentWeather, weeklyWeather } = data;
+  const { moonPhase, uvIndex, airQuality, currentWeather, weeklyWeather } = data;
   const moonIconStyle = getMoonIconStyle(moonPhase?.name);
   const moonIconName = (moonPhase?.iconName && typeof moonPhase.iconName === 'string') ? moonPhase.iconName : "Moon";
   const uvProgressValue = uvIndex ? Math.min(100, (uvIndex.value / 11) * 100) : 0; // Max UV for 100% is 11
@@ -239,7 +239,7 @@ export function EnvironmentalWidget() {
   return (
     <Card className="shadow-lg">
       <CardHeader>
-        <SectionTitle icon={LucideIcons.Cloud} title={locationName ? `Environment - ${locationName}`: "Environment"} />
+        <SectionTitle icon={LucideIcons.Cloud} title="Environment" />
          {locationError && !error && (
             <p className="text-xs text-amber-600 dark:text-amber-500 mt-1 flex items-center">
                 <MapPinOff size={14} className="mr-1.5 flex-shrink-0" /> {locationError}
@@ -254,7 +254,7 @@ export function EnvironmentalWidget() {
               <p className="text-md font-medium text-card-foreground">{moonPhase.name}</p>
               <p className="text-xs text-muted-foreground mt-0.5">Illumination: {moonPhase.illumination}%</p>
             </div>
-          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Moon phase N/A</p></div>}
+          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Moon phase data N/A</p></div>}
 
           {uvIndex ? (
             <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center space-y-1">
@@ -270,7 +270,7 @@ export function EnvironmentalWidget() {
                 aria-label={`UV Index level: ${uvIndex.description}, value ${uvIndex.value}`}
               />
             </div>
-          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">UV index N/A</p></div>}
+          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">UV index data N/A</p></div>}
         
           {airQuality ? (
             <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
@@ -278,7 +278,7 @@ export function EnvironmentalWidget() {
                 <p className={cn("text-md font-medium", airQuality.colorClass || 'text-card-foreground')}>{airQuality.level}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">AQI (1-5): {airQuality.aqi}</p>
             </div>
-          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Air Quality N/A</p></div>}
+          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Air Quality data N/A</p></div>}
         </div>
         
         {currentWeather && (
@@ -323,3 +323,4 @@ export function EnvironmentalWidget() {
     </Card>
   );
 }
+
