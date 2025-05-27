@@ -58,15 +58,15 @@ export interface WeatherDay {
 export interface Asset {
   id: string;
   name: string;
-  symbol: string;
+  symbol: string; // e.g., AAPL, BTC-USD, VOO
   quantity: number;
-  purchasePrice: number;
-  currentValue: number;
-  type: 'stock' | 'fund' | 'crypto';
+  purchasePrice: number; // Price per unit at the time of purchase
+  type: 'stock' | 'fund' | 'crypto'; // Type of asset
 }
 
 export interface AssetHolding extends Asset {
-  totalValue: number;
+  currentPricePerUnit?: number | null; // Fetched current price per unit
+  totalValue: number; // quantity * currentPricePerUnit
   profitLoss: number;
   profitLossPercentage: number;
 }
@@ -75,5 +75,6 @@ export interface AssetPortfolio {
   holdings: AssetHolding[];
   totalPortfolioValue: number;
   totalProfitLoss: number;
-  totalProfitLossPercentage: number;
+  // totalProfitLossPercentage field was removed as per user request
 }
+
