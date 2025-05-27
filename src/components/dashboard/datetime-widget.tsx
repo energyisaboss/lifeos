@@ -2,9 +2,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { SectionTitle } from './section-title';
-import { Clock } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 
 export function DateTimeWidget() {
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
@@ -37,13 +35,10 @@ export function DateTimeWidget() {
     : 'Loading date...'; // Placeholder for initial render
 
   return (
-    <Card className="shadow-lg">
-      <CardHeader>
-        <SectionTitle icon={Clock} title="Current Date & Time" />
-      </CardHeader>
-      <CardContent>
+    <Card className="shadow-lg h-full">
+      <CardContent className="flex flex-col items-center justify-center h-full p-6">
         <p className="text-3xl font-semibold text-primary">{formattedTime}</p>
-        <p className="text-base text-muted-foreground">{formattedDate}</p>
+        <p className="text-base text-muted-foreground mt-1">{formattedDate}</p>
       </CardContent>
     </Card>
   );
