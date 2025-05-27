@@ -15,12 +15,12 @@ import { Progress } from "@/components/ui/progress";
 
 const IconComponent = ({ name, className, style, ...props }: { name: string, className?: string, style?: React.CSSProperties } & LucideIcons.LucideProps) => {
   if (!name || typeof name !== 'string') {
-    console.warn(`IconComponent received invalid name: ${name}, falling back to HelpCircle`);
-    return <LucideIcons.HelpCircle className={className} style={style} {...props} />;
+    console.warn(`IconComponent received invalid name: ${name}, falling back to Moon`);
+    return <LucideIcons.Moon className={className} style={style} {...props} />;
   }
   const Icon = (LucideIcons as any)[name];
   if (!Icon) {
-    console.warn(`Icon not found: ${name}, falling back to Moon`); // Changed fallback to Moon for thematic consistency
+    console.warn(`Icon not found: ${name}, falling back to Moon`);
     return <LucideIcons.Moon className={className} style={style} {...props} />;
   }
   return <Icon className={className} style={style} {...props} />;
@@ -64,23 +64,25 @@ export function EnvironmentalWidget() {
         (err) => {
           console.error("Error getting geolocation:", err);
           setLocationError("Could not get your location. Please enable location services. Showing data for a default location (San Francisco).");
-          setLatitude(37.7749);
-          setLongitude(-122.4194);
+          setLatitude(37.7749); // Default to San Francisco
+          setLongitude(-122.4194); // Default to San Francisco
         }
       );
     } else {
       setLocationError("Geolocation is not supported by your browser. Showing data for a default location (San Francisco).");
-      setLatitude(37.7749);
-      setLongitude(-122.4194);
+      setLatitude(37.7749); // Default to San Francisco
+      setLongitude(-122.4194); // Default to San Francisco
     }
   }, []);
 
   useEffect(() => {
     if (latitude === null || longitude === null) {
-      if (!locationError) {
+      if (!locationError) { // Still waiting for initial geolocation attempt or it's not supported
           setIsLoading(true);
           return;
       }
+      // If locationError is set, it means we've already tried and failed or decided to use default.
+      // In this case, latitude/longitude should be set to default, so we can proceed.
     }
 
     const fetchData = async () => {
@@ -90,24 +92,26 @@ export function EnvironmentalWidget() {
         try {
           const result = await getEnvironmentalData({ latitude, longitude });
           setData(result);
+          // Refine location error message based on API response for location name
           if (locationError && result.locationName && !result.locationName.toLowerCase().includes("san francisco")) {
             setLocationError(`Could not get your location. Showing data for ${result.locationName}. Please enable location services for local data.`);
           } else if (locationError && result.locationName && result.locationName.toLowerCase().includes("san francisco")) {
              // Keep existing locationError about default location if it's SF
           } else if (!locationError) {
-            setLocationError(null);
+            setLocationError(null); // Clear error if location was successful and API returned a name
           }
+
         } catch (err) {
-          console.error("Failed to fetch environmental data:", err);
+          console.error("Failed to fetch environmental data in widget:", err);
           const errorMessage = err instanceof Error ? err.message : String(err);
 
           if (errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("GOOGLE_API_KEY") || errorMessage.toLowerCase().includes("failed_precondition") || errorMessage.toLowerCase().includes("api key not valid")) {
              setError("Google AI API key is missing. Please add GOOGLE_API_KEY or GEMINI_API_KEY to your .env.local file and restart the server. See https://firebase.google.com/docs/genkit/plugins/google-genai for details.");
-          } else if (errorMessage.includes("OPENWEATHER_API_KEY") && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
+          } else if ((errorMessage.includes("OPENWEATHER_API_KEY") || errorMessage.includes("OpenWeatherMap API key")) && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
              setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your .env.local file and restart server.");
-          } else if (errorMessage.includes("OPENUV_API_KEY") && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
+          } else if ((errorMessage.includes("OPENUV_API_KEY") || errorMessage.includes("OpenUV API key")) && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
              setError("OpenUV API key for UV Index is missing. Please add OPENUV_API_KEY to .env.local and restart server. Note: OpenUV has low free tier limits.");
-          } else if (errorMessage.includes("WEATHERAPI_COM_KEY") && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
+          } else if ((errorMessage.includes("WEATHERAPI_COM_KEY") || errorMessage.includes("WeatherAPI.com key")) && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
              setError("WeatherAPI.com key for Moon Phase is missing. Please add WEATHERAPI_COM_KEY to .env.local and restart server. Note: WeatherAPI.com has low free tier limits.");
           } else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.includes("401")) {
               setError("Failed to fetch weather data: Unauthorized. Check your API keys (OpenWeatherMap, OpenUV, WeatherAPI.com), ensure they are active, and subscribed to necessary services.");
@@ -121,7 +125,7 @@ export function EnvironmentalWidget() {
       }
     };
     fetchData();
-  }, [latitude, longitude, locationError]); 
+  }, [latitude, longitude, locationError]); // Rerun if locationError changes (e.g. from null to an error, then we use defaults)
 
   const getMoonIconStyle = (phaseName?: string): React.CSSProperties => {
     if (!phaseName) return {};
@@ -148,7 +152,7 @@ export function EnvironmentalWidget() {
     );
   }
 
-  if (locationError && !data && !error && !(latitude && longitude)) {
+  if (locationError && !data && !error && !(latitude && longitude)) { // Show only if we genuinely couldn't get a location and haven't even fetched default yet
     return (
       <Card className="shadow-lg">
         <CardHeader>
@@ -182,13 +186,13 @@ export function EnvironmentalWidget() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <Skeleton className="h-20 w-full" />
             <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full md:col-span-1" /> 
+            <Skeleton className="h-20 w-full md:col-span-1" />
           </div>
           <div>
             <Skeleton className="h-8 w-1/3 mb-2" />
-            <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 text-center">
+            <div className="flex flex-wrap justify-center gap-2 text-center">
               {Array.from({ length: 7 }).map((_, i) => (
-                <Skeleton key={i} className="h-24 w-full" />
+                <Skeleton key={i} className="h-24 w-16" />
               ))}
             </div>
           </div>
@@ -231,7 +235,7 @@ export function EnvironmentalWidget() {
     );
   }
 
-  const { moonPhase, uvIndex, airQuality, currentWeather, weeklyWeather } = data;
+  const { moonPhase, uvIndex, airQuality, currentWeather, weeklyWeather, locationName } = data;
   const moonIconStyle = getMoonIconStyle(moonPhase?.name);
   const moonIconName = (moonPhase?.iconName && typeof moonPhase.iconName === 'string') ? moonPhase.iconName : "Moon";
   const uvProgressValue = uvIndex ? Math.min(100, (uvIndex.value / 11) * 100) : 0; // Max UV for 100% is 11
@@ -271,7 +275,7 @@ export function EnvironmentalWidget() {
               />
             </div>
           ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">UV index data N/A</p></div>}
-        
+
           {airQuality ? (
             <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
                 <IconComponent name={airQuality.iconName || "HelpCircle"} className={cn("w-8 h-8 mb-1", airQuality.colorClass || 'text-primary')} />
@@ -280,7 +284,7 @@ export function EnvironmentalWidget() {
             </div>
           ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Air Quality data N/A</p></div>}
         </div>
-        
+
         {currentWeather && (
           <div className="p-4 rounded-md bg-muted/30 shadow-md">
             <div className="flex flex-col sm:flex-row items-center justify-between mb-2">
@@ -288,7 +292,10 @@ export function EnvironmentalWidget() {
                 <IconComponent name={currentWeather.iconName || "Cloud"} className="w-12 h-12 mr-3 text-primary" />
                 <span className="text-5xl font-semibold">{currentWeather.temp}°C</span>
               </div>
-              <span className="text-lg text-card-foreground capitalize text-center sm:text-right">{currentWeather.description}</span>
+              <div className="flex flex-col items-center sm:items-end">
+                <span className="text-lg text-card-foreground capitalize text-center sm:text-right">{currentWeather.description}</span>
+                {locationName && <span className="text-xs text-muted-foreground">in {locationName}</span>}
+              </div>
             </div>
             <div className="flex flex-col sm:flex-row items-center justify-around text-sm text-muted-foreground space-y-1 sm:space-y-0 sm:space-x-4 mt-3 pt-3 border-t border-border/50">
               <div className="flex items-center">
@@ -304,9 +311,9 @@ export function EnvironmentalWidget() {
         {weeklyWeather && weeklyWeather.length > 0 && (
           <div className="flex flex-col items-center">
             <h4 className="text-sm font-medium text-muted-foreground mb-2 text-center">Weekly Weather</h4>
-            <div className="inline-grid grid-cols-4 sm:grid-cols-7 gap-2 text-center">
+            <div className="flex flex-wrap justify-center gap-2">
               {weeklyWeather.map((dayWeather) => (
-                <div key={dayWeather.day} className="p-2 rounded-md bg-muted/30 flex flex-col items-center justify-between min-h-[90px]">
+                <div key={dayWeather.day} className="w-16 p-2 rounded-md bg-muted/30 flex flex-col items-center justify-between min-h-[90px] text-center">
                   <p className="text-xs font-medium text-card-foreground">{dayWeather.day}</p>
                   <IconComponent name={dayWeather.iconName || "Cloud"} className="my-1 text-2xl text-primary" />
                   <p className="text-xs text-card-foreground">{dayWeather.tempHigh}° / {dayWeather.tempLow}°</p>
@@ -323,5 +330,3 @@ export function EnvironmentalWidget() {
     </Card>
   );
 }
-
-    
