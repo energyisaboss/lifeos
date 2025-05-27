@@ -2,26 +2,26 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
 import * as LucideIcons from 'lucide-react';
 import type { EnvironmentalData } from '@/lib/types';
 import { getEnvironmentalData } from '@/ai/flows/environmental-data-flow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal, MapPinOff } from "lucide-react";
+import { Terminal, MapPinOff, Gauge, Smile, Meh, Frown, CloudFog, Skull, HelpCircle } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Progress } from "@/components/ui/progress";
 
 const IconComponent = ({ name, className, style, ...props }: { name: string, className?: string, style?: React.CSSProperties } & LucideIcons.LucideProps) => {
   if (!name || typeof name !== 'string') {
-    console.warn(`IconComponent received invalid name: ${name}, falling back to Moon`);
-    return <LucideIcons.Moon className={className} style={style} {...props} />;
+    console.warn(`IconComponent received invalid name: ${name}, falling back to HelpCircle`);
+    return <LucideIcons.HelpCircle className={className} style={style} {...props} />;
   }
   const Icon = (LucideIcons as any)[name];
   if (!Icon) {
-    console.warn(`Icon not found: ${name}, falling back to Moon`);
-    return <LucideIcons.Moon className={className} style={style} {...props} />;
+    console.warn(`Icon not found: ${name}, falling back to HelpCircle`);
+    return <LucideIcons.HelpCircle className={className} style={style} {...props} />;
   }
   return <Icon className={className} style={style} {...props} />;
 };
@@ -179,9 +179,10 @@ export function EnvironmentalWidget() {
              <Skeleton className="h-6 w-full" />
              <Skeleton className="h-4 w-3/4 mt-1" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <Skeleton className="h-20 w-full" />
             <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full md:col-span-1" /> 
           </div>
           <div>
             <Skeleton className="h-8 w-1/3 mb-2" />
@@ -230,11 +231,10 @@ export function EnvironmentalWidget() {
     );
   }
 
-  const { locationName, moonPhase, uvIndex, currentWeather, weeklyWeather } = data;
+  const { locationName, moonPhase, uvIndex, airQuality, currentWeather, weeklyWeather } = data;
   const moonIconStyle = getMoonIconStyle(moonPhase?.name);
   const moonIconName = (moonPhase?.iconName && typeof moonPhase.iconName === 'string') ? moonPhase.iconName : "Moon";
   const uvProgressValue = uvIndex ? Math.min(100, (uvIndex.value / 11) * 100) : 0; // Max UV for 100% is 11
-
 
   return (
     <Card className="shadow-lg">
@@ -247,14 +247,14 @@ export function EnvironmentalWidget() {
         )}
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {moonPhase ? (
             <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
               <IconComponent name={moonIconName || "Moon"} className="w-8 h-8 mb-1 text-primary" style={moonIconStyle} />
               <p className="text-md font-medium text-card-foreground">{moonPhase.name}</p>
               <p className="text-xs text-muted-foreground mt-0.5">Illumination: {moonPhase.illumination}%</p>
             </div>
-          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Moon phase data N/A</p></div>}
+          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Moon phase N/A</p></div>}
 
           {uvIndex ? (
             <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center space-y-1">
@@ -270,7 +270,15 @@ export function EnvironmentalWidget() {
                 aria-label={`UV Index level: ${uvIndex.description}, value ${uvIndex.value}`}
               />
             </div>
-          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">UV index data N/A</p></div>}
+          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">UV index N/A</p></div>}
+        
+          {airQuality ? (
+            <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
+                <IconComponent name={airQuality.iconName || "HelpCircle"} className={cn("w-8 h-8 mb-1", airQuality.colorClass || 'text-primary')} />
+                <p className={cn("text-md font-medium", airQuality.colorClass || 'text-card-foreground')}>{airQuality.level}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">AQI (1-5): {airQuality.aqi}</p>
+            </div>
+          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Air Quality N/A</p></div>}
         </div>
         
         {currentWeather && (
@@ -315,5 +323,3 @@ export function EnvironmentalWidget() {
     </Card>
   );
 }
-
-

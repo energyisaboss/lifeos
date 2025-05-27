@@ -2,7 +2,7 @@
 'use server';
 /**
  * @fileOverview A Genkit flow to fetch environmental data.
- * It uses OpenWeatherMap for current weather and 5-day forecast,
+ * It uses OpenWeatherMap for current weather, 5-day forecast, and air quality,
  * OpenUV for UV index, and WeatherAPI.com for moon phase.
  *
  * - getEnvironmentalData - Fetches and combines data from these sources.
@@ -12,7 +12,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import type { EnvironmentalData as AppEnvironmentalData, WeatherDay } from '@/lib/types';
+import type { EnvironmentalData as AppEnvironmentalData } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 
 const EnvironmentalDataInputSchema = z.object({
@@ -29,6 +29,13 @@ const WeatherDaySchema = z.object({
   rainPercentage: z.number(),
 });
 
+const AirQualitySchema = z.object({
+  aqi: z.number().describe('Air Quality Index value (OWM scale 1-5).'),
+  level: z.string().describe('Descriptive level of air quality.'),
+  iconName: z.string().describe('Lucide icon name for the AQI level.'),
+  colorClass: z.string().describe('Tailwind CSS class for text color.'),
+});
+
 const EnvironmentalDataOutputSchema = z.object({
   locationName: z.string().optional().describe('Name of the location/city.'),
   moonPhase: z.optional(z.object({
@@ -40,6 +47,7 @@ const EnvironmentalDataOutputSchema = z.object({
     value: z.number(),
     description: z.string(),
   })),
+  airQuality: z.optional(AirQualitySchema),
   currentWeather: z.object({
     temp: z.number(),
     description: z.string(),
@@ -74,15 +82,23 @@ function getUvIndexDescription(uv: number): string {
 
 function mapMoonPhaseToIconName(phaseName: string): string {
     const lowerPhase = phaseName.toLowerCase();
-    if (lowerPhase.includes('new moon')) return 'Eclipse';
-    if (lowerPhase.includes('full moon')) return 'Sun';
+    if (lowerPhase.includes('new moon')) return 'Eclipse'; // Dark circle
+    if (lowerPhase.includes('full moon')) return 'Sun'; // Bright circle
     if (lowerPhase.includes('first quarter') || lowerPhase.includes('last quarter')) return 'CircleHalf';
-    // For Crescents and Gibbous, 'Moon' (which is a crescent shape in Lucide) will be used.
-    // Client-side logic will flip it for waning phases.
     if (lowerPhase.includes('crescent') || lowerPhase.includes('gibbous')) return 'Moon';
     return 'Moon'; // Default
 }
 
+function getAqiInfo(owmAqi: number): { level: string, iconName: string, colorClass: string } {
+  switch (owmAqi) {
+    case 1: return { level: 'Good', iconName: 'Smile', colorClass: 'text-green-500' };
+    case 2: return { level: 'Fair', iconName: 'Meh', colorClass: 'text-yellow-500' };
+    case 3: return { level: 'Moderate', iconName: 'Frown', colorClass: 'text-orange-500' };
+    case 4: return { level: 'Poor', iconName: 'CloudFog', colorClass: 'text-red-500' };
+    case 5: return { level: 'Very Poor', iconName: 'Skull', colorClass: 'text-purple-500' };
+    default: return { level: 'Unknown', iconName: 'HelpCircle', colorClass: 'text-muted-foreground' };
+  }
+}
 
 export async function getEnvironmentalData(input: EnvironmentalDataInput): Promise<EnvironmentalDataOutput> {
   return environmentalDataFlow(input);
@@ -97,26 +113,31 @@ const environmentalDataFlow = ai.defineFlow(
   async ({ latitude, longitude }) => {
     const openWeatherApiKey = process.env.OPENWEATHER_API_KEY;
     const openUvApiKey = process.env.OPENUV_API_KEY;
-    const weatherApiComKey = process.env.WEATHERAPI_COM_KEY;
+    const weatherApiComKey = process.env.WEATHERAPI_COM_KEY; // Corrected from WEATHERAPI_API_KEY
 
     let currentWeatherData: AppEnvironmentalData['currentWeather'] | undefined;
     let weeklyWeatherData: AppEnvironmentalData['weeklyWeather'] = [];
     let locationNameData: string | undefined;
     let uvIndexData: AppEnvironmentalData['uvIndex'] | undefined;
     let moonPhaseData: AppEnvironmentalData['moonPhase'] | undefined;
+    let airQualityData: AppEnvironmentalData['airQuality'] | undefined;
 
     const errors: string[] = [];
 
-    // Fetch OpenWeatherMap Data
+    // Fetch OpenWeatherMap Data (Current Weather, Forecast, Air Quality)
     if (openWeatherApiKey) {
       const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${openWeatherApiKey}&units=metric`;
       const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&appid=${openWeatherApiKey}&units=metric`;
+      const airQualityUrl = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${latitude}&lon=${longitude}&appid=${openWeatherApiKey}`;
+      
       try {
-        const [currentWeatherResponse, forecastResponse] = await Promise.all([
+        const [currentWeatherResponse, forecastResponse, airQualityResponse] = await Promise.all([
           fetch(currentWeatherUrl),
           fetch(forecastUrl),
+          fetch(airQualityUrl),
         ]);
 
+        // Current Weather
         if (!currentWeatherResponse.ok) {
           const errorText = await currentWeatherResponse.text();
           const errorMessage = `OpenWeatherMap Current Weather API Error: ${currentWeatherResponse.status} ${errorText}`;
@@ -134,6 +155,7 @@ const environmentalDataFlow = ai.defineFlow(
           locationNameData = currentData.name;
         }
 
+        // Forecast
         if (!forecastResponse.ok) {
            const errorText = await forecastResponse.text();
            const errorMessage = `OpenWeatherMap Forecast API Error: ${forecastResponse.status} ${errorText}`;
@@ -172,6 +194,31 @@ const environmentalDataFlow = ai.defineFlow(
               };
             });
         }
+
+        // Air Quality
+        if (!airQualityResponse.ok) {
+          const errorText = await airQualityResponse.text();
+          const errorMessage = `OpenWeatherMap Air Quality API Error: ${airQualityResponse.status} ${errorText}`;
+          console.error(errorMessage);
+          errors.push(errorMessage);
+        } else {
+          const aqData = await airQualityResponse.json();
+          if (aqData && aqData.list && aqData.list[0] && aqData.list[0].main) {
+            const owmAqiValue = aqData.list[0].main.aqi;
+            const aqiInfo = getAqiInfo(owmAqiValue);
+            airQualityData = {
+              aqi: owmAqiValue,
+              level: aqiInfo.level,
+              iconName: aqiInfo.iconName,
+              colorClass: aqiInfo.colorClass,
+            };
+          } else {
+            const formatError = 'OpenWeatherMap Air Quality API response format error.';
+            console.error(formatError, aqData);
+            errors.push(formatError);
+          }
+        }
+
       } catch (error) {
         const errorMessage = `Failed to fetch OpenWeatherMap data: ${error instanceof Error ? error.message : String(error)}`;
         console.error(errorMessage);
@@ -189,7 +236,7 @@ const environmentalDataFlow = ai.defineFlow(
         if (!uvResponse.ok) {
           const errorText = await uvResponse.text();
           const errorMessage = `OpenUV API Error: ${uvResponse.status} ${errorText}`;
-          console.error(`OpenUV API Error: ${uvResponse.status} ${await uvResponse.text()}`);
+          console.error(errorMessage);
           errors.push(errorMessage);
         } else {
           const uvData = await uvResponse.json();
@@ -206,7 +253,7 @@ const environmentalDataFlow = ai.defineFlow(
         }
       } catch (error) {
         const errorMessage = `Failed to fetch OpenUV data: ${error instanceof Error ? error.message : String(error)}`;
-        console.error(`Failed to fetch OpenUV data: ${error}`);
+        console.error(errorMessage);
         errors.push(errorMessage);
       }
     } else {
@@ -221,7 +268,7 @@ const environmentalDataFlow = ai.defineFlow(
         if (!moonResponse.ok) {
           const errorText = await moonResponse.text();
           const errorMessage = `WeatherAPI.com Error: ${moonResponse.status} ${errorText}`;
-          console.error(`WeatherAPI.com Error: ${moonResponse.status} ${await moonResponse.text()}`);
+          console.error(errorMessage);
           errors.push(errorMessage);
         } else {
           const moonApiData = await moonResponse.json();
@@ -240,7 +287,7 @@ const environmentalDataFlow = ai.defineFlow(
         }
       } catch (error) {
         const errorMessage = `Failed to fetch WeatherAPI.com data: ${error instanceof Error ? error.message : String(error)}`;
-        console.error(`Failed to fetch WeatherAPI.com data: ${error}`);
+        console.error(errorMessage);
         errors.push(errorMessage);
       }
     } else {
@@ -261,6 +308,7 @@ const environmentalDataFlow = ai.defineFlow(
       weeklyWeather: weeklyWeatherData,
       uvIndex: uvIndexData,
       moonPhase: moonPhaseData,
+      airQuality: airQualityData,
     };
   }
 );

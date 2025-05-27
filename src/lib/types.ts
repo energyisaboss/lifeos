@@ -30,6 +30,12 @@ export interface EnvironmentalData {
     value: number;
     description: string; // e.g., "Low", "Moderate", "High"
   };
+  airQuality?: {
+    aqi: number; // OWM AQI Index (1-5)
+    level: string; // e.g., "Good", "Fair", "Moderate", "Poor", "Very Poor"
+    iconName: string; // Lucide icon name for the level
+    colorClass: string; // Tailwind CSS class for text color
+  };
   currentWeather: {
     temp: number;
     description: string;
