@@ -43,7 +43,7 @@ export function DateTimeWidget() {
       </CardHeader>
       <CardContent>
         <p className="text-3xl font-semibold text-primary">{formattedTime}</p>
-        <p className="text-sm text-muted-foreground">{formattedDate}</p>
+        <p className="text-base text-muted-foreground">{formattedDate}</p>
       </CardContent>
     </Card>
   );
