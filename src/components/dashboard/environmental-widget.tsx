@@ -290,7 +290,7 @@ export function EnvironmentalWidget() {
             <div className="flex flex-col sm:flex-row items-center justify-between mb-2">
               <div className="flex items-center mb-2 sm:mb-0">
                 <IconComponent name={currentWeather.iconName || "Cloud"} className="w-12 h-12 mr-3 text-primary" />
-                <span className="text-5xl font-semibold">{currentWeather.temp}°C</span>
+                <span className="text-5xl font-semibold">{currentWeather.temp}°F</span>
               </div>
               <div className="flex flex-col items-center sm:items-end">
                 <span className="text-lg text-card-foreground capitalize text-center sm:text-right">{currentWeather.description}</span>
@@ -302,7 +302,7 @@ export function EnvironmentalWidget() {
                 <LucideIcons.Droplets className="w-4 h-4 mr-1.5" /> Humidity: {currentWeather.humidity}%
               </div>
               <div className="flex items-center">
-                <LucideIcons.Wind className="w-4 h-4 mr-1.5" /> Wind: {currentWeather.windSpeed} km/h
+                <LucideIcons.Wind className="w-4 h-4 mr-1.5" /> Wind: {currentWeather.windSpeed} mph
               </div>
             </div>
           </div>
@@ -316,7 +316,7 @@ export function EnvironmentalWidget() {
                 <div key={dayWeather.day} className="w-16 p-2 rounded-md bg-muted/30 flex flex-col items-center justify-between min-h-[90px] text-center">
                   <p className="text-xs font-medium text-card-foreground">{dayWeather.day}</p>
                   <IconComponent name={dayWeather.iconName || "Cloud"} className="my-1 text-2xl text-primary" />
-                  <p className="text-xs text-card-foreground">{dayWeather.tempHigh}° / {dayWeather.tempLow}°</p>
+                  <p className="text-xs text-card-foreground">{dayWeather.tempHigh}° / {dayWeather.tempLow}°F</p>
                   <div className="flex items-center text-xs text-muted-foreground mt-1">
                     <LucideIcons.Droplets className="w-3 h-3 mr-1" />
                     <span>{dayWeather.rainPercentage}%</span>
@@ -330,3 +330,4 @@ export function EnvironmentalWidget() {
     </Card>
   );
 }
+

@@ -113,7 +113,7 @@ const environmentalDataFlow = ai.defineFlow(
   async ({ latitude, longitude }) => {
     const openWeatherApiKey = process.env.OPENWEATHER_API_KEY;
     const openUvApiKey = process.env.OPENUV_API_KEY;
-    const weatherApiComKey = process.env.WEATHERAPI_COM_KEY; // Corrected from WEATHERAPI_API_KEY
+    const weatherApiComKey = process.env.WEATHERAPI_COM_KEY;
 
     let currentWeatherData: AppEnvironmentalData['currentWeather'] | undefined;
     let weeklyWeatherData: AppEnvironmentalData['weeklyWeather'] = [];
@@ -126,8 +126,8 @@ const environmentalDataFlow = ai.defineFlow(
 
     // Fetch OpenWeatherMap Data (Current Weather, Forecast, Air Quality)
     if (openWeatherApiKey) {
-      const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${openWeatherApiKey}&units=metric`;
-      const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&appid=${openWeatherApiKey}&units=metric`;
+      const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${openWeatherApiKey}&units=imperial`;
+      const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&appid=${openWeatherApiKey}&units=imperial`;
       const airQualityUrl = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${latitude}&lon=${longitude}&appid=${openWeatherApiKey}`;
       
       try {
@@ -150,7 +150,7 @@ const environmentalDataFlow = ai.defineFlow(
             description: currentData.weather[0].description,
             iconName: mapOwmIconToLucideName(currentData.weather[0].icon),
             humidity: currentData.main.humidity,
-            windSpeed: Math.round(currentData.wind.speed * 3.6), // m/s to km/h
+            windSpeed: Math.round(currentData.wind.speed), // wind.speed is in mph for imperial units
           };
           locationNameData = currentData.name;
         }
@@ -236,7 +236,7 @@ const environmentalDataFlow = ai.defineFlow(
         if (!uvResponse.ok) {
           const errorText = await uvResponse.text();
           const errorMessage = `OpenUV API Error: ${uvResponse.status} ${errorText}`;
-          console.error(errorMessage);
+          console.error("OpenUV API Error: ", errorMessage, uvResponse);
           errors.push(errorMessage);
         } else {
           const uvData = await uvResponse.json();
@@ -253,7 +253,7 @@ const environmentalDataFlow = ai.defineFlow(
         }
       } catch (error) {
         const errorMessage = `Failed to fetch OpenUV data: ${error instanceof Error ? error.message : String(error)}`;
-        console.error(errorMessage);
+        console.error("Failed to fetch OpenUV data:", errorMessage, error);
         errors.push(errorMessage);
       }
     } else {
@@ -268,7 +268,7 @@ const environmentalDataFlow = ai.defineFlow(
         if (!moonResponse.ok) {
           const errorText = await moonResponse.text();
           const errorMessage = `WeatherAPI.com Error: ${moonResponse.status} ${errorText}`;
-          console.error(errorMessage);
+          console.error("WeatherAPI.com Error:", errorMessage, moonResponse);
           errors.push(errorMessage);
         } else {
           const moonApiData = await moonResponse.json();
@@ -287,7 +287,7 @@ const environmentalDataFlow = ai.defineFlow(
         }
       } catch (error) {
         const errorMessage = `Failed to fetch WeatherAPI.com data: ${error instanceof Error ? error.message : String(error)}`;
-        console.error(errorMessage);
+        console.error("Failed to fetch WeatherAPI.com data:", errorMessage, error);
         errors.push(errorMessage);
       }
     } else {
@@ -312,3 +312,4 @@ const environmentalDataFlow = ai.defineFlow(
     };
   }
 );
+
