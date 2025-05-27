@@ -1,12 +1,13 @@
 
 export interface NewsArticle {
-  id: string;
-  title: string;
-  source: string;
-  summary: string;
-  url: string;
-  category?: string;
-  publishedAt: string;
+  id: string; // Can be guid or link if guid is missing
+  title?: string;
+  link?: string;
+  sourceName: string; // From feed title or user-provided label
+  contentSnippet?: string; // Short summary
+  isoDate?: string; // ISO date string for sorting
+  category?: string; // Optional category from feed item
+  imageUrl?: string; // Optional image URL from feed item
 }
 
 export interface CalendarEvent {
