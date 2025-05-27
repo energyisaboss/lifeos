@@ -9,7 +9,7 @@ import type { EnvironmentalData } from '@/lib/types';
 import { getEnvironmentalData } from '@/ai/flows/environmental-data-flow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal, MapPinOff, Gauge, Smile, Meh, Frown, CloudFog, Skull, HelpCircle } from "lucide-react";
+import { Terminal, MapPinOff, Gauge, Smile, Meh, Frown, CloudFog, Skull, HelpCircle, Cloud } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Progress } from "@/components/ui/progress";
 
@@ -121,7 +121,7 @@ export function EnvironmentalWidget() {
       }
     };
     fetchData();
-  }, [latitude, longitude, locationError]); // locationError dependency to re-fetch when it changes (e.g., user enables location)
+  }, [latitude, longitude, locationError]); 
 
   const getMoonIconStyle = (phaseName?: string): React.CSSProperties => {
     if (!phaseName) return {};
@@ -171,7 +171,7 @@ export function EnvironmentalWidget() {
     return (
       <Card className="shadow-lg">
         <CardHeader>
-          <SectionTitle icon={LucideIcons.Cloud} title="Environment" />
+          <SectionTitle icon={Cloud} title="Environment" />
         </CardHeader>
         <CardContent className="space-y-6">
            <div className="p-3 rounded-md bg-muted/30">
@@ -221,7 +221,7 @@ export function EnvironmentalWidget() {
     return (
        <Card className="shadow-lg">
         <CardHeader>
-          <SectionTitle icon={LucideIcons.Cloud} title="Environment" />
+          <SectionTitle icon={Cloud} title="Environment" />
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">No environmental data available or primary weather fetch failed.</p>
@@ -239,7 +239,7 @@ export function EnvironmentalWidget() {
   return (
     <Card className="shadow-lg">
       <CardHeader>
-        <SectionTitle icon={LucideIcons.Cloud} title="Environment" />
+        <SectionTitle icon={Cloud} title="Environment" />
          {locationError && !error && (
             <p className="text-xs text-amber-600 dark:text-amber-500 mt-1 flex items-center">
                 <MapPinOff size={14} className="mr-1.5 flex-shrink-0" /> {locationError}
@@ -249,7 +249,7 @@ export function EnvironmentalWidget() {
       <CardContent className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {moonPhase ? (
-            <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
+             <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
               <IconComponent name={moonIconName || "Moon"} className="w-8 h-8 mb-1 text-primary" style={moonIconStyle} />
               <p className="text-md font-medium text-card-foreground">{moonPhase.name}</p>
               <p className="text-xs text-muted-foreground mt-0.5">Illumination: {moonPhase.illumination}%</p>
@@ -257,7 +257,7 @@ export function EnvironmentalWidget() {
           ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Moon phase data N/A</p></div>}
 
           {uvIndex ? (
-            <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center space-y-1">
+             <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center space-y-1">
               <div className="flex items-center text-sm text-muted-foreground">
                 <LucideIcons.Sun className="w-4 h-4 mr-2 text-primary" />
                 UV Index
@@ -303,7 +303,7 @@ export function EnvironmentalWidget() {
 
         {weeklyWeather && weeklyWeather.length > 0 && (
           <div>
-            <h4 className="text-sm font-medium text-muted-foreground mb-2">Weekly Weather</h4>
+            <h4 className="text-sm font-medium text-muted-foreground mb-2 text-center">Weekly Weather</h4>
             <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 text-center">
               {weeklyWeather.map((dayWeather) => (
                 <div key={dayWeather.day} className="p-2 rounded-md bg-muted/30 flex flex-col items-center justify-between min-h-[90px]">
