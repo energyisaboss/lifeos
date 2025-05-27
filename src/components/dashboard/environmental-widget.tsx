@@ -9,7 +9,7 @@ import type { EnvironmentalData } from '@/lib/types';
 import { getEnvironmentalData } from '@/ai/flows/environmental-data-flow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal, MapPinOff, Gauge, Smile, Meh, Frown, CloudFog, Skull, HelpCircle, Cloud } from "lucide-react";
+import { Terminal, MapPinOff, Gauge, Smile, Meh, Frown, CloudFog, Skull, HelpCircle, Cloud, Sun, Eclipse, CircleHalf, Moon } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Progress } from "@/components/ui/progress";
 
@@ -20,8 +20,8 @@ const IconComponent = ({ name, className, style, ...props }: { name: string, cla
   }
   const Icon = (LucideIcons as any)[name];
   if (!Icon) {
-    console.warn(`Icon not found: ${name}, falling back to HelpCircle`);
-    return <LucideIcons.HelpCircle className={className} style={style} {...props} />;
+    console.warn(`Icon not found: ${name}, falling back to Moon`); // Changed fallback to Moon for thematic consistency
+    return <LucideIcons.Moon className={className} style={style} {...props} />;
   }
   return <Icon className={className} style={style} {...props} />;
 };
@@ -302,9 +302,9 @@ export function EnvironmentalWidget() {
         )}
 
         {weeklyWeather && weeklyWeather.length > 0 && (
-          <div>
+          <div className="flex flex-col items-center">
             <h4 className="text-sm font-medium text-muted-foreground mb-2 text-center">Weekly Weather</h4>
-            <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 text-center">
+            <div className="inline-grid grid-cols-4 sm:grid-cols-7 gap-2 text-center">
               {weeklyWeather.map((dayWeather) => (
                 <div key={dayWeather.day} className="p-2 rounded-md bg-muted/30 flex flex-col items-center justify-between min-h-[90px]">
                   <p className="text-xs font-medium text-card-foreground">{dayWeather.day}</p>
@@ -324,3 +324,4 @@ export function EnvironmentalWidget() {
   );
 }
 
+    
