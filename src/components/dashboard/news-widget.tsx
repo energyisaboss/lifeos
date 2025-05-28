@@ -60,9 +60,11 @@ const isValidHexColor = (color: string) => {
   return /^#([0-9A-F]{3}){1,2}$/i.test(color);
 }
 
+interface NewsWidgetProps {
+  settingsOpen: boolean;
+}
 
-export function NewsWidget() {
-  const [showFeedManagement, setShowFeedManagement] = useState(false);
+export function NewsWidget({ settingsOpen }: NewsWidgetProps) {
   const [categories, setCategories] = useState<NewsCategory[]>(() => {
     if (typeof window === 'undefined') {
       return [];
@@ -295,9 +297,15 @@ export function NewsWidget() {
   };
   
   const handleCategoryColorChange = (categoryId: string, newColor: string) => {
-    setCategories(prev => prev.map(cat => 
-      cat.id === categoryId ? { ...cat, color: newColor } : cat
-    ));
+    setCategories(prev => prev.map(cat => {
+      if (cat.id === categoryId) {
+        if (newColor !== '' && !isValidHexColor(newColor)) {
+          toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive", duration: 3000 });
+        }
+        return { ...cat, color: newColor };
+      }
+      return cat;
+    }));
   };
 
   const articlesByCategoryId = (catId: string) => {
@@ -308,17 +316,9 @@ export function NewsWidget() {
     <React.Fragment>
       <div className="flex justify-between items-center mb-4 p-4 border-b">
         <SectionTitle icon={Newspaper} title="Categorized News" className="mb-0 text-lg" />
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={() => setShowFeedManagement(!showFeedManagement)}
-          aria-label="Manage RSS Feeds & Categories"
-        >
-          <Settings className="w-4 h-4" />
-        </Button>
       </div>
 
-      {showFeedManagement && (
+      {settingsOpen && (
         <div className="mb-6 p-4 border rounded-lg bg-muted/10 shadow-sm">
           <div className="p-3 bg-muted/20 rounded-md mb-4">
             <Label htmlFor="new-category-name" className="text-xs font-medium">New Category Name</Label>
@@ -469,8 +469,8 @@ export function NewsWidget() {
         </div>
       )}
 
-      <div className={cn("space-y-6", showFeedManagement ? "mt-6" : "mt-0")}>
-        {isLoading && !showFeedManagement && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
+      <div className={cn("space-y-0", settingsOpen ? "mt-6" : "mt-0")}>
+        {isLoading && !settingsOpen && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
            <div className="space-y-4">
               {Array.from({length: Math.min(2, categories.filter(c => c.feeds.some(f=>f.url.trim())).length || 1)}).map((_, i) => (
                 <Card key={`skel-cat-${i}`} className="mb-4 shadow-md">
@@ -489,27 +489,27 @@ export function NewsWidget() {
         )}
         {error && <p className="text-sm text-destructive p-2 py-2">Error loading articles: {error}</p>}
         
-        {!isLoading && categories.length === 0 && !showFeedManagement && (
-           <p className="text-sm text-muted-foreground p-2 py-2 text-center">No news articles. Add categories and RSS feeds in settings <Settings className="inline h-4 w-4" />.</p>
+        {!isLoading && categories.length === 0 && !settingsOpen && (
+           <p className="text-sm text-muted-foreground p-2 py-2 text-center">No news articles. Open settings to add categories and RSS feeds.</p>
         )}
-         {!isLoading && !error && allArticles.length === 0 && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && !showFeedManagement && (
+         {!isLoading && !error && allArticles.length === 0 && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && !settingsOpen && (
            <p className="text-sm text-muted-foreground p-2 py-2 text-center">No articles found from active feeds, or feeds might need updating/checking.</p>
         )}
 
         {!isLoading && !error && (
           categories.map(category => {
             const categoryArticles = articlesByCategoryId(category.id);
-             if (categoryArticles.length === 0 && !isLoading && !showFeedManagement && !category.feeds.some(f=>f.url.trim())) return null;
+             if (categoryArticles.length === 0 && !isLoading && !settingsOpen && !category.feeds.some(f=>f.url.trim())) return null;
 
             return (
               <Card 
                   key={category.id} 
-                  className="shadow-md mb-6"
+                  className="shadow-md mb-6" // Added mb-6 for spacing between category cards
                   style={{ borderTop: `4px solid ${isValidHexColor(category.color) ? category.color : predefinedNewsCategoryColors[0]}` }}
               >
                 <CardHeader>
                   <CardTitle className="text-xl flex items-center">
-                    <Newspaper className="mr-2 h-5 w-5" style={{ color: isValidHexColor(category.color) ? category.color : 'hsl(var(--muted-foreground))' }} />
+                    <Newspaper className="mr-2 h-5 w-5" style={{ color: isValidHexColor(category.color) ? category.color : 'hsl(var(--muted-foreground))' }}/>
                     {category.name}
                   </CardTitle>
                 </CardHeader>
@@ -575,4 +575,3 @@ export function NewsWidget() {
     </React.Fragment>
   );
 }
-

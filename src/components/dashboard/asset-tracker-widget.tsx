@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, Loader2, Settings, AlertCircle, RefreshCw } from 'lucide-react';
+import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, Loader2, Settings as SettingsIcon, AlertCircle, RefreshCw } from 'lucide-react';
 import type { Asset, AssetPortfolio, AssetHolding } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -78,10 +78,14 @@ function calculateAssetPortfolio(
   };
 }
 
-export function AssetTrackerWidget() {
+interface AssetTrackerWidgetProps {
+  settingsOpen: boolean;
+}
+
+export function AssetTrackerWidget({ settingsOpen }: AssetTrackerWidgetProps) {
   const [assets, setAssets] = useState<Asset[]>(() => {
     if (typeof window === 'undefined') {
-      return []; 
+      return [];
     }
     console.log("AssetTracker: useState initializer - Attempting to load assets from localStorage.");
     const savedAssetsString = localStorage.getItem(LOCALSTORAGE_KEY);
@@ -125,7 +129,7 @@ export function AssetTrackerWidget() {
       return [];
     }
   });
-  
+
   const [fetchedPrices, setFetchedPrices] = useState<Record<string, number | null>>({});
   const [portfolio, setPortfolio] = useState<AssetPortfolio | null>(null);
 
@@ -136,7 +140,6 @@ export function AssetTrackerWidget() {
   const [isFetchingPrices, setIsFetchingPrices] = useState(false);
   const [priceFetchError, setPriceFetchError] = useState<string | null>(null);
   const [isFetchingName, setIsFetchingName] = useState(false);
-  const [showAssetManagement, setShowAssetManagement] = useState(false);
   const [showNewAssetForm, setShowNewAssetForm] = useState(false);
 
   const isFetchingPricesRef = useRef(isFetchingPrices);
@@ -248,7 +251,7 @@ export function AssetTrackerWidget() {
           }
         }
       } else {
-        prices[asset.id] = null; // For crypto or assets without symbols, set price to null
+        prices[asset.id] = null;
       }
     }
     console.log("AssetTracker: Finished fetching all asset prices. Result:", prices);
@@ -273,7 +276,7 @@ export function AssetTrackerWidget() {
       setPortfolio(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assets]); 
+  }, [assets]);
 
   useEffect(() => {
     if (assets.length === 0) {
@@ -327,12 +330,12 @@ export function AssetTrackerWidget() {
         if (profile.assetName) {
           setAssetFormData(prev => ({ ...prev, name: profile.assetName! }));
         } else {
-          setAssetFormData(prev => ({ ...prev, name: symbol })); 
+          setAssetFormData(prev => ({ ...prev, name: symbol }));
           toast({ title: "Name Fetch", description: `Could not fetch name for ${symbol} from Tiingo. Using symbol as name.`, variant: "default", duration: 3000});
         }
       } catch (error) {
         console.error("Error fetching asset profile for symbol from Tiingo:", symbol, error);
-        setAssetFormData(prev => ({ ...prev, name: symbol })); 
+        setAssetFormData(prev => ({ ...prev, name: symbol }));
         toast({ title: "Name Fetch Error", description: `Error fetching name for ${symbol} from Tiingo. Using symbol as name.`, variant: "destructive"});
       } finally {
         setIsFetchingName(false);
@@ -407,7 +410,7 @@ export function AssetTrackerWidget() {
 
   const handleOpenEditDialog = (assetToEdit: Asset) => {
     setEditingAsset(assetToEdit);
-    setAssetFormData({ 
+    setAssetFormData({
       name: assetToEdit.name,
       symbol: assetToEdit.symbol,
       quantity: assetToEdit.quantity,
@@ -415,14 +418,14 @@ export function AssetTrackerWidget() {
       type: assetToEdit.type,
     });
     setIsEditDialogOpen(true);
-    setShowNewAssetForm(false); 
+    setShowNewAssetForm(false);
   };
 
   const handleOpenNewAssetForm = () => {
     setEditingAsset(null);
     setAssetFormData(initialAssetFormState);
     setShowNewAssetForm(true);
-    setIsEditDialogOpen(false); 
+    setIsEditDialogOpen(false);
   };
 
   const handleCancelNewAsset = () => {
@@ -525,19 +528,9 @@ export function AssetTrackerWidget() {
     <TooltipProvider>
       <div className="flex justify-between items-center mb-2">
         <SectionTitle icon={TrendingUp} title="Asset Tracker" className="mb-0 text-lg" />
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setShowAssetManagement(!showAssetManagement)}
-            aria-label="Manage Assets"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
-        </div>
       </div>
 
-      {showAssetManagement && (
+      {settingsOpen && (
         <div className="mb-4 p-3 border rounded-lg bg-muted/10 shadow-sm">
           {!showNewAssetForm && (
             <Button size="sm" onClick={handleOpenNewAssetForm} className="w-full mb-3">
@@ -706,7 +699,7 @@ export function AssetTrackerWidget() {
               ) : (
                 <>
                   <p className="text-sm">No assets tracked yet.</p>
-                  <p className="text-xs">Click the settings icon <Settings className="inline h-3 w-3 align-middle" /> then "Add New Asset" to get started.</p>
+                  <p className="text-xs">Open settings <SettingsIcon className="inline h-3 w-3 align-middle" /> to add assets.</p>
                 </>
               )}
                {priceFetchError && !isFetchingPrices && <p className="text-xs text-destructive mt-3">{priceFetchError}</p>}

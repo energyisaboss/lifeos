@@ -23,7 +23,6 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
-// Ensure gapi types are available
 declare global {
   interface Window {
     gapi: any;
@@ -39,7 +38,7 @@ interface Task {
   id: string;
   title: string;
   status: 'needsAction' | 'completed';
-  due?: string; // ISO date string
+  due?: string; 
   notes?: string;
 }
 
@@ -70,8 +69,11 @@ const isValidHexColor = (color: string) => {
   return /^#([0-9A-F]{3}){1,2}$/i.test(color);
 }
 
+interface TaskListContentProps {
+  settingsOpen: boolean; // Prop to control settings visibility
+}
 
-const TaskListContent: React.FC = () => {
+const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen }) => {
   const [accessToken, setAccessToken] = useState<string | null>(() => {
     if (typeof window !== 'undefined') return localStorage.getItem('googleTasksAccessToken');
     return null;
@@ -116,7 +118,6 @@ const TaskListContent: React.FC = () => {
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorPerList, setErrorPerList] = useState<Record<string, string | null>>({});
-  const [showTaskSettings, setShowTaskSettings] = useState(false);
   
   const [isGapiClientLoaded, setIsGapiClientLoaded] = useState(false);
 
@@ -185,10 +186,8 @@ const TaskListContent: React.FC = () => {
     setIsSignedIn(false);
     setTaskLists([]);
     setTasksByListId({});
-    setShowTaskSettings(false);
     setError(null);
     setErrorPerList({});
-    // setIsGapiClientLoaded(false); // Keep GAPI loaded if user signs back in quickly
     setEditingListId(null);
     setEditingListTitle('');
     if (typeof window !== 'undefined') {
@@ -263,14 +262,13 @@ const TaskListContent: React.FC = () => {
 
         fetchedLists.forEach((list, index) => {
             if (!newSettings[list.id]) {
-                // Make only the very first list visible by default if no lists were visible before
                 const makeThisVisible = !initialListMadeVisible && index === 0;
                 newSettings[list.id] = {
                     visible: makeThisVisible, 
                     color: getNextColor() 
                 };
                 settingsChanged = true;
-                if(makeThisVisible) initialListMadeVisible = true; // Ensure only one gets this treatment
+                if(makeThisVisible) initialListMadeVisible = true;
             } else if (!newSettings[list.id].color || !isValidHexColor(newSettings[list.id].color) ) { 
                 newSettings[list.id].color = getNextColor();
                 settingsChanged = true;
@@ -280,7 +278,6 @@ const TaskListContent: React.FC = () => {
             localStorage.setItem(TASK_LIST_SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
         }
         
-        // Fetch tasks for lists that are marked visible and not already loaded/loading
         if (accessToken && isGapiClientLoaded) {
            fetchedLists.forEach(list => {
              if(newSettings[list.id]?.visible && !tasksByListId[list.id] && !isLoadingTasksForList[list.id]) {
@@ -301,18 +298,15 @@ const TaskListContent: React.FC = () => {
     }
   }, [isGapiClientLoaded, loadGapiClient, handleSignOut, accessToken, tasksByListId, isLoadingTasksForList, fetchAndSetTasksForList]); 
 
-  // Effect to load GAPI client for Tasks API on mount
   useEffect(() => {
     if (!isGapiClientLoaded) {
       loadGapiClient().catch(e => {
         console.error("TaskListWidget: Failed to load GAPI client on mount", e);
-        // setError is handled within loadGapiClient
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadGapiClient]); // loadGapiClient is stable due to useCallback
+  }, []); 
 
-  // Effect to fetch task lists once authenticated and GAPI (for Tasks) is ready
   useEffect(() => {
     if (accessToken && isSignedIn && isGapiClientLoaded) {
       console.log("TaskListWidget: Conditions met to fetch task lists (token, signedIn, GAPI loaded).");
@@ -339,7 +333,6 @@ const TaskListContent: React.FC = () => {
     setIsSignedIn(true);
     if (typeof window !== 'undefined') localStorage.setItem('googleTasksAccessToken', newAccessToken);
     console.log('TaskListWidget: Login successful, token acquired.');
-    // GAPI client loading is now handled by the mount effect or re-checked in fetchTaskLists/fetchAndSetTasksForList
   };
   
   const login = useGoogleLogin({
@@ -472,7 +465,7 @@ const TaskListContent: React.FC = () => {
             }
         };
          if (key === 'color' && typeof value === 'string' && value !== '' && !isValidHexColor(value)) {
-            toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive" });
+            toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive", duration:3000 });
         }
         
         if (key === 'visible' && value === true && accessToken && !tasksByListId[listId] && !isLoadingTasksForList[listId] && isGapiClientLoaded) {
@@ -523,31 +516,23 @@ const TaskListContent: React.FC = () => {
     <>
       <div className="flex justify-between items-center mb-1 p-4 border-b">
         <SectionTitle icon={ListChecks} title="Tasks" className="mb-0 text-lg" />
-        <div className="flex items-center gap-1">
-            {isSignedIn && (
-              <Button variant="ghost" size="sm" onClick={() => setShowTaskSettings(!showTaskSettings)} aria-label="Task Settings">
-                <Settings className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
       </div>
       
       <div className="px-4 pb-4">
         {!isSignedIn ? (
            <div className="flex flex-col items-center justify-center py-8 text-center">
               <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
-              <Button onClick={() => login()} variant="default">
+              <Button onClick={() => login()} variant="default" >
                  <LogIn className="mr-2 h-4 w-4" />
                  Sign In with Google
               </Button>
               {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
-              {!isGapiClientLoaded && !error && <p className="text-xs text-muted-foreground mt-2">Initializing Google services...</p>}
           </div>
         ) : (
           <>
             {error && <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
             
-            {showTaskSettings && (
+            {settingsOpen && (
               <Card className="mb-6 p-4 shadow-md">
                 <CardHeader className="p-2 pt-0">
                   <CardTitle className="text-lg">Task List Settings</CardTitle>
@@ -667,7 +652,7 @@ const TaskListContent: React.FC = () => {
               </Card>
             )}
 
-            {isLoadingLists && !taskLists.length && !showTaskSettings ? (
+            {isLoadingLists && !taskLists.length && !settingsOpen ? (
                 <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</div>
             ) : visibleListsToDisplay.length > 0 ? (
               <div className="space-y-4 mt-4">
@@ -751,12 +736,12 @@ const TaskListContent: React.FC = () => {
                 )})}
               </div>
             ) : (
-               !isLoadingLists && isSignedIn && taskLists.length > 0 && !showTaskSettings && (
-                <p className="text-sm text-muted-foreground text-center py-6">No task lists are currently visible. Go to settings <Settings className="inline h-3 w-3"/> to select lists to display.</p>
+               !isLoadingLists && isSignedIn && taskLists.length > 0 && !settingsOpen && (
+                <p className="text-sm text-muted-foreground text-center py-6">No task lists are currently visible. Open settings <Settings className="inline h-3 w-3"/> to select lists to display.</p>
                )
             )}
-             {!isLoadingLists && !taskLists.length && isSignedIn && !error && !showTaskSettings && (
-               <p className="text-sm text-muted-foreground text-center py-6">No Google Task lists found. Click settings <Settings className="inline h-3 w-3"/> to create one.</p>
+             {!isLoadingLists && !taskLists.length && isSignedIn && !error && !settingsOpen && (
+               <p className="text-sm text-muted-foreground text-center py-6">No Google Task lists found. Open settings <Settings className="inline h-3 w-3"/> to create one.</p>
              )}
           </>
         )}
@@ -765,8 +750,10 @@ const TaskListContent: React.FC = () => {
   );
 };
 
-
-export function TaskListWidget() {
+interface TaskListWidgetProps {
+  settingsOpen: boolean;
+}
+export function TaskListWidget({ settingsOpen }: TaskListWidgetProps) {
   const [googleClientId, setGoogleClientId] = useState<string | null>(null);
   const [providerError, setProviderError] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
@@ -818,8 +805,7 @@ export function TaskListWidget() {
 
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
-      <TaskListContent />
+      <TaskListContent settingsOpen={settingsOpen} />
     </GoogleOAuthProvider>
   );
 }
-
