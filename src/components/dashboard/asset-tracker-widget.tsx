@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
 import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, RefreshCw, AlertCircle, Loader2, Settings, ListTree } from 'lucide-react';
@@ -37,6 +37,8 @@ const initialAssetFormState: Omit<Asset, 'id'> = {
   purchasePrice: 0,
   type: 'stock',
 };
+
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 function calculateAssetPortfolio(
   assets: Asset[],
@@ -89,6 +91,11 @@ export function AssetTrackerWidget() {
   const [isFetchingName, setIsFetchingName] = useState(false);
   const [showAssetManagement, setShowAssetManagement] = useState(false);
 
+  const isFetchingPricesRef = useRef(isFetchingPrices);
+  useEffect(() => {
+    isFetchingPricesRef.current = isFetchingPrices;
+  }, [isFetchingPrices]);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedAssets = localStorage.getItem('userAssetsLifeOS_v2');
@@ -124,6 +131,10 @@ export function AssetTrackerWidget() {
       setFetchedPrices({});
       setIsFetchingPrices(false);
       setPriceFetchError(null);
+      return;
+    }
+    if (isFetchingPricesRef.current) { // Check ref to prevent overlapping calls
+      console.log("AssetTracker: Price fetch already in progress, skipping new fetchAllAssetPrices call.");
       return;
     }
     setIsFetchingPrices(true);
@@ -169,7 +180,7 @@ export function AssetTrackerWidget() {
           duration: 7000,
         });
     }
-  }, []);
+  }, []); // Removed isFetchingPrices from useCallback dependencies as it's handled by the ref
 
   useEffect(() => {
     if (assets.length > 0) {
@@ -179,6 +190,27 @@ export function AssetTrackerWidget() {
       setPortfolio(null); 
     }
   }, [assets, fetchAllAssetPrices]);
+
+  // Auto-refresh prices
+  useEffect(() => {
+    if (assets.length === 0) {
+      return; // No assets, no interval.
+    }
+
+    const intervalId = setInterval(() => {
+      if (!isFetchingPricesRef.current) {
+        console.log('AssetTracker: Auto-refreshing prices via interval.');
+        fetchAllAssetPrices(assets);
+      } else {
+        console.log('AssetTracker: Interval tick - skipping auto-refresh, a fetch is already in progress.');
+      }
+    }, REFRESH_INTERVAL_MS);
+
+    return () => {
+      console.log('AssetTracker: Clearing price refresh interval.');
+      clearInterval(intervalId);
+    };
+  }, [assets, fetchAllAssetPrices]); // fetchAllAssetPrices is stable due to useCallback
 
   useEffect(() => {
     if (assets.length > 0 || Object.keys(fetchedPrices).length > 0) {
@@ -309,9 +341,7 @@ export function AssetTrackerWidget() {
       <div className="flex justify-between items-center mb-4">
         <SectionTitle icon={TrendingUp} title="Asset Tracker" className="mb-0" />
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={() => fetchAllAssetPrices(assets)} disabled={isFetchingPrices || assets.length === 0}>
-            <RefreshCw className={cn("mr-2 h-4 w-4", isFetchingPrices && "animate-spin")} /> Refresh Prices
-          </Button>
+          {/* Refresh Prices button removed */}
           <Button 
             size="sm" 
             variant="ghost" 
@@ -573,3 +603,4 @@ export function AssetTrackerWidget() {
     </TooltipProvider>
   );
 }
+
