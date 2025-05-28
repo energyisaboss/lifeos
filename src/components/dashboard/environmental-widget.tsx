@@ -9,7 +9,7 @@ import type { EnvironmentalData } from '@/lib/types';
 import { getEnvironmentalData } from '@/ai/flows/environmental-data-flow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal, MapPinOff, Gauge, Smile, Meh, Frown, CloudFog, Skull, HelpCircle, Cloud, Sun, Eclipse, CircleHalf, Moon } from "lucide-react";
+import { Terminal, MapPinOff, Gauge, Smile, Meh, Frown, CloudFog, Skull, HelpCircle, Cloud, Sun, Eclipse, CircleHalf, Moon, SunOff } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Progress } from "@/components/ui/progress";
 
@@ -81,8 +81,6 @@ export function EnvironmentalWidget() {
           setIsLoading(true);
           return;
       }
-      // If locationError is set, it means we've already tried and failed or decided to use default.
-      // In this case, latitude/longitude should be set to default, so we can proceed.
     }
 
     const fetchData = async () => {
@@ -92,13 +90,12 @@ export function EnvironmentalWidget() {
         try {
           const result = await getEnvironmentalData({ latitude, longitude });
           setData(result);
-          // Refine location error message based on API response for location name
           if (locationError && result.locationName && !result.locationName.toLowerCase().includes("san francisco")) {
             setLocationError(`Could not get your location. Showing data for ${result.locationName}. Please enable location services for local data.`);
           } else if (locationError && result.locationName && result.locationName.toLowerCase().includes("san francisco")) {
              // Keep existing locationError about default location if it's SF
           } else if (!locationError) {
-            setLocationError(null); // Clear error if location was successful and API returned a name
+            setLocationError(null); 
           }
 
         } catch (err) {
@@ -125,7 +122,7 @@ export function EnvironmentalWidget() {
       }
     };
     fetchData();
-  }, [latitude, longitude, locationError]); // Rerun if locationError changes (e.g. from null to an error, then we use defaults)
+  }, [latitude, longitude, locationError]); 
 
   const getMoonIconStyle = (phaseName?: string): React.CSSProperties => {
     if (!phaseName) return {};
@@ -152,7 +149,7 @@ export function EnvironmentalWidget() {
     );
   }
 
-  if (locationError && !data && !error && !(latitude && longitude)) { // Show only if we genuinely couldn't get a location and haven't even fetched default yet
+  if (locationError && !data && !error && !(latitude && longitude)) { 
     return (
       <Card className="shadow-lg">
         <CardHeader>
@@ -238,7 +235,7 @@ export function EnvironmentalWidget() {
   const { moonPhase, uvIndex, airQuality, currentWeather, weeklyWeather, locationName } = data;
   const moonIconStyle = getMoonIconStyle(moonPhase?.name);
   const moonIconName = (moonPhase?.iconName && typeof moonPhase.iconName === 'string') ? moonPhase.iconName : "Moon";
-  const uvProgressValue = uvIndex ? Math.min(100, (uvIndex.value / 11) * 100) : 0; // Max UV for 100% is 11
+  const uvProgressValue = uvIndex ? Math.min(100, (uvIndex.value / 11) * 100) : 0;
 
   return (
     <Card className="shadow-lg">
@@ -274,7 +271,15 @@ export function EnvironmentalWidget() {
                 aria-label={`UV Index level: ${uvIndex.description}, value ${uvIndex.value}`}
               />
             </div>
-          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">UV index data N/A</p></div>}
+          ) : (
+            <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
+                <LucideIcons.SunOff size={24} className="mb-1 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">UV index data N/A.</p>
+                <p className="text-xs text-muted-foreground/80 mt-0.5 px-1">
+                  Check <code className="text-xs bg-muted/70 px-1 py-0.5 rounded">.env.local</code> for <code className="text-xs bg-muted/70 px-1 py-0.5 rounded">OPENUV_API_KEY</code> &amp; server logs for details.
+                </p>
+            </div>
+          )}
 
           {airQuality ? (
             <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
@@ -308,24 +313,26 @@ export function EnvironmentalWidget() {
           </div>
         )}
 
-        {weeklyWeather && weeklyWeather.length > 0 && (
-          <div className="flex flex-col items-center">
+         <div className="flex flex-col items-center">
             <h4 className="text-sm font-medium text-muted-foreground mb-2 text-center">Weekly Weather</h4>
-            <div className="flex flex-wrap justify-center gap-2">
-              {weeklyWeather.map((dayWeather) => (
-                <div key={dayWeather.day} className="w-16 p-2 rounded-md bg-muted/30 flex flex-col items-center justify-between min-h-[90px] text-center">
-                  <p className="text-xs font-medium text-card-foreground">{dayWeather.day}</p>
-                  <IconComponent name={dayWeather.iconName || "Cloud"} className="my-1 text-2xl text-primary" />
-                  <p className="text-xs text-card-foreground">{dayWeather.tempHigh}° / {dayWeather.tempLow}°F</p>
-                  <div className="flex items-center text-xs text-muted-foreground mt-1">
-                    <LucideIcons.Droplets className="w-3 h-3 mr-1" />
-                    <span>{dayWeather.rainPercentage}%</span>
-                  </div>
+            {weeklyWeather && weeklyWeather.length > 0 ? (
+                <div className="flex flex-wrap justify-center gap-2 text-center">
+                {weeklyWeather.map((dayWeather) => (
+                    <div key={dayWeather.day} className="w-16 p-2 rounded-md bg-muted/30 flex flex-col items-center justify-between min-h-[90px] text-center">
+                    <p className="text-xs font-medium text-card-foreground">{dayWeather.day}</p>
+                    <IconComponent name={dayWeather.iconName || "Cloud"} className="my-1 text-2xl text-primary" />
+                    <p className="text-xs text-card-foreground">{dayWeather.tempHigh}° / {dayWeather.tempLow}°F</p>
+                    <div className="flex items-center text-xs text-muted-foreground mt-1">
+                        <LucideIcons.Droplets className="w-3 h-3 mr-1" />
+                        <span>{dayWeather.rainPercentage}%</span>
+                    </div>
+                    </div>
+                ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+            ) : (
+                <p className="text-xs text-muted-foreground">Weekly forecast data N/A.</p>
+            )}
+        </div>
       </CardContent>
     </Card>
   );
