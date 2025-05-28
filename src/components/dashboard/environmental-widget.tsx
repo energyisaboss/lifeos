@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
 import * as LucideIcons from 'lucide-react';
@@ -9,9 +9,11 @@ import type { EnvironmentalData } from '@/lib/types';
 import { getEnvironmentalData } from '@/ai/flows/environmental-data-flow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal, MapPinOff, Gauge, Smile, Meh, Frown, CloudFog, Skull, HelpCircle, Cloud, Sun, Eclipse, CircleHalf, Moon } from "lucide-react"; // Removed SunOff
+import { Terminal, MapPinOff, Gauge, Smile, Meh, Frown, CloudFog, Skull, HelpCircle, Cloud, Sun, Eclipse, CircleHalf, Moon } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { Progress } from "@/components/ui/progress";
+
+const REFRESH_INTERVAL_MS = 1 * 60 * 60 * 1000; // 1 hour
 
 const IconComponent = ({ name, className, style, ...props }: { name: string, className?: string, style?: React.CSSProperties } & LucideIcons.LucideProps) => {
   if (!name || typeof name !== 'string') {
@@ -53,6 +55,8 @@ export function EnvironmentalWidget() {
   const [longitude, setLongitude] = useState<number | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
 
+  const isFetchingRef = useRef(false);
+
   useEffect(() => {
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -75,55 +79,71 @@ export function EnvironmentalWidget() {
     }
   }, []);
 
+  const fetchData = useCallback(async (lat: number, lon: number) => {
+    if (isFetchingRef.current) {
+      console.log("EnvironmentalWidget: Fetch already in progress, skipping new fetch.");
+      return;
+    }
+    isFetchingRef.current = true;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await getEnvironmentalData({ latitude: lat, longitude: lon });
+      setData(result);
+      if (locationError && result.locationName && !result.locationName.toLowerCase().includes("san francisco")) {
+        setLocationError(`Could not get your location. Showing data for ${result.locationName}. Please enable location services for local data.`);
+      } else if (locationError && result.locationName && result.locationName.toLowerCase().includes("san francisco")) {
+         // Keep existing locationError about default location if it's SF
+      } else if (!locationError) {
+        setLocationError(null); 
+      }
+    } catch (err) {
+      console.error("Failed to fetch environmental data in widget:", err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+
+      if (errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("GOOGLE_API_KEY") || errorMessage.toLowerCase().includes("failed_precondition") || errorMessage.toLowerCase().includes("api key not valid")) {
+         setError("Google AI API key is missing. Please add GOOGLE_API_KEY or GEMINI_API_KEY to your .env.local file and restart the server. See https://firebase.google.com/docs/genkit/plugins/google-genai for details.");
+      } else if ((errorMessage.includes("OPENWEATHER_API_KEY") || errorMessage.includes("OpenWeatherMap API key")) && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
+         setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your .env.local file and restart server.");
+      } else if ((errorMessage.includes("OPENUV_API_KEY") || errorMessage.includes("OpenUV API key")) && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
+         setError("OpenUV API key for UV Index is missing. Please add OPENUV_API_KEY to .env.local and restart server. Note: OpenUV has low free tier limits.");
+      } else if ((errorMessage.includes("WEATHERAPI_COM_KEY") || errorMessage.includes("WeatherAPI.com key")) && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
+         setError("WeatherAPI.com key for Moon Phase is missing. Please add WEATHERAPI_COM_KEY to .env.local and restart server. Note: WeatherAPI.com has low free tier limits.");
+      } else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.includes("401")) {
+          setError("Failed to fetch weather data: Unauthorized. Check your API keys (OpenWeatherMap, OpenUV, WeatherAPI.com), ensure they are active, and subscribed to necessary services.");
+      }
+      else {
+           setError(`Failed to load environmental data. ${errorMessage.substring(0,300)}`);
+      }
+    } finally {
+      setIsLoading(false);
+      isFetchingRef.current = false;
+    }
+  }, [locationError]); // locationError dependency ensures re-evaluation of error messages if needed
+
   useEffect(() => {
     if (latitude === null || longitude === null) {
-      if (!locationError) { // Still waiting for initial geolocation attempt or it's not supported
-          setIsLoading(true);
-          return;
+      if (!locationError) {
+        setIsLoading(true);
+        return;
       }
     }
 
-    const fetchData = async () => {
-      if (latitude !== null && longitude !== null) {
-        setIsLoading(true);
-        setError(null);
-        try {
-          const result = await getEnvironmentalData({ latitude, longitude });
-          setData(result);
-          if (locationError && result.locationName && !result.locationName.toLowerCase().includes("san francisco")) {
-            setLocationError(`Could not get your location. Showing data for ${result.locationName}. Please enable location services for local data.`);
-          } else if (locationError && result.locationName && result.locationName.toLowerCase().includes("san francisco")) {
-             // Keep existing locationError about default location if it's SF
-          } else if (!locationError) {
-            setLocationError(null); 
-          }
+    if (latitude !== null && longitude !== null) {
+      fetchData(latitude, longitude); // Initial fetch
 
-        } catch (err) {
-          console.error("Failed to fetch environmental data in widget:", err);
-          const errorMessage = err instanceof Error ? err.message : String(err);
+      const intervalId = setInterval(() => {
+        console.log("EnvironmentalWidget: Auto-refreshing environmental data via interval.");
+        fetchData(latitude, longitude);
+      }, REFRESH_INTERVAL_MS);
 
-          if (errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("GOOGLE_API_KEY") || errorMessage.toLowerCase().includes("failed_precondition") || errorMessage.toLowerCase().includes("api key not valid")) {
-             setError("Google AI API key is missing. Please add GOOGLE_API_KEY or GEMINI_API_KEY to your .env.local file and restart the server. See https://firebase.google.com/docs/genkit/plugins/google-genai for details.");
-          } else if ((errorMessage.includes("OPENWEATHER_API_KEY") || errorMessage.includes("OpenWeatherMap API key")) && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
-             setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your .env.local file and restart server.");
-          } else if ((errorMessage.includes("OPENUV_API_KEY") || errorMessage.includes("OpenUV API key")) && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
-             setError("OpenUV API key for UV Index is missing. Please add OPENUV_API_KEY to .env.local and restart server. Note: OpenUV has low free tier limits.");
-          } else if ((errorMessage.includes("WEATHERAPI_COM_KEY") || errorMessage.includes("WeatherAPI.com key")) && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
-             setError("WeatherAPI.com key for Moon Phase is missing. Please add WEATHERAPI_COM_KEY to .env.local and restart server. Note: WeatherAPI.com has low free tier limits.");
-          } else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.includes("401")) {
-              setError("Failed to fetch weather data: Unauthorized. Check your API keys (OpenWeatherMap, OpenUV, WeatherAPI.com), ensure they are active, and subscribed to necessary services.");
-          }
-          else {
-               setError(`Failed to load environmental data. ${errorMessage.substring(0,300)}`);
-          }
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
-    fetchData();
+      return () => {
+        console.log("EnvironmentalWidget: Clearing environmental data refresh interval.");
+        clearInterval(intervalId);
+      };
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latitude, longitude]); 
+  }, [latitude, longitude, fetchData]); // fetchData is now stable due to useCallback
 
   const getMoonIconStyle = (phaseName?: string): React.CSSProperties => {
     if (!phaseName) return {};
@@ -169,11 +189,16 @@ export function EnvironmentalWidget() {
     );
   }
 
-  if (isLoading) {
+  if (isLoading && !data) { // Show loading skeleton if loading and no data yet
     return (
       <Card className="shadow-lg">
         <CardHeader>
           <SectionTitle icon={Cloud} title="Environment" />
+           {locationError && !error && (
+            <p className="text-xs text-amber-600 dark:text-amber-500 mt-1 flex items-center">
+                <MapPinOff size={14} className="mr-1.5 flex-shrink-0" /> {locationError}
+            </p>
+           )}
         </CardHeader>
         <CardContent className="space-y-6">
            <div className="p-4 rounded-md bg-muted/30 shadow-md">
@@ -233,10 +258,10 @@ export function EnvironmentalWidget() {
     );
   }
 
-  const { moonPhase, uvIndex, airQuality, currentWeather, locationName } = data;
+  const { moonPhase, uvIndex, airQuality, currentWeather } = data; // Removed locationName as it's handled in fetchData
   const moonIconStyle = getMoonIconStyle(moonPhase?.name);
   const moonIconName = (moonPhase?.iconName && typeof moonPhase.iconName === 'string') ? moonPhase.iconName : "Moon";
-  const uvProgressValue = uvIndex ? Math.min(100, (uvIndex.value / 11) * 100) : 0; // Assuming max relevant UV is 11 for 100% bar
+  const uvProgressValue = uvIndex ? Math.min(100, (uvIndex.value / 11) * 100) : 0;
 
   return (
     <Card className="shadow-lg">
@@ -259,7 +284,7 @@ export function EnvironmentalWidget() {
               </div>
               <div className="flex flex-col items-center sm:items-end">
                 <span className="text-lg text-card-foreground capitalize text-center sm:text-right">{currentWeather.description}</span>
-                {locationName && <span className="text-xs text-muted-foreground">in {locationName}</span>}
+                {data.locationName && <span className="text-xs text-muted-foreground">in {data.locationName}</span>}
               </div>
             </div>
             <div className="flex flex-col sm:flex-row items-center justify-around text-sm text-muted-foreground space-y-1 sm:space-y-0 sm:space-x-4 mt-3 pt-3 border-t border-border/50">
@@ -339,6 +364,5 @@ export function EnvironmentalWidget() {
     </Card>
   );
 }
-
 
     
