@@ -2,161 +2,146 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { Palette } from 'lucide-react';
+import { Palette, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface AccentPalette {
   name: string;
-  hsl: {
-    accent: string; // e.g., "261 42% 66.3%"
-    accentForeground: string; // e.g., "0 0% 100%"
-    primary: string; // often same as accent
-    primaryForeground: string; // often same as accentForeground
-    ring: string; // often same as accent
-    chart1?: string; // Optional: if chart-1 should also match
-  };
-  previewColor: string; // A hex or HSL string for the swatch background
+  hex: string;
 }
 
-const ACCENT_COLOR_STORAGE_KEY = 'lifeos-accent-color';
+const ACCENT_COLOR_STORAGE_KEY = 'lifeos-accent-color-hex_v1';
 
-const defaultDarkAccent: AccentPalette = {
-  name: 'Default Purple',
-  hsl: {
-    accent: '261 42% 66.3%',
-    accentForeground: '0 0% 100%',
-    primary: '261 42% 66.3%',
-    primaryForeground: '0 0% 100%',
-    ring: '261 42% 66.3%',
-    chart1: '261 42% 66.3%',
-  },
-  previewColor: 'hsl(261, 42%, 66.3%)',
-};
-
-const availablePalettes: AccentPalette[] = [
-  defaultDarkAccent,
-  {
-    name: 'Blue',
-    hsl: {
-      accent: '217 91% 60%', // hsl for #3B82F6
-      accentForeground: '0 0% 100%',
-      primary: '217 91% 60%',
-      primaryForeground: '0 0% 100%',
-      ring: '217 91% 60%',
-      chart1: '217 91% 60%',
-    },
-    previewColor: 'hsl(217, 91%, 60%)',
-  },
-  {
-    name: 'Green',
-    hsl: {
-      accent: '142 71% 45%', // hsl for #22C55E
-      accentForeground: '0 0% 100%',
-      primary: '142 71% 45%',
-      primaryForeground: '0 0% 100%',
-      ring: '142 71% 45%',
-      chart1: '142 71% 45%',
-    },
-    previewColor: 'hsl(142, 71%, 45%)',
-  },
-  {
-    name: 'Orange',
-    hsl: {
-      accent: '25 95% 53%', // hsl for #F97316 (Tailwind Orange 600)
-      accentForeground: '0 0% 100%',
-      primary: '25 95% 53%',
-      primaryForeground: '0 0% 100%',
-      ring: '25 95% 53%',
-      chart1: '25 95% 53%',
-    },
-    previewColor: 'hsl(25, 95%, 53%)',
-  },
-  {
-    name: 'Rose',
-    hsl: {
-      accent: '347 89% 60%', // hsl for #F43F5E (Tailwind Rose 500)
-      accentForeground: '0 0% 100%',
-      primary: '347 89% 60%',
-      primaryForeground: '0 0% 100%',
-      ring: '347 89% 60%',
-      chart1: '347 89% 60%',
-    },
-    previewColor: 'hsl(347, 89%, 60%)',
-  },
-  {
-    name: 'Teal',
-    hsl: {
-      accent: '170 75% 41%', // hsl for #14B8A6 (Tailwind Teal 500)
-      accentForeground: '0 0% 100%',
-      primary: '170 75% 41%',
-      primaryForeground: '0 0% 100%',
-      ring: '170 75% 41%',
-      chart1: '170 75% 41%',
-    },
-    previewColor: 'hsl(170, 75%, 41%)',
-  },
+const predefinedPalettes: AccentPalette[] = [
+  { name: 'Default Purple', hex: '#9575CD' }, // Original default for consistency
+  { name: 'Red', hex: '#F44336' },
+  { name: 'Blue', hex: '#2196F3' },
+  { name: 'Orange', hex: '#FF9800' },
+  { name: 'Yellow', hex: '#FFEB3B' },
+  { name: 'Green', hex: '#4CAF50' },
+  { name: 'Purple', hex: '#9C27B0' },
 ];
+
+const defaultAccentHex = predefinedPalettes[0].hex; // Default Purple
+
+const isValidHexColor = (color: string): boolean => {
+  return /^#([0-9A-Fa-f]{3}){1,2}$/.test(color);
+};
 
 export function AccentColorSwitcher() {
   const [mounted, setMounted] = useState(false);
-  const [currentAccentName, setCurrentAccentName] = useState<string>(defaultDarkAccent.name);
+  const [activeColorHex, setActiveColorHex] = useState<string>(defaultAccentHex);
+  const [customHexInput, setCustomHexInput] = useState<string>(defaultAccentHex);
 
-  const applyTheme = (paletteName: string) => {
-    const palette = availablePalettes.find(p => p.name === paletteName) || defaultDarkAccent;
-    
-    document.documentElement.style.setProperty('--accent', palette.hsl.accent);
-    document.documentElement.style.setProperty('--accent-foreground', palette.hsl.accentForeground);
-    document.documentElement.style.setProperty('--primary', palette.hsl.primary);
-    document.documentElement.style.setProperty('--primary-foreground', palette.hsl.primaryForeground);
-    document.documentElement.style.setProperty('--ring', palette.hsl.ring);
-    if (palette.hsl.chart1) {
-      document.documentElement.style.setProperty('--chart-1', palette.hsl.chart1);
+  const applyTheme = (hexColor: string) => {
+    if (!isValidHexColor(hexColor)) {
+      // Optionally, provide feedback that the hex is invalid
+      // For now, just don't apply if invalid
+      return;
     }
-    setCurrentAccentName(palette.name);
+    
+    document.documentElement.style.setProperty('--accent', hexColor);
+    document.documentElement.style.setProperty('--primary', hexColor);
+    document.documentElement.style.setProperty('--ring', hexColor);
+    document.documentElement.style.setProperty('--chart-1', hexColor);
+
+    // For dark theme, a white foreground usually works well with most accents
+    document.documentElement.style.setProperty('--accent-foreground', 'hsl(0 0% 100%)');
+    document.documentElement.style.setProperty('--primary-foreground', 'hsl(0 0% 100%)');
+    
+    setActiveColorHex(hexColor);
+    setCustomHexInput(hexColor); // Sync input field with applied color
   };
 
   useEffect(() => {
     setMounted(true);
-    const savedAccentName = localStorage.getItem(ACCENT_COLOR_STORAGE_KEY);
-    if (savedAccentName) {
-      applyTheme(savedAccentName);
+    const savedAccentHex = localStorage.getItem(ACCENT_COLOR_STORAGE_KEY);
+    if (savedAccentHex && isValidHexColor(savedAccentHex)) {
+      applyTheme(savedAccentHex);
     } else {
-      applyTheme(defaultDarkAccent.name); // Apply default if nothing saved
+      applyTheme(defaultAccentHex); // Apply default if nothing valid saved
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
-  const handleColorChange = (paletteName: string) => {
-    applyTheme(paletteName);
-    localStorage.setItem(ACCENT_COLOR_STORAGE_KEY, paletteName);
+  const handleSwatchClick = (hexColor: string) => {
+    applyTheme(hexColor);
+    localStorage.setItem(ACCENT_COLOR_STORAGE_KEY, hexColor);
   };
 
+  const handleCustomHexApply = () => {
+    if (isValidHexColor(customHexInput)) {
+      applyTheme(customHexInput);
+      localStorage.setItem(ACCENT_COLOR_STORAGE_KEY, customHexInput);
+    } else {
+      // Provide feedback for invalid hex, e.g., using toast
+      console.warn("Invalid hex color entered:", customHexInput);
+    }
+  };
+  
+  const handleCustomHexInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomHexInput(e.target.value);
+  };
+
+
   if (!mounted) {
-    // Avoid rendering on server or before hydration to prevent mismatch
-    return null; 
+    return (
+      <div className="p-1 space-y-2">
+        <div className="h-5 w-24 bg-muted animate-pulse rounded"></div>
+        <div className="flex flex-wrap gap-2">
+          {Array(6).fill(0).map((_, i) => (
+            <div key={i} className="h-8 w-8 rounded-full bg-muted animate-pulse"></div>
+          ))}
+        </div>
+         <div className="h-8 w-full bg-muted animate-pulse rounded mt-1"></div>
+      </div>
+    ); 
   }
 
   return (
-    <div className="p-1">
-      <p className="text-sm font-medium text-muted-foreground mb-2">Accent Color</p>
-      <div className="flex flex-wrap gap-2">
-        {availablePalettes.map((palette) => (
-          <Button
-            key={palette.name}
-            variant="outline"
-            size="icon"
-            className={cn(
-              "h-8 w-8 rounded-full border-2",
-              currentAccentName === palette.name ? 'border-foreground ring-2 ring-ring ring-offset-1 ring-offset-background' : 'border-muted-foreground/50'
-            )}
-            style={{ backgroundColor: palette.previewColor }}
-            onClick={() => handleColorChange(palette.name)}
-            title={palette.name}
-            aria-label={`Set accent color to ${palette.name}`}
+    <div className="p-1 space-y-3">
+      <div>
+        <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">Predefined Accents</Label>
+        <div className="flex flex-wrap gap-2">
+          {predefinedPalettes.map((palette) => (
+            <Button
+              key={palette.name}
+              variant="outline"
+              size="icon"
+              className={cn(
+                "h-7 w-7 rounded-full border-2 p-0",
+                activeColorHex.toLowerCase() === palette.hex.toLowerCase() ? 'border-foreground ring-2 ring-ring ring-offset-1 ring-offset-background' : 'border-muted-foreground/30 hover:border-muted-foreground/70'
+              )}
+              style={{ backgroundColor: palette.hex }}
+              onClick={() => handleSwatchClick(palette.hex)}
+              title={palette.name}
+              aria-label={`Set accent color to ${palette.name}`}
+            >
+              {activeColorHex.toLowerCase() === palette.hex.toLowerCase() && <Check className="h-3.5 w-3.5 text-white mix-blend-difference" />}
+            </Button>
+          ))}
+        </div>
+      </div>
+      
+      <div>
+        <Label htmlFor="custom-hex-input" className="text-xs font-medium text-muted-foreground mb-1.5 block">Custom Hex Color</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            id="custom-hex-input"
+            type="text"
+            value={customHexInput}
+            onChange={handleCustomHexInputChange}
+            placeholder="#RRGGBB"
+            className={cn("h-8 text-sm flex-grow", !isValidHexColor(customHexInput) && customHexInput.length > 0 ? "border-destructive focus-visible:ring-destructive" : "")}
           />
-        ))}
+          <Button size="sm" onClick={handleCustomHexApply} className="h-8 px-3" disabled={!isValidHexColor(customHexInput)}>
+            Apply
+          </Button>
+        </div>
       </div>
     </div>
   );
