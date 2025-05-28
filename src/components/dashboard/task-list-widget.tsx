@@ -167,7 +167,7 @@ const TaskListContent: React.FC = () => {
         tasklist: listId,
         showCompleted: false,
         showHidden: false,
-        maxResults: 100, // Fetch more tasks
+        maxResults: 100, 
       });
       setTasks(response.result.items || []);
     } catch (err: any) {
@@ -267,7 +267,7 @@ const TaskListContent: React.FC = () => {
   };
 
   return (
-      <Card className="shadow-lg flex flex-col h-full">
+      <Card className="shadow-lg flex flex-col"> {/* Removed h-full */}
         <CardHeader className="flex-shrink-0">
           <div className="flex justify-between items-center">
             <SectionTitle icon={ListChecks} title="Google Tasks" className="mb-0" />
@@ -278,9 +278,9 @@ const TaskListContent: React.FC = () => {
             )}
           </div>
         </CardHeader>
-        <CardContent className="pt-4 flex-grow flex flex-col overflow-hidden">
+        <CardContent className="pt-4 flex flex-col overflow-hidden"> {/* Removed flex-grow */}
           {!isSignedIn ? (
-             <div className="flex flex-col items-center justify-center h-full">
+             <div className="flex flex-col items-center justify-center py-8"> {/* Added py-8 for some default height */}
                 <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
                 <Button onClick={() => login()} variant="default">
                    <LogIn className="mr-2 h-4 w-4" /> Sign In with Google
@@ -288,11 +288,11 @@ const TaskListContent: React.FC = () => {
                 {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
             </div>
           ) : (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col"> {/* Removed h-full */}
               {error && <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
               
               {isLoadingLists ? (
-                <div className="flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
+                <div className="flex items-center justify-center py-4"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
               ) : taskLists.length > 0 ? (
                 <Select
                   value={selectedTaskListId || undefined}
@@ -335,9 +335,9 @@ const TaskListContent: React.FC = () => {
               )}
 
               {isLoadingTasks && selectedTaskListId ? (
-                <div className="flex items-center justify-center flex-grow"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading tasks...</div>
+                <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading tasks...</div>
               ) : tasks.length > 0 && selectedTaskListId ? (
-                <ScrollArea className="flex-grow pr-1">
+                <ScrollArea className="pr-1 max-h-60"> {/* Added max-h-60 for a default scrollable height */}
                   <ul className="space-y-2">
                     {tasks.map((task) => (
                       <li key={task.id} className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted/50 transition-colors">
@@ -358,10 +358,10 @@ const TaskListContent: React.FC = () => {
                   </ul>
                 </ScrollArea>
               ) : selectedTaskListId && !isLoadingLists && (
-                <p className="text-sm text-muted-foreground text-center py-4 flex-grow">No active tasks in this list. Add one above!</p>
+                <p className="text-sm text-muted-foreground text-center py-4">No active tasks in this list. Add one above!</p>
               )}
               {!selectedTaskListId && !isLoadingLists && taskLists.length > 0 && (
-                 <p className="text-sm text-muted-foreground text-center py-4 flex-grow">Select a task list to view tasks.</p>
+                 <p className="text-sm text-muted-foreground text-center py-4">Select a task list to view tasks.</p>
               )}
             </div>
           )}
@@ -376,14 +376,27 @@ export function TaskListWidget() {
   const [providerError, setProviderError] = useState<string | null>(null);
 
   useEffect(() => {
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (clientId) {
-      setGoogleClientId(clientId);
-    } else {
-      console.error("TaskListWidget: NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set in .env.local");
-      setProviderError("Google Client ID not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env.local file and restart the server.");
+    // Ensure this code only runs on the client
+    if (typeof window !== 'undefined') {
+      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+      if (clientId) {
+        setGoogleClientId(clientId);
+      } else {
+        console.error("TaskListWidget: NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set in .env.local");
+        setProviderError("Google Client ID not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env.local file and restart the server.");
+      }
     }
   }, []);
+
+  if (typeof window === 'undefined') {
+    // Return a placeholder or null during SSR/build time
+    return (
+       <Card className="shadow-lg">
+        <CardHeader><SectionTitle icon={ListChecks} title="Google Tasks" /></CardHeader>
+        <CardContent><p className="text-sm text-muted-foreground">Loading Google Tasks...</p></CardContent>
+      </Card>
+    );
+  }
 
   if (providerError || !googleClientId) {
     return (
@@ -410,4 +423,3 @@ export function TaskListWidget() {
     </GoogleOAuthProvider>
   );
 }
-
