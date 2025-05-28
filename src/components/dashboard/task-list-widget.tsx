@@ -188,7 +188,7 @@ const TaskListContent: React.FC = () => {
     setShowTaskSettings(false);
     setError(null);
     setErrorPerList({});
-    setIsGapiClientLoaded(false); 
+    // setIsGapiClientLoaded(false); // Keep GAPI loaded if user signs back in quickly
     setEditingListId(null);
     setEditingListTitle('');
     if (typeof window !== 'undefined') {
@@ -256,19 +256,21 @@ const TaskListContent: React.FC = () => {
       setListSettings(prevSettings => {
         const newSettings = {...prevSettings};
         let settingsChanged = false;
-        let newListsMadeVisible = false;
         
         const currentlyVisibleCount = Object.keys(newSettings).filter(key => newSettings[key]?.visible).length;
+        let initialListMadeVisible = currentlyVisibleCount > 0;
+
 
         fetchedLists.forEach((list, index) => {
             if (!newSettings[list.id]) {
-                const makeThisVisible = currentlyVisibleCount === 0 && index === 0; // Make only the very first list visible by default
+                // Make only the very first list visible by default if no lists were visible before
+                const makeThisVisible = !initialListMadeVisible && index === 0;
                 newSettings[list.id] = {
                     visible: makeThisVisible, 
                     color: getNextColor() 
                 };
                 settingsChanged = true;
-                if (makeThisVisible) newListsMadeVisible = true;
+                if(makeThisVisible) initialListMadeVisible = true; // Ensure only one gets this treatment
             } else if (!newSettings[list.id].color || !isValidHexColor(newSettings[list.id].color) ) { 
                 newSettings[list.id].color = getNextColor();
                 settingsChanged = true;
@@ -277,7 +279,9 @@ const TaskListContent: React.FC = () => {
         if (settingsChanged && typeof window !== 'undefined') {
             localStorage.setItem(TASK_LIST_SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
         }
-        if (newListsMadeVisible && accessToken && isGapiClientLoaded) {
+        
+        // Fetch tasks for lists that are marked visible and not already loaded/loading
+        if (accessToken && isGapiClientLoaded) {
            fetchedLists.forEach(list => {
              if(newSettings[list.id]?.visible && !tasksByListId[list.id] && !isLoadingTasksForList[list.id]) {
                  fetchAndSetTasksForList(accessToken, list.id);
@@ -297,16 +301,18 @@ const TaskListContent: React.FC = () => {
     }
   }, [isGapiClientLoaded, loadGapiClient, handleSignOut, accessToken, tasksByListId, isLoadingTasksForList, fetchAndSetTasksForList]); 
 
+  // Effect to load GAPI client for Tasks API on mount
   useEffect(() => {
-    if (!isSignedIn && accessToken) { 
-      setAccessToken(null);
-      if (typeof window !== 'undefined') localStorage.removeItem('googleTasksAccessToken');
+    if (!isGapiClientLoaded) {
+      loadGapiClient().catch(e => {
+        console.error("TaskListWidget: Failed to load GAPI client on mount", e);
+        // setError is handled within loadGapiClient
+      });
     }
-    if (isSignedIn || accessToken) { 
-       loadGapiClient().catch(e => console.error("TaskListWidget: Failed to load GAPI on mount/auth change", e));
-    }
-  }, [isSignedIn, accessToken, loadGapiClient]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadGapiClient]); // loadGapiClient is stable due to useCallback
 
+  // Effect to fetch task lists once authenticated and GAPI (for Tasks) is ready
   useEffect(() => {
     if (accessToken && isSignedIn && isGapiClientLoaded) {
       console.log("TaskListWidget: Conditions met to fetch task lists (token, signedIn, GAPI loaded).");
@@ -333,6 +339,7 @@ const TaskListContent: React.FC = () => {
     setIsSignedIn(true);
     if (typeof window !== 'undefined') localStorage.setItem('googleTasksAccessToken', newAccessToken);
     console.log('TaskListWidget: Login successful, token acquired.');
+    // GAPI client loading is now handled by the mount effect or re-checked in fetchTaskLists/fetchAndSetTasksForList
   };
   
   const login = useGoogleLogin({
@@ -529,11 +536,12 @@ const TaskListContent: React.FC = () => {
         {!isSignedIn ? (
            <div className="flex flex-col items-center justify-center py-8 text-center">
               <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
-              <Button onClick={() => login()} variant="default" disabled={!isGapiClientLoaded}>
-                 {!isGapiClientLoaded ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" /> }
+              <Button onClick={() => login()} variant="default">
+                 <LogIn className="mr-2 h-4 w-4" />
                  Sign In with Google
               </Button>
               {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
+              {!isGapiClientLoaded && !error && <p className="text-xs text-muted-foreground mt-2">Initializing Google services...</p>}
           </div>
         ) : (
           <>
@@ -666,14 +674,7 @@ const TaskListContent: React.FC = () => {
                 {visibleListsToDisplay.map(list => {
                   const listColor = listSettings[list.id]?.color;
                   const finalColor = (listColor && isValidHexColor(listColor)) ? listColor : predefinedTaskColors[0];
-                  const checkboxStyle = taskStatus === 'completed' && finalColor && isValidHexColor(finalColor) ? {
-                    '--task-checkbox-checked-bg': finalColor,
-                    '--task-checkbox-checked-border': finalColor,
-                    '--task-checkbox-unchecked-border': finalColor, // Also color unchecked border
-                  } : {
-                    '--task-checkbox-unchecked-border': finalColor, // Color unchecked border
-                  } as React.CSSProperties;
-
+                 
                   return (
                   <Card 
                     key={list.id} 
@@ -727,8 +728,8 @@ const TaskListContent: React.FC = () => {
                                       ? {
                                           '--task-checkbox-checked-bg': finalColor,
                                           '--task-checkbox-checked-border': finalColor,
-                                          '--task-checkbox-unchecked-border': finalColor, // Apply to unchecked border as well
-                                        }
+                                          '--task-checkbox-unchecked-border': finalColor, 
+                                        } as React.CSSProperties
                                       : {}
                                   }
                                 />
