@@ -37,7 +37,7 @@ const initialAssetFormState: Omit<Asset, 'id' | 'name'> & { name?: string } = {
   type: 'stock',
 };
 
-const REFRESH_INTERVAL_MS = 15 * 60 * 1000;
+const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 const LOCALSTORAGE_KEY = 'userAssetsLifeOS_Tiingo_v1';
 
 function calculateAssetPortfolio(
@@ -479,7 +479,6 @@ export function AssetTrackerWidget() {
             <p className="text-xs text-muted-foreground pt-1">Fetched Name: {assetFormData.name}</p>
         )}
       </div>
-      {/* Name field is removed - name is auto-fetched or derived from symbol */}
       <div className="space-y-1">
         <Label htmlFor={forEditingDialog ? "edit-quantity" : "quantity"}>Quantity</Label>
         <Input
@@ -536,8 +535,8 @@ export function AssetTrackerWidget() {
 
   return (
     <TooltipProvider>
-      <div className="flex justify-between items-center mb-4">
-        <SectionTitle icon={TrendingUp} title="Asset Tracker" className="mb-0" />
+      <div className="flex justify-between items-center mb-2">
+        <SectionTitle icon={TrendingUp} title="Asset Tracker" className="mb-0 text-lg" />
         <div className="flex items-center gap-2">
           <Button
             size="sm"
@@ -551,23 +550,23 @@ export function AssetTrackerWidget() {
       </div>
 
       {showAssetManagement && (
-        <div className="mb-6 p-4 border rounded-lg bg-muted/10 shadow-sm">
+        <div className="mb-4 p-3 border rounded-lg bg-muted/10 shadow-sm">
           {!showNewAssetForm && (
-            <Button size="sm" onClick={handleOpenNewAssetForm} className="w-full mb-4">
+            <Button size="sm" onClick={handleOpenNewAssetForm} className="w-full mb-3">
               <PlusCircle className="mr-2 h-4 w-4" /> Add New Asset
             </Button>
           )}
 
           {showNewAssetForm && (
-            <Card className="mb-4 p-4 bg-background">
-              <CardHeader className="p-2 pt-0">
-                <CardTitle className="text-md">Add New Asset</CardTitle>
+            <Card className="mb-3 p-3 bg-background">
+              <CardHeader className="p-1 pt-0">
+                <CardTitle className="text-base">Add New Asset</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 {renderAssetFormFields()}
-                <div className="mt-4 flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={handleCancelNewAsset}>Cancel</Button>
-                  <Button type="button" onClick={handleSubmitAsset} disabled={isFetchingName}>
+                <div className="mt-3 flex justify-end gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={handleCancelNewAsset}>Cancel</Button>
+                  <Button type="button" onClick={handleSubmitAsset} disabled={isFetchingName} size="sm">
                     {isFetchingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" /> }
                     Add Asset
                   </Button>
@@ -577,34 +576,34 @@ export function AssetTrackerWidget() {
           )}
 
           {assets.length > 0 ? (
-             <div className="mt-4">
-                <h4 className="text-sm font-medium text-muted-foreground mb-2">Manage Existing Assets</h4>
-                <ScrollArea className="h-[200px] pr-1">
+             <div className="mt-2">
+                <h4 className="text-xs font-medium text-muted-foreground mb-1">Manage Existing Assets</h4>
+                <ScrollArea className="h-[150px] pr-1">
                 <Table>
                     <TableHeader>
                     <TableRow>
-                        <TableHead>Asset</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead className="text-center">Actions</TableHead>
+                        <TableHead className="p-2 text-xs">Asset</TableHead>
+                        <TableHead className="p-2 text-xs">Type</TableHead>
+                        <TableHead className="p-2 text-xs text-center">Actions</TableHead>
                     </TableRow>
                     </TableHeader>
                     <TableBody>
                     {assets.map((asset) => (
                         <TableRow key={asset.id}>
-                        <TableCell>
-                            <div className="font-medium text-card-foreground">{asset.name}</div>
+                        <TableCell className="p-2">
+                            <div className="font-medium text-sm text-card-foreground">{asset.name}</div>
                             <div className="text-xs text-muted-foreground">{asset.symbol.toUpperCase()}</div>
                         </TableCell>
-                        <TableCell className="capitalize">{asset.type}</TableCell>
-                        <TableCell className="text-center">
-                            <div className="flex justify-center items-center gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEditDialog(asset)} aria-label="Edit asset">
-                                <Edit3 className="w-4 h-4" />
+                        <TableCell className="p-2 text-xs capitalize">{asset.type}</TableCell>
+                        <TableCell className="p-2 text-center">
+                            <div className="flex justify-center items-center gap-0.5">
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleOpenEditDialog(asset)} aria-label="Edit asset">
+                                <Edit3 className="w-3.5 h-3.5" />
                             </Button>
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive h-7 w-7" aria-label="Delete asset">
-                                    <Trash2 className="w-4 h-4" />
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive h-6 w-6" aria-label="Delete asset">
+                                    <Trash2 className="w-3.5 h-3.5" />
                                 </Button>
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
@@ -631,80 +630,80 @@ export function AssetTrackerWidget() {
                 </ScrollArea>
             </div>
           ) : (
-            !showNewAssetForm && <p className="text-sm text-muted-foreground text-center py-2">No assets added yet. Click "Add New Asset" to start.</p>
+            !showNewAssetForm && <p className="text-xs text-muted-foreground text-center py-1">No assets added yet. Click "Add New Asset" to start.</p>
           )}
         </div>
       )}
 
       <Card className="shadow-lg">
-        <CardContent className="pt-6">
+        <CardContent className="pt-4 px-3 pb-3">
           {portfolio && assets.length > 0 ? (
             <>
-              <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3 rounded-md bg-muted/30">
-                  <div className="text-sm text-muted-foreground mb-1">Total Value</div>
-                  <div className="text-2xl font-semibold text-primary">{formatCurrency(portfolio.totalPortfolioValue)}</div>
+              <div className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="p-2 rounded-md bg-muted/30">
+                  <div className="text-xs text-muted-foreground mb-0.5">Total Value</div>
+                  <div className="text-xl font-semibold text-primary">{formatCurrency(portfolio.totalPortfolioValue)}</div>
                 </div>
-                <div className="p-3 rounded-md bg-muted/30">
-                  <div className="text-sm text-muted-foreground mb-1">Total P/L</div>
+                <div className="p-2 rounded-md bg-muted/30">
+                  <div className="text-xs text-muted-foreground mb-0.5">Total P/L</div>
                   <div className={cn(
-                    "text-xl font-semibold flex items-center",
+                    "text-lg font-semibold flex items-center",
                     portfolio.totalProfitLoss >= 0 ? "text-green-500" : "text-red-500"
                   )}>
-                    {portfolio.totalProfitLoss >= 0 ? <ArrowUp className="w-4 h-4 mr-1" /> : <ArrowDown className="w-4 h-4 mr-1" />}
+                    {portfolio.totalProfitLoss >= 0 ? <ArrowUp className="w-3.5 h-3.5 mr-1" /> : <ArrowDown className="w-3.5 h-3.5 mr-1" />}
                     {formatCurrency(portfolio.totalProfitLoss)}
                   </div>
                 </div>
               </div>
 
-              <ScrollArea className="h-[320px] pr-1">
+              <ScrollArea className="h-[280px] pr-0.5">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Asset (Symbol)</TableHead>
-                      <TableHead className="text-right">Quantity</TableHead>
-                      <TableHead className="text-right">Purchase Price</TableHead>
-                      <TableHead className="text-right">Current Price</TableHead>
-                      <TableHead className="text-right">Total Value</TableHead>
-                      <TableHead className="text-right">P/L</TableHead>
-                      <TableHead className="text-right">P/L %</TableHead>
+                      <TableHead className="p-2 text-xs h-10">Asset (Symbol)</TableHead>
+                      <TableHead className="p-2 text-xs text-right h-10">Qty</TableHead>
+                      <TableHead className="p-2 text-xs text-right h-10">Buy Price</TableHead>
+                      <TableHead className="p-2 text-xs text-right h-10">Current Price</TableHead>
+                      <TableHead className="p-2 text-xs text-right h-10">Value</TableHead>
+                      <TableHead className="p-2 text-xs text-right h-10">P/L</TableHead>
+                      <TableHead className="p-2 text-xs text-right h-10">P/L %</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {portfolio.holdings.map((asset) => (
                       <TableRow key={asset.id}>
-                        <TableCell>
-                          <div className="font-medium text-card-foreground">{asset.name} ({asset.symbol.toUpperCase()})</div>
+                        <TableCell className="p-2">
+                          <div className="font-medium text-sm text-card-foreground">{asset.name} ({asset.symbol.toUpperCase()})</div>
                           <div className="text-xs text-muted-foreground capitalize">{asset.type}</div>
                         </TableCell>
-                        <TableCell className="text-right">{asset.quantity}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(asset.purchasePrice)}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="p-2 text-xs text-right">{asset.quantity}</TableCell>
+                        <TableCell className="p-2 text-xs text-right">{formatCurrency(asset.purchasePrice)}</TableCell>
+                        <TableCell className="p-2 text-xs text-right">
                           {isFetchingPrices && fetchedPrices[asset.id] === undefined ? (
-                            <Skeleton className="h-4 w-16 inline-block" />
+                            <Skeleton className="h-3 w-12 inline-block" />
                           ) : (
                             formatCurrency(asset.currentPricePerUnit, 'N/A')
                           )}
                           {asset.currentPricePerUnit === null && (asset.type === 'stock' || asset.type === 'fund') && !isFetchingPrices && (
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <AlertCircle className="w-3 h-3 inline-block ml-1 text-destructive cursor-help"/>
+                                <AlertCircle className="w-2.5 h-2.5 inline-block ml-0.5 text-destructive cursor-help"/>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-xs text-xs">
-                                <p>Price data unavailable (Tiingo EOD). This might be due to an invalid symbol, API plan limitations (e.g., some mutual funds require higher tiers or are not covered), or temporary API issues. Check server logs for details.</p>
+                                <p>Price data from Tiingo (EOD) unavailable. May be an invalid symbol, API plan limits (e.g., some mutual funds require higher tiers), or temporary API issues.</p>
                               </TooltipContent>
                             </Tooltip>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">{formatCurrency(asset.totalValue)}</TableCell>
+                        <TableCell className="p-2 text-xs text-right">{formatCurrency(asset.totalValue)}</TableCell>
                         <TableCell className={cn(
-                          "text-right",
+                          "p-2 text-xs text-right",
                           asset.profitLoss >= 0 ? "text-green-500" : "text-red-500"
                         )}>
                           {formatCurrency(asset.profitLoss)}
                         </TableCell>
                         <TableCell className={cn(
-                          "text-right",
+                          "p-2 text-xs text-right",
                           asset.profitLossPercentage >= 0 ? "text-green-500" : "text-red-500"
                         )}>
                           {formatPercentage(asset.profitLossPercentage)}
@@ -717,19 +716,19 @@ export function AssetTrackerWidget() {
                {priceFetchError && !isFetchingPrices && <p className="text-xs text-destructive mt-2 text-center">{priceFetchError}</p>}
             </>
           ) : (
-            <div className="text-center py-10 text-muted-foreground">
+            <div className="text-center py-8 text-muted-foreground">
               {isFetchingPrices ? (
                 <>
-                  <Loader2 className="mx-auto h-8 w-8 animate-spin mb-2" />
-                  <p>Loading assets and prices...</p>
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin mb-1.5" />
+                  <p className="text-sm">Loading assets and prices...</p>
                 </>
               ) : (
                 <>
-                  <p>No assets tracked yet.</p>
-                  <p className="text-sm">Click the settings icon <Settings className="inline h-3 w-3 align-middle" /> then "Add New Asset" to get started.</p>
+                  <p className="text-sm">No assets tracked yet.</p>
+                  <p className="text-xs">Click the settings icon <Settings className="inline h-3 w-3 align-middle" /> then "Add New Asset" to get started.</p>
                 </>
               )}
-               {priceFetchError && !isFetchingPrices && <p className="text-xs text-destructive mt-4">{priceFetchError}</p>}
+               {priceFetchError && !isFetchingPrices && <p className="text-xs text-destructive mt-3">{priceFetchError}</p>}
             </div>
           )}
         </CardContent>
