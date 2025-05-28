@@ -49,7 +49,7 @@ interface TaskListSetting {
 }
 
 const GOOGLE_TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
-const TASK_LIST_SETTINGS_STORAGE_KEY = 'googleTaskListSettings_v2'; // Updated key for new color input
+const TASK_LIST_SETTINGS_STORAGE_KEY = 'googleTaskListSettings_v2'; 
 
 const predefinedTaskColors: string[] = [
   '#F44336', // Red
@@ -90,9 +90,8 @@ const TaskListContent: React.FC = () => {
         try {
           const parsedSettings = JSON.parse(savedSettings);
           if (typeof parsedSettings === 'object' && parsedSettings !== null) {
-            // Ensure all loaded settings have a color property
             Object.keys(parsedSettings).forEach(key => {
-              if (parsedSettings[key] && !parsedSettings[key].color) {
+              if (parsedSettings[key] && (!parsedSettings[key].color || !isValidHexColor(parsedSettings[key].color))) {
                 parsedSettings[key].color = getNextColor(); 
               }
             });
@@ -188,7 +187,6 @@ const TaskListContent: React.FC = () => {
     setIsSignedIn(false);
     setTaskLists([]);
     setTasksByListId({});
-    // setListSettings({}); // User might prefer settings persist
     setShowTaskSettings(false);
     setError(null);
     setErrorPerList({});
@@ -266,13 +264,13 @@ const TaskListContent: React.FC = () => {
             if (!newSettings[list.id]) {
                 const isFirstList = Object.keys(newSettings).length === 0 && index === 0;
                 newSettings[list.id] = {
-                    visible: isFirstList, // Make only the very first list visible by default
+                    visible: isFirstList, 
                     color: getNextColor() 
                 };
                 settingsChanged = true;
                 if (isFirstList) newListsMadeVisible = true;
-            } else if (!newSettings[list.id].color) { // Ensure existing entries have a color
-                newSettings[list.id].color = newSettings[list.id].color || getNextColor();
+            } else if (!newSettings[list.id].color || !isValidHexColor(newSettings[list.id].color) ) { 
+                newSettings[list.id].color = getNextColor();
                 settingsChanged = true;
             }
         });
@@ -466,12 +464,8 @@ const TaskListContent: React.FC = () => {
                 [key]: value
             }
         };
-        if (key === 'color' && typeof value === 'string' && !isValidHexColor(value) && value !== '') {
-            // If hex is partially typed but invalid, don't toast yet, let them finish typing
-            // If it's invalid upon trying to apply fully (e.g. on blur or button), we'd add toast there
-        } else if (key === 'color' && typeof value === 'string' && value !== '' && !isValidHexColor(value)) {
+         if (key === 'color' && typeof value === 'string' && value !== '' && !isValidHexColor(value)) {
             toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive" });
-            // Optionally revert to previous color or keep invalid input until corrected
         }
         
         if (key === 'visible' && value === true && accessToken && !tasksByListId[listId] && !isLoadingTasksForList[listId] && isGapiClientLoaded) {
@@ -671,11 +665,14 @@ const TaskListContent: React.FC = () => {
                 <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</div>
             ) : visibleListsToDisplay.length > 0 ? (
               <div className="space-y-4 mt-4">
-                {visibleListsToDisplay.map(list => (
+                {visibleListsToDisplay.map(list => {
+                  const listColor = listSettings[list.id]?.color;
+                  const finalColor = listColor && isValidHexColor(listColor) ? listColor : predefinedTaskColors[0];
+                  return (
                   <Card 
                     key={list.id} 
                     className="shadow-md flex flex-col"
-                    style={{ borderTop: `4px solid ${listSettings[list.id]?.color || predefinedTaskColors[0]}` }}
+                    style={{ borderTop: `4px solid ${finalColor}` }}
                   >
                     <CardHeader className="py-3 px-4 border-b">
                       <CardTitle className="text-md">{list.title}</CardTitle>
@@ -696,6 +693,10 @@ const TaskListContent: React.FC = () => {
                           disabled={!(newTaskTitles[list.id] || '').trim() || isAddingTaskForList[list.id]} 
                           size="sm"
                           className="h-9"
+                          style={{ 
+                            backgroundColor: finalColor, 
+                            color: 'hsl(var(--primary-foreground))' 
+                          }}
                         >
                           {isAddingTaskForList[list.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
                         </Button>
@@ -714,6 +715,11 @@ const TaskListContent: React.FC = () => {
                                   checked={task.status === 'completed'}
                                   onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
                                   aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
+                                  style={task.status === 'completed' ? {
+                                    backgroundColor: finalColor,
+                                    borderColor: finalColor,
+                                  } : {}}
+                                  className={cn(task.status === 'completed' && 'text-primary-foreground')}
                                 />
                                 <label
                                   htmlFor={`task-${list.id}-${task.id}`}
@@ -730,7 +736,7 @@ const TaskListContent: React.FC = () => {
                       )}
                     </CardContent>
                   </Card>
-                ))}
+                )})}
               </div>
             ) : (
                !isLoadingLists && isSignedIn && taskLists.length > 0 && !showTaskSettings && (
@@ -765,6 +771,7 @@ export function TaskListWidget() {
   }, []);
 
   if (!isClient) {
+    // Return a basic skeleton or placeholder during SSR or before client hydration
     return (
        <div className="flex flex-col">
         <div className="p-4 border-b mb-1"><SectionTitle icon={ListChecks} title="Tasks" /></div>
@@ -800,3 +807,4 @@ export function TaskListWidget() {
     </GoogleOAuthProvider>
   );
 }
+
