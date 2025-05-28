@@ -13,7 +13,7 @@ interface AccentPalette {
   hex: string;
 }
 
-const ACCENT_COLOR_STORAGE_KEY = 'lifeos-accent-color-hex_v2'; // Updated key for new defaults
+const ACCENT_COLOR_STORAGE_KEY = 'lifeos-accent-color-hex_v3'; // Updated key
 
 const predefinedPalettes: AccentPalette[] = [
   { name: 'White', hex: '#FFFFFF' },
@@ -25,7 +25,7 @@ const predefinedPalettes: AccentPalette[] = [
   { name: 'Purple', hex: '#9C27B0' },
 ];
 
-const defaultAccentHex = predefinedPalettes[0].hex; // Default to White now
+const defaultAccentHex = predefinedPalettes[0].hex; // Default to White
 
 const isValidHexColor = (color: string): boolean => {
   return /^#([0-9A-Fa-f]{3}){1,2}$/.test(color);
@@ -90,17 +90,18 @@ export function AccentColorSwitcher() {
     document.documentElement.style.setProperty('--accent', hslValues);
     document.documentElement.style.setProperty('--primary', hslValues);
     document.documentElement.style.setProperty('--ring', hslValues);
-    document.documentElement.style.setProperty('--chart-1', hslValues);
+    document.documentElement.style.setProperty('--chart-1', hslValues); // Also update chart-1 for consistency
 
     // Adjust foreground colors for contrast
-    if (hexColor.toLowerCase() === '#ffffff') {
-      // If accent is white, use a dark foreground
-      document.documentElement.style.setProperty('--accent-foreground', '0 0% 12.9%'); // Dark Grey, similar to card background
-      document.documentElement.style.setProperty('--primary-foreground', '0 0% 12.9%'); 
-    } else {
-      // For other accents, use white foreground
-      document.documentElement.style.setProperty('--accent-foreground', '0 0% 100%');
-      document.documentElement.style.setProperty('--primary-foreground', '0 0% 100%');
+    const isWhiteAccent = hexColor.toLowerCase() === '#ffffff';
+    const primaryFgHsl = isWhiteAccent ? hexToHslValues('#212121') : hexToHslValues('#FFFFFF'); // Dark grey for white accent, white otherwise
+    const accentFgHsl = isWhiteAccent ? hexToHslValues('#212121') : hexToHslValues('#FFFFFF');
+    
+    if (primaryFgHsl) {
+        document.documentElement.style.setProperty('--primary-foreground', primaryFgHsl);
+    }
+    if (accentFgHsl) {
+        document.documentElement.style.setProperty('--accent-foreground', accentFgHsl);
     }
     
     setActiveColorHex(hexColor);
@@ -130,6 +131,7 @@ export function AccentColorSwitcher() {
       localStorage.setItem(ACCENT_COLOR_STORAGE_KEY, customHexInput);
     } else {
       console.warn("Invalid custom hex color entered:", customHexInput);
+      // Optionally, provide user feedback here, e.g., using a toast
     }
   };
   
