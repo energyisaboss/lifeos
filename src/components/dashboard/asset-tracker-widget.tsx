@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, Loader2, Settings as SettingsIcon, AlertCircle, RefreshCw } from 'lucide-react';
+import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, Loader2, Settings as SettingsIconOriginal, AlertCircle, RefreshCw } from 'lucide-react';
 import type { Asset, AssetPortfolio, AssetHolding } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -37,7 +37,7 @@ const initialAssetFormState: Omit<Asset, 'id' | 'name'> & { name?: string } = {
   type: 'stock',
 };
 
-const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const REFRESH_INTERVAL_MS = 15 * 60 * 1000; 
 const LOCALSTORAGE_KEY = 'userAssetsLifeOS_Tiingo_v1';
 
 function calculateAssetPortfolio(
@@ -79,21 +79,19 @@ function calculateAssetPortfolio(
 }
 
 interface AssetTrackerWidgetProps {
-  settingsOpen: boolean;
+  settingsOpen: boolean; 
+  displayMode?: 'widgetOnly' | 'settingsOnly';
 }
 
-export function AssetTrackerWidget({ settingsOpen }: AssetTrackerWidgetProps) {
+export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }: AssetTrackerWidgetProps) {
   const [assets, setAssets] = useState<Asset[]>(() => {
     if (typeof window === 'undefined') {
       return [];
     }
-    console.log("AssetTracker: useState initializer - Attempting to load assets from localStorage.");
     const savedAssetsString = localStorage.getItem(LOCALSTORAGE_KEY);
-    console.log(`AssetTracker: useState initializer - Raw data from localStorage using key "${LOCALSTORAGE_KEY}":`, savedAssetsString);
     if (savedAssetsString) {
       try {
         const parsedAssetsArray = JSON.parse(savedAssetsString);
-        console.log("AssetTracker: useState initializer - Parsed assets from localStorage:", parsedAssetsArray);
         if (Array.isArray(parsedAssetsArray)) {
           const validAssets = parsedAssetsArray.filter((asset: any) => {
             const isValid =
@@ -104,30 +102,19 @@ export function AssetTrackerWidget({ settingsOpen }: AssetTrackerWidgetProps) {
               typeof asset.quantity === 'number' && asset.quantity > 0 &&
               typeof asset.purchasePrice === 'number' && asset.purchasePrice >= 0 &&
               ['stock', 'fund', 'crypto'].includes(asset.type);
-            if (!isValid) {
-              console.warn("AssetTracker: useState initializer - Filtering out invalid asset from localStorage:", asset);
-            }
             return isValid;
           });
-          console.log("AssetTracker: useState initializer - Valid assets after filtering:", validAssets);
-          if (validAssets.length < parsedAssetsArray.length) {
-             console.warn("AssetTracker: useState initializer - Some saved assets had invalid data and were not loaded.");
-          }
           return validAssets;
         } else {
-          console.warn("AssetTracker: useState initializer - Parsed data from localStorage is not an array. Clearing corrupted localStorage item.");
           localStorage.removeItem(LOCALSTORAGE_KEY);
           return [];
         }
       } catch (e) {
-        console.error("AssetTracker: useState initializer - Failed to parse assets from localStorage. Clearing corrupted localStorage item.", e);
         localStorage.removeItem(LOCALSTORAGE_KEY);
         return [];
       }
-    } else {
-      console.log(`AssetTracker: useState initializer - No assets found in localStorage with key "${LOCALSTORAGE_KEY}".`);
-      return [];
     }
+    return [];
   });
 
   const [fetchedPrices, setFetchedPrices] = useState<Record<string, number | null>>({});
@@ -191,9 +178,7 @@ export function AssetTrackerWidget({ settingsOpen }: AssetTrackerWidgetProps) {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
-        console.log("AssetTracker: Saving useEffect - Attempting to save assets to localStorage:", assets);
         localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(assets));
-        console.log(`AssetTracker: Saving useEffect - Successfully saved assets to localStorage with key "${LOCALSTORAGE_KEY}".`);
       } catch (error) {
         console.error("AssetTracker: Saving useEffect - Error saving assets to localStorage:", error);
         toast({
@@ -213,12 +198,10 @@ export function AssetTrackerWidget({ settingsOpen }: AssetTrackerWidgetProps) {
       return;
     }
     if (isFetchingPricesRef.current) {
-      console.log("AssetTracker: Price fetch already in progress, skipping new fetchAllAssetPrices call.");
       return;
     }
     setIsFetchingPrices(true);
     setPriceFetchError(null);
-    console.log("AssetTracker: Starting to fetch all asset prices for:", currentAssets.map(a => a.symbol));
     const prices: Record<string, number | null> = {};
     let anErrorOccurred = false;
     let specificErrorMessage = "Could not fetch prices for some assets. Ensure symbols are correct and Tiingo API key is set in .env.local.";
@@ -226,13 +209,10 @@ export function AssetTrackerWidget({ settingsOpen }: AssetTrackerWidgetProps) {
     for (const asset of currentAssets) {
       if ((asset.type === 'stock' || asset.type === 'fund') && asset.symbol) {
         try {
-          console.log(`AssetTracker: Fetching price for ${asset.symbol}`);
           const priceData = await getAssetPrice({ symbol: asset.symbol });
           prices[asset.id] = priceData.currentPrice;
           if (priceData.currentPrice === null) {
              console.warn(`Tiingo: Price not found or unavailable for symbol ${asset.symbol} (Type: ${asset.type}). API Response for ${asset.symbol} was ${JSON.stringify(priceData)}`);
-          } else {
-            console.log(`AssetTracker: Price for ${asset.symbol} fetched: ${priceData.currentPrice}`);
           }
         } catch (err) {
           console.error(`Error fetching price for ${asset.symbol} from Tiingo:`, err);
@@ -254,7 +234,6 @@ export function AssetTrackerWidget({ settingsOpen }: AssetTrackerWidgetProps) {
         prices[asset.id] = null;
       }
     }
-    console.log("AssetTracker: Finished fetching all asset prices. Result:", prices);
     setFetchedPrices(prices);
     setIsFetchingPrices(false);
     if (anErrorOccurred) {
@@ -269,36 +248,30 @@ export function AssetTrackerWidget({ settingsOpen }: AssetTrackerWidgetProps) {
   }, []);
 
   useEffect(() => {
-    if (assets.length > 0) {
+    if (assets.length > 0 && (displayMode === 'widgetOnly' || settingsOpen)) {
       fetchAllAssetPrices(assets);
     } else {
       setFetchedPrices({});
       setPortfolio(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assets]);
+  }, [assets, displayMode, settingsOpen]); // Re-fetch if assets change or mode/settings visibility changes
 
   useEffect(() => {
-    if (assets.length === 0) {
-      console.log('AssetTracker: No assets, clearing price refresh interval.');
+    if (assets.length === 0 || displayMode !== 'widgetOnly') {
       return;
     }
-    console.log('AssetTracker: Setting up price refresh interval.');
     const intervalId = setInterval(() => {
       if (!isFetchingPricesRef.current) {
-        console.log('AssetTracker: Auto-refreshing prices (Tiingo) via interval.');
         fetchAllAssetPrices(assets);
-      } else {
-        console.log('AssetTracker: Interval tick - skipping auto-refresh (Tiingo), a fetch is already in progress.');
       }
     }, REFRESH_INTERVAL_MS);
 
     return () => {
-      console.log('AssetTracker: Clearing price refresh interval (Tiingo).');
       clearInterval(intervalId);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assets]);
+  }, [assets, displayMode]);
 
 
   useEffect(() => {
@@ -524,40 +497,38 @@ export function AssetTrackerWidget({ settingsOpen }: AssetTrackerWidgetProps) {
     </div>
   );
 
-  return (
-    <TooltipProvider>
-      <div className="flex justify-between items-center mb-2">
-        <SectionTitle icon={TrendingUp} title="Asset Tracker" className="mb-0 text-lg" />
-      </div>
-
-      {settingsOpen && (
-        <div className="mb-4 p-3 border rounded-lg bg-muted/10 shadow-sm">
-          {!showNewAssetForm && (
+  const renderSettingsContent = () => (
+     <Card className="shadow-md">
+        <CardHeader>
+            <CardTitle className="text-lg">Asset Tracker Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+            {!showNewAssetForm && (
             <Button size="sm" onClick={handleOpenNewAssetForm} className="w-full mb-3">
-              <PlusCircle className="mr-2 h-4 w-4" /> Add New Asset
+                <PlusCircle className="mr-2 h-4 w-4" /> Add New Asset
             </Button>
-          )}
+            )}
 
-          {showNewAssetForm && (
+            {showNewAssetForm && (
             <Card className="mb-3 p-3 bg-background">
-              <CardHeader className="p-1 pt-0">
+                <CardHeader className="p-1 pt-0">
                 <CardTitle className="text-base">Add New Asset</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
+                </CardHeader>
+                <CardContent className="p-0">
                 {renderAssetFormFields()}
                 <div className="mt-3 flex justify-end gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={handleCancelNewAsset}>Cancel</Button>
-                  <Button type="button" onClick={handleSubmitAsset} disabled={isFetchingName} size="sm">
+                    <Button type="button" variant="outline" size="sm" onClick={handleCancelNewAsset}>Cancel</Button>
+                    <Button type="button" onClick={handleSubmitAsset} disabled={isFetchingName} size="sm">
                     {isFetchingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" /> }
                     Add Asset
-                  </Button>
+                    </Button>
                 </div>
-              </CardContent>
+                </CardContent>
             </Card>
-          )}
+            )}
 
-          {assets.length > 0 ? (
-             <div className="mt-2">
+            {assets.length > 0 ? (
+            <div className="mt-2">
                 <h4 className="text-xs font-medium text-muted-foreground mb-1">Manage Existing Assets</h4>
                 <ScrollArea className="h-[150px] pr-1">
                 <Table>
@@ -610,131 +581,142 @@ export function AssetTrackerWidget({ settingsOpen }: AssetTrackerWidgetProps) {
                 </Table>
                 </ScrollArea>
             </div>
-          ) : (
+            ) : (
             !showNewAssetForm && <p className="text-xs text-muted-foreground text-center py-1">No assets added yet. Click "Add New Asset" to start.</p>
-          )}
-        </div>
-      )}
-
-      <Card className="shadow-lg">
-        <CardContent className="pt-4 px-3 pb-3">
-          {portfolio && assets.length > 0 ? (
-            <>
-              <div className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-2">
-                <div className="p-2 rounded-md bg-muted/30">
-                  <div className="text-xs text-muted-foreground mb-0.5">Total Value</div>
-                  <div className="text-xl font-semibold text-primary">{formatCurrency(portfolio.totalPortfolioValue)}</div>
-                </div>
-                <div className="p-2 rounded-md bg-muted/30">
-                  <div className="text-xs text-muted-foreground mb-0.5">Total P/L</div>
-                  <div className={cn(
-                    "text-lg font-semibold flex items-center",
-                    portfolio.totalProfitLoss >= 0 ? "text-green-500" : "text-red-500"
-                  )}>
-                    {portfolio.totalProfitLoss >= 0 ? <ArrowUp className="w-3.5 h-3.5 mr-1" /> : <ArrowDown className="w-3.5 h-3.5 mr-1" />}
-                    {formatCurrency(portfolio.totalProfitLoss)}
-                  </div>
-                </div>
-              </div>
-
-              <ScrollArea className="h-[280px] pr-0.5">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="p-2 text-xs h-10">Asset (Symbol)</TableHead>
-                      <TableHead className="p-2 text-xs text-right h-10">Qty</TableHead>
-                      <TableHead className="p-2 text-xs text-right h-10">Buy Price</TableHead>
-                      <TableHead className="p-2 text-xs text-right h-10">Current Price</TableHead>
-                      <TableHead className="p-2 text-xs text-right h-10">Value</TableHead>
-                      <TableHead className="p-2 text-xs text-right h-10">P/L</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {portfolio.holdings.map((asset) => (
-                      <TableRow key={asset.id}>
-                        <TableCell className="p-2">
-                          <div className="font-medium text-sm text-card-foreground">{asset.name} ({asset.symbol.toUpperCase()})</div>
-                          <div className="text-xs text-muted-foreground capitalize">{asset.type}</div>
-                        </TableCell>
-                        <TableCell className="p-2 text-xs text-right">{asset.quantity}</TableCell>
-                        <TableCell className="p-2 text-xs text-right">{formatCurrency(asset.purchasePrice)}</TableCell>
-                        <TableCell className="p-2 text-xs text-right">
-                          {isFetchingPrices && fetchedPrices[asset.id] === undefined ? (
-                            <Skeleton className="h-3 w-12 inline-block" />
-                          ) : (
-                            formatCurrency(asset.currentPricePerUnit, 'N/A')
-                          )}
-                          {asset.currentPricePerUnit === null && (asset.type === 'stock' || asset.type === 'fund') && !isFetchingPrices && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <AlertCircle className="w-2.5 h-2.5 inline-block ml-0.5 text-destructive cursor-help"/>
-                              </TooltipTrigger>
-                              <TooltipContent className="max-w-xs text-xs">
-                                <p>Price data from Tiingo (EOD) unavailable. May be an invalid symbol, API plan limits (e.g., some mutual funds require higher tiers), or temporary API issues.</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          )}
-                        </TableCell>
-                        <TableCell className="p-2 text-xs text-right">{formatCurrency(asset.totalValue)}</TableCell>
-                        <TableCell className={cn(
-                          "p-2 text-xs text-right",
-                          asset.profitLoss >= 0 ? "text-green-500" : "text-red-500"
-                        )}>
-                          {formatCurrency(asset.profitLoss)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-               {priceFetchError && !isFetchingPrices && <p className="text-xs text-destructive mt-2 text-center">{priceFetchError}</p>}
-            </>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              {isFetchingPrices ? (
-                <>
-                  <Loader2 className="mx-auto h-6 w-6 animate-spin mb-1.5" />
-                  <p className="text-sm">Loading assets and prices...</p>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm">No assets tracked yet.</p>
-                  <p className="text-xs">Open settings <SettingsIcon className="inline h-3 w-3 align-middle" /> to add assets.</p>
-                </>
-              )}
-               {priceFetchError && !isFetchingPrices && <p className="text-xs text-destructive mt-3">{priceFetchError}</p>}
-            </div>
-          )}
+            )}
         </CardContent>
-      </Card>
+     </Card>
+  );
 
-      <Dialog open={isEditDialogOpen} onOpenChange={(isOpen) => {
-        setIsEditDialogOpen(isOpen);
-        if (!isOpen) {
-          setEditingAsset(null);
-          setAssetFormData(initialAssetFormState);
-          setIsFetchingName(false);
-        }
-      }}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Edit Asset</DialogTitle>
-            <DialogDescription>
-              Update the details of your asset. {editingAsset && `Current Name: ${editingAsset.name}`}
-            </DialogDescription>
-          </DialogHeader>
-          {editingAsset && renderAssetFormFields(true)}
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button type="button" onClick={handleSubmitAsset} disabled={isFetchingName}>
-              {isFetchingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" /> }
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+  const renderWidgetDisplay = () => (
+    <TooltipProvider>
+        <div className="flex justify-between items-center mb-2">
+            <SectionTitle icon={TrendingUp} title="Asset Tracker" className="mb-0 text-lg" />
+        </div>
+        <Card className="shadow-lg">
+            <CardContent className="pt-4 px-3 pb-3">
+            {portfolio && assets.length > 0 ? (
+                <>
+                <div className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div className="p-2 rounded-md bg-muted/30">
+                    <div className="text-xs text-muted-foreground mb-0.5">Total Value</div>
+                    <div className="text-xl font-semibold text-primary">{formatCurrency(portfolio.totalPortfolioValue)}</div>
+                    </div>
+                    <div className="p-2 rounded-md bg-muted/30">
+                    <div className="text-xs text-muted-foreground mb-0.5">Total P/L</div>
+                    <div className={cn(
+                        "text-lg font-semibold flex items-center",
+                        portfolio.totalProfitLoss >= 0 ? "text-green-500" : "text-red-500"
+                    )}>
+                        {portfolio.totalProfitLoss >= 0 ? <ArrowUp className="w-3.5 h-3.5 mr-1" /> : <ArrowDown className="w-3.5 h-3.5 mr-1" />}
+                        {formatCurrency(portfolio.totalProfitLoss)}
+                    </div>
+                    </div>
+                </div>
+
+                <ScrollArea className="h-[280px] pr-0.5">
+                    <Table>
+                    <TableHeader>
+                        <TableRow>
+                        <TableHead className="p-2 text-xs h-10">Asset (Symbol)</TableHead>
+                        <TableHead className="p-2 text-xs text-right h-10">Qty</TableHead>
+                        <TableHead className="p-2 text-xs text-right h-10">Buy Price</TableHead>
+                        <TableHead className="p-2 text-xs text-right h-10">Current Price</TableHead>
+                        <TableHead className="p-2 text-xs text-right h-10">Value</TableHead>
+                        <TableHead className="p-2 text-xs text-right h-10">P/L</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {portfolio.holdings.map((asset) => (
+                        <TableRow key={asset.id}>
+                            <TableCell className="p-2">
+                            <div className="font-medium text-sm text-card-foreground">{asset.name} ({asset.symbol.toUpperCase()})</div>
+                            <div className="text-xs text-muted-foreground capitalize">{asset.type}</div>
+                            </TableCell>
+                            <TableCell className="p-2 text-xs text-right">{asset.quantity}</TableCell>
+                            <TableCell className="p-2 text-xs text-right">{formatCurrency(asset.purchasePrice)}</TableCell>
+                            <TableCell className="p-2 text-xs text-right">
+                            {isFetchingPrices && fetchedPrices[asset.id] === undefined ? (
+                                <Skeleton className="h-3 w-12 inline-block" />
+                            ) : (
+                                formatCurrency(asset.currentPricePerUnit, 'N/A')
+                            )}
+                            {asset.currentPricePerUnit === null && (asset.type === 'stock' || asset.type === 'fund') && !isFetchingPrices && (
+                                <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <AlertCircle className="w-2.5 h-2.5 inline-block ml-0.5 text-destructive cursor-help"/>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs text-xs">
+                                    <p>Price data from Tiingo (EOD) unavailable. May be an invalid symbol, API plan limits (e.g., some mutual funds require higher tiers), or temporary API issues.</p>
+                                </TooltipContent>
+                                </Tooltip>
+                            )}
+                            </TableCell>
+                            <TableCell className="p-2 text-xs text-right">{formatCurrency(asset.totalValue)}</TableCell>
+                            <TableCell className={cn(
+                            "p-2 text-xs text-right",
+                            asset.profitLoss >= 0 ? "text-green-500" : "text-red-500"
+                            )}>
+                            {formatCurrency(asset.profitLoss)}
+                            </TableCell>
+                        </TableRow>
+                        ))}
+                    </TableBody>
+                    </Table>
+                </ScrollArea>
+                {priceFetchError && !isFetchingPrices && <p className="text-xs text-destructive mt-2 text-center">{priceFetchError}</p>}
+                </>
+            ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                {isFetchingPrices ? (
+                    <>
+                    <Loader2 className="mx-auto h-6 w-6 animate-spin mb-1.5" />
+                    <p className="text-sm">Loading assets and prices...</p>
+                    </>
+                ) : (
+                    <>
+                    <p className="text-sm">No assets tracked yet.</p>
+                    <p className="text-xs">Open settings <SettingsIconOriginal className="inline h-3 w-3 align-middle" /> to add assets.</p>
+                    </>
+                )}
+                {priceFetchError && !isFetchingPrices && <p className="text-xs text-destructive mt-3">{priceFetchError}</p>}
+                </div>
+            )}
+            </CardContent>
+        </Card>
+
+        <Dialog open={isEditDialogOpen} onOpenChange={(isOpen) => {
+            setIsEditDialogOpen(isOpen);
+            if (!isOpen) {
+            setEditingAsset(null);
+            setAssetFormData(initialAssetFormState);
+            setIsFetchingName(false);
+            }
+        }}>
+            <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+                <DialogTitle>Edit Asset</DialogTitle>
+                <DialogDescription>
+                Update the details of your asset. {editingAsset && `Current Name: ${editingAsset.name}`}
+                </DialogDescription>
+            </DialogHeader>
+            {editingAsset && renderAssetFormFields(true)}
+            <DialogFooter>
+                <DialogClose asChild>
+                <Button type="button" variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button type="button" onClick={handleSubmitAsset} disabled={isFetchingName}>
+                {isFetchingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" /> }
+                Save Changes
+                </Button>
+            </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </TooltipProvider>
   );
+
+  if (displayMode === 'settingsOnly') {
+    return settingsOpen ? renderSettingsContent() : null;
+  }
+  return renderWidgetDisplay();
 }
