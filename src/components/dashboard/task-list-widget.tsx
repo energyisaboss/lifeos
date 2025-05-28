@@ -15,9 +15,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SectionTitle } from './section-title';
-import { ListChecks, LogIn, LogOut, PlusCircle, Loader2, AlertCircle, Settings } from 'lucide-react';
+import { ListChecks, LogIn, LogOut, PlusCircle, Loader2, AlertCircle, Settings, ListPlus } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Separator } from '@/components/ui/separator';
 
 // Ensure gapi types are available
 declare global {
@@ -58,10 +59,12 @@ const TaskListContent: React.FC = () => {
   });
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskListTitle, setNewTaskListTitle] = useState('');
 
   const [isLoadingLists, setIsLoadingLists] = useState(false);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [isAddingTask, setIsAddingTask] = useState(false);
+  const [isCreatingList, setIsCreatingList] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTaskSettings, setShowTaskSettings] = useState(false);
 
@@ -145,10 +148,13 @@ const TaskListContent: React.FC = () => {
         if (currentStoredListId && response.result.items.find((l: TaskList) => l.id === currentStoredListId)) {
             setSelectedTaskListId(currentStoredListId);
         } else {
-            // Don't auto-select, let user pick from settings
-            // const defaultListId = response.result.items[0].id;
-            // setSelectedTaskListId(defaultListId);
-            // if (typeof window !== 'undefined') localStorage.setItem('selectedGoogleTaskListId', defaultListId);
+            // Do not auto-select
+        }
+      } else {
+        // No lists found, ensure selectedTaskListId is null if it pointed to a non-existent list
+        if (currentStoredListId) {
+            setSelectedTaskListId(null);
+            if (typeof window !== 'undefined') localStorage.removeItem('selectedGoogleTaskListId');
         }
       }
     } catch (err: any) {
@@ -270,6 +276,32 @@ const TaskListContent: React.FC = () => {
     }
   };
 
+  const handleCreateTaskList = async () => {
+    if (!newTaskListTitle.trim() || !accessToken) return;
+    setIsCreatingList(true);
+    setError(null);
+    try {
+      await discoverTasksAPI();
+      window.gapi.client.setToken({ access_token: accessToken });
+      const response = await window.gapi.client.tasks.tasklists.insert({
+        resource: { title: newTaskListTitle.trim() },
+      });
+      toast({ title: "Task List Created", description: `"${response.result.title}" created.` });
+      setNewTaskListTitle('');
+      await fetchTaskLists(accessToken); // Refresh lists
+      // Optionally, select the new list
+      setSelectedTaskListId(response.result.id);
+      if (typeof window !== 'undefined') localStorage.setItem('selectedGoogleTaskListId', response.result.id);
+
+    } catch (err: any) {
+      console.error('TaskListWidget: Error creating task list:', err);
+      setError(`Failed to create task list: ${err.result?.error?.message || err.message || 'Unknown error'}.`);
+      if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
+    } finally {
+      setIsCreatingList(false);
+    }
+  };
+
   return (
       <Card className="shadow-lg flex flex-col">
         <CardHeader className="flex-shrink-0">
@@ -303,48 +335,77 @@ const TaskListContent: React.FC = () => {
               {error && <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
               
               {showTaskSettings && (
-                <div className="mb-4 p-3 border rounded-lg bg-muted/10 shadow-sm">
-                  {isLoadingLists ? (
-                    <div className="flex items-center justify-center py-2"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
-                  ) : taskLists.length > 0 ? (
-                    <Select
-                      value={selectedTaskListId || undefined}
-                      onValueChange={(value) => {
-                        setSelectedTaskListId(value);
-                        if (typeof window !== 'undefined') localStorage.setItem('selectedGoogleTaskListId', value);
-                      }}
-                      disabled={isLoadingTasks}
-                    >
-                      <SelectTrigger className="mb-3 w-full flex-shrink-0">
-                        <SelectValue placeholder="Select a task list" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {taskLists.map((list) => (
-                          <SelectItem key={list.id} value={list.id}>
-                            {list.title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-1">No task lists found.</p>
-                  )}
+                <div className="mb-4 p-3 border rounded-lg bg-muted/10 shadow-sm space-y-4">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Select Task List</p>
+                    {isLoadingLists ? (
+                      <div className="flex items-center justify-center py-2"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
+                    ) : taskLists.length > 0 ? (
+                      <Select
+                        value={selectedTaskListId || undefined}
+                        onValueChange={(value) => {
+                          setSelectedTaskListId(value);
+                          if (typeof window !== 'undefined') localStorage.setItem('selectedGoogleTaskListId', value);
+                        }}
+                        disabled={isLoadingTasks}
+                      >
+                        <SelectTrigger className="w-full flex-shrink-0">
+                          <SelectValue placeholder="Select a task list" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {taskLists.map((list) => (
+                            <SelectItem key={list.id} value={list.id}>
+                              {list.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-1">No task lists found. Try creating one below.</p>
+                    )}
+                  </div>
 
-                  {selectedTaskListId && (
-                    <div className="flex mt-2">
+                  <Separator />
+
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Create New Task List</p>
+                    <div className="flex">
                       <Input
                         type="text"
-                        value={newTaskTitle}
-                        onChange={(e) => setNewTaskTitle(e.target.value)}
-                        placeholder="Add a new task..."
+                        value={newTaskListTitle}
+                        onChange={(e) => setNewTaskListTitle(e.target.value)}
+                        placeholder="New list title..."
                         className="mr-2"
-                        onKeyPress={(e) => e.key === 'Enter' && !isAddingTask && handleAddTask()}
-                        disabled={isAddingTask}
+                        onKeyPress={(e) => e.key === 'Enter' && !isCreatingList && handleCreateTaskList()}
+                        disabled={isCreatingList}
                       />
-                      <Button onClick={handleAddTask} disabled={!newTaskTitle.trim() || isAddingTask}>
-                        {isAddingTask ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+                      <Button onClick={handleCreateTaskList} disabled={!newTaskListTitle.trim() || isCreatingList} size="sm">
+                        {isCreatingList ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListPlus className="h-4 w-4" />}
                       </Button>
                     </div>
+                  </div>
+                  
+                  {selectedTaskListId && (
+                    <>
+                      <Separator />
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-1">Add New Task to "{taskLists.find(l => l.id === selectedTaskListId)?.title || 'Selected List'}"</p>
+                        <div className="flex">
+                          <Input
+                            type="text"
+                            value={newTaskTitle}
+                            onChange={(e) => setNewTaskTitle(e.target.value)}
+                            placeholder="New task title..."
+                            className="mr-2"
+                            onKeyPress={(e) => e.key === 'Enter' && !isAddingTask && handleAddTask()}
+                            disabled={isAddingTask}
+                          />
+                          <Button onClick={handleAddTask} disabled={!newTaskTitle.trim() || isAddingTask || !selectedTaskListId} size="sm">
+                            {isAddingTask ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               )}
@@ -378,12 +439,12 @@ const TaskListContent: React.FC = () => {
                   <p className="text-sm text-muted-foreground text-center py-4">No active tasks in this list. Add one in settings!</p>
                 )
               ) : (
-                !isLoadingLists && taskLists.length > 0 && (
+                !isLoadingLists && taskLists.length > 0 && !showTaskSettings && (
                   <p className="text-sm text-muted-foreground text-center py-4">Please select a task list from settings to view tasks.</p>
                 )
               )}
-               {!isLoadingLists && taskLists.length === 0 && isSignedIn && !error && (
-                 <p className="text-sm text-muted-foreground text-center py-4">No Google Task lists found for your account, or unable to load them.</p>
+               {!isLoadingLists && taskLists.length === 0 && isSignedIn && !error && !showTaskSettings &&(
+                 <p className="text-sm text-muted-foreground text-center py-4">No Google Task lists found. Click settings <Settings className="inline h-3 w-3"/> to create one or select if already created.</p>
                )}
             </div>
           )}
@@ -396,8 +457,10 @@ const TaskListContent: React.FC = () => {
 export function TaskListWidget() {
   const [googleClientId, setGoogleClientId] = useState<string | null>(null);
   const [providerError, setProviderError] = useState<string | null>(null);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
     // Ensure this code only runs on the client
     if (typeof window !== 'undefined') {
       const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
@@ -410,7 +473,7 @@ export function TaskListWidget() {
     }
   }, []);
 
-  if (typeof window === 'undefined') {
+  if (!isClient) {
     // Return a placeholder or null during SSR/build time
     return (
        <Card className="shadow-lg">
