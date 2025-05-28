@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SectionTitle } from './section-title';
-import { ListChecks, LogIn, LogOut, PlusCircle, Loader2, AlertCircle, Settings, ListPlus, Eye, EyeOff, Edit3, Check, XCircle } from 'lucide-react';
+import { ListChecks, LogIn, LogOut, PlusCircle, Loader2, AlertCircle, Settings, ListPlus, Edit3, Check, XCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from '@/components/ui/separator';
@@ -413,7 +413,7 @@ const TaskListContent: React.FC = () => {
       <div className="flex flex-col">
         <div className="p-4 border-b mb-1">
           <div className="flex justify-between items-center">
-            <SectionTitle icon={ListChecks} title="Google Tasks" className="mb-0" />
+            <SectionTitle icon={ListChecks} title="Tasks" className="mb-0" />
             <div className="flex items-center gap-1">
               {isSignedIn && (
                 <Button variant="ghost" size="sm" onClick={() => setShowTaskSettings(!showTaskSettings)} aria-label="Task Settings">
@@ -623,7 +623,7 @@ export function TaskListWidget() {
   if (!isClient) {
     return (
        <div className="p-4 border rounded-lg shadow-lg">
-        <div className="p-4 border-b"><SectionTitle icon={ListChecks} title="Google Tasks" /></div>
+        <div className="p-4 border-b"><SectionTitle icon={ListChecks} title="Tasks" /></div>
         <div className="p-6">
           <Skeleton className="h-10 w-3/4 mb-4" />
           <Skeleton className="h-8 w-full mb-2" />
@@ -636,7 +636,7 @@ export function TaskListWidget() {
   if (providerError || !googleClientId) {
     return (
       <div className="p-4 border rounded-lg shadow-lg">
-        <div className="p-4 border-b"><SectionTitle icon={ListChecks} title="Google Tasks" /></div>
+        <div className="p-4 border-b"><SectionTitle icon={ListChecks} title="Tasks" /></div>
         <div className="p-6">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -656,3 +656,4 @@ export function TaskListWidget() {
     </GoogleOAuthProvider>
   );
 }
+
