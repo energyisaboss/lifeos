@@ -20,6 +20,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from '@/components/ui/separator';
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from '@/components/ui/skeleton'; // Added import
 
 // Ensure gapi types are available
 declare global {
@@ -58,24 +59,32 @@ const TaskListContent: React.FC = () => {
   const [tasksByListId, setTasksByListId] = useState<Record<string, Task[]>>({});
   const [visibleListIds, setVisibleListIds] = useState<Record<string, boolean>>({});
   
-  const [newTaskTitles, setNewTaskTitles] = useState<Record<string, string>>({}); // For new task inputs per list
+  const [newTaskTitles, setNewTaskTitles] = useState<Record<string, string>>({});
   const [newTaskListTitle, setNewTaskListTitle] = useState('');
 
   const [isLoadingLists, setIsLoadingLists] = useState(false);
   const [isLoadingTasksForList, setIsLoadingTasksForList] = useState<Record<string, boolean>>({});
   const [isAddingTaskForList, setIsAddingTaskForList] = useState<Record<string, boolean>>({});
   const [isCreatingList, setIsCreatingList] = useState(false);
-  const [error, setError] = useState<string | null>(null); // General error
+  const [error, setError] = useState<string | null>(null);
   const [errorPerList, setErrorPerList] = useState<Record<string, string | null>>({});
   const [showTaskSettings, setShowTaskSettings] = useState(false);
   
-  const gapiLoadedRef = useRef(false);
+  const [isGapiClientLoaded, setIsGapiClientLoaded] = useState(false);
 
   const loadGapiClient = useCallback(async () => {
-    if (gapiLoadedRef.current && window.gapi && window.gapi.client && window.gapi.client.tasks) {
-      return; // Already loaded
+    if (isGapiClientLoaded && window.gapi && window.gapi.client && window.gapi.client.tasks) {
+      console.log('TaskListWidget: GAPI client and Tasks API already confirmed loaded.');
+      return;
     }
+    console.log('TaskListWidget: Attempting to load GAPI client...');
     return new Promise<void>((resolve, reject) => {
+      if (window.gapi && window.gapi.client && window.gapi.client.tasks) {
+        console.log('TaskListWidget: GAPI client and Tasks API found on window, assuming loaded.');
+        setIsGapiClientLoaded(true);
+        resolve();
+        return;
+      }
       const script = document.createElement('script');
       script.src = 'https://apis.google.com/js/api.js';
       script.async = true;
@@ -83,15 +92,16 @@ const TaskListContent: React.FC = () => {
       script.onload = () => {
         window.gapi.load('client', async () => {
           try {
-            await window.gapi.client.init({}); // Minimal init
+            await window.gapi.client.init({}); 
             console.log('TaskListWidget: GAPI client initialized.');
             await window.gapi.client.load('https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest');
             console.log('TaskListWidget: Google Tasks API discovered.');
-            gapiLoadedRef.current = true;
+            setIsGapiClientLoaded(true);
             resolve();
           } catch (initError) {
             console.error('TaskListWidget: Error initializing GAPI client or Tasks API:', initError);
             setError('Failed to initialize Google API client or Tasks API.');
+            setIsGapiClientLoaded(false);
             reject(initError);
           }
         });
@@ -99,11 +109,12 @@ const TaskListContent: React.FC = () => {
       script.onerror = (err) => {
          console.error('TaskListWidget: Error loading GAPI script:', err);
          setError('Failed to load Google API script.');
+         setIsGapiClientLoaded(false);
          reject(err);
       }
       document.body.appendChild(script);
     });
-  }, []);
+  }, [isGapiClientLoaded]);
 
 
   const handleSignOut = useCallback(() => {
@@ -116,24 +127,31 @@ const TaskListContent: React.FC = () => {
     setShowTaskSettings(false);
     setError(null);
     setErrorPerList({});
+    setIsGapiClientLoaded(false);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('googleTasksAccessToken');
-      localStorage.removeItem(VISIBLE_LISTS_STORAGE_KEY); // Clear visibility preferences
+      localStorage.removeItem(VISIBLE_LISTS_STORAGE_KEY);
     }
     if (window.gapi && window.gapi.client) {
         window.gapi.client.setToken(null);
     }
-    gapiLoadedRef.current = false; // Reset GAPI loaded state
     console.log('TaskListWidget: Signed out.');
   }, []);
 
   const fetchAndSetTasksForList = useCallback(async (token: string, listId: string) => {
     if (!token || !listId) return;
+    console.log(`TaskListWidget: Fetching tasks for list ${listId}`);
     setIsLoadingTasksForList(prev => ({ ...prev, [listId]: true }));
     setErrorPerList(prev => ({ ...prev, [listId]: null }));
 
     try {
-      if (!gapiLoadedRef.current) await loadGapiClient();
+      if (!isGapiClientLoaded) {
+        console.warn(`TaskListWidget: GAPI client not loaded, attempting to load before fetching tasks for list ${listId}.`);
+        await loadGapiClient();
+      }
+      if (!window.gapi || !window.gapi.client || !window.gapi.client.tasks) {
+        throw new Error("Google Tasks API client is not available.");
+      }
       window.gapi.client.setToken({ access_token: token });
       const response = await window.gapi.client.tasks.tasks.list({
         tasklist: listId,
@@ -141,7 +159,8 @@ const TaskListContent: React.FC = () => {
         showHidden: false,
         maxResults: 100,
       });
-      setTasksByListId(prev => ({ ...prev, [listId]: response.result.items || [] }));
+      console.log(`TaskListWidget: Raw response from tasks.list() for list ${listId}:`, JSON.stringify(response, null, 2));
+      setTasksByListId(prev => ({ ...prev, [listId]: response?.result?.items || [] }));
     } catch (err: any) {
       console.error(`TaskListWidget: Error fetching tasks for list ${listId}:`, err);
       setErrorPerList(prev => ({ ...prev, [listId]: `Failed to fetch tasks: ${err.result?.error?.message || err.message || 'Unknown error'}.`}));
@@ -149,23 +168,32 @@ const TaskListContent: React.FC = () => {
     } finally {
       setIsLoadingTasksForList(prev => ({ ...prev, [listId]: false }));
     }
-  }, [loadGapiClient, handleSignOut]);
+  }, [isGapiClientLoaded, loadGapiClient, handleSignOut]);
 
   const fetchTaskLists = useCallback(async (token: string) => {
     if (!token) return;
     setIsLoadingLists(true);
     setError(null);
+    console.log('TaskListWidget: Attempting to fetch task lists.');
     try {
-      if (!gapiLoadedRef.current) await loadGapiClient();
+      if (!isGapiClientLoaded) {
+        console.warn('TaskListWidget: GAPI client not loaded, attempting to load before fetching task lists.');
+        await loadGapiClient();
+      }
+      if (!window.gapi || !window.gapi.client || !window.gapi.client.tasks) {
+        throw new Error("Google Tasks API client is not available for fetching lists.");
+      }
       window.gapi.client.setToken({ access_token: token });
       const response = await window.gapi.client.tasks.tasklists.list();
-      const fetchedLists = response.result.items || [];
+      console.log('TaskListWidget: Raw response from tasklists.list():', JSON.stringify(response, null, 2));
+
+      const fetchedLists = response?.result?.items || [];
+      console.log(`TaskListWidget: Fetched ${fetchedLists.length} task lists from API.`);
       setTaskLists(fetchedLists);
 
       const storedVisibleIds = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem(VISIBLE_LISTS_STORAGE_KEY) || '{}') : {};
       setVisibleListIds(storedVisibleIds);
       
-      // Fetch tasks for lists that are marked as visible
       fetchedLists.forEach(list => {
         if (storedVisibleIds[list.id]) {
           fetchAndSetTasksForList(token, list.id);
@@ -179,22 +207,22 @@ const TaskListContent: React.FC = () => {
     } finally {
       setIsLoadingLists(false);
     }
-  }, [loadGapiClient, handleSignOut, fetchAndSetTasksForList]);
-
+  }, [isGapiClientLoaded, loadGapiClient, handleSignOut, fetchAndSetTasksForList]);
 
   useEffect(() => {
-    // Load GAPI client as soon as possible if signed in or attempting to sign in
-    if (isSignedIn || !accessToken) { // Attempt to load if signed in, or to prepare for login
-       loadGapiClient().catch(e => console.error("Failed to load GAPI on mount", e));
+    if (isSignedIn || !accessToken) {
+       loadGapiClient().catch(e => console.error("TaskListWidget: Failed to load GAPI on mount/auth change", e));
     }
   }, [isSignedIn, accessToken, loadGapiClient]);
 
-
   useEffect(() => {
-    if (accessToken && isSignedIn && gapiLoadedRef.current) {
+    if (accessToken && isSignedIn && isGapiClientLoaded) {
+      console.log("TaskListWidget: Conditions met to fetch task lists (token, signedIn, GAPI loaded).");
       fetchTaskLists(accessToken);
+    } else {
+      console.log("TaskListWidget: Conditions NOT met to fetch task lists.", {accessToken: !!accessToken, isSignedIn, isGapiClientLoaded});
     }
-  }, [accessToken, isSignedIn, fetchTaskLists]); // Removed gapiLoadedRef from deps here to avoid loop with fetchTaskLists
+  }, [accessToken, isSignedIn, isGapiClientLoaded, fetchTaskLists]);
 
 
   const handleLoginSuccess = (tokenResponse: Omit<TokenResponse, 'error' | 'error_description' | 'error_uri'>) => {
@@ -204,8 +232,9 @@ const TaskListContent: React.FC = () => {
     if (typeof window !== 'undefined') localStorage.setItem('googleTasksAccessToken', newAccessToken);
     console.log('TaskListWidget: Login successful, token acquired.');
     loadGapiClient().then(() => {
-       fetchTaskLists(newAccessToken);
-    }).catch(e => console.error("GAPI load failed post-login", e));
+        // fetchTaskLists will be called by the useEffect hook reacting to isGapiClientLoaded and accessToken changes
+        console.log('TaskListWidget: GAPI client loaded post-login. Fetch should be triggered by useEffect.');
+    }).catch(e => console.error("TaskListWidget: GAPI load failed post-login", e));
   };
   
   const login = useGoogleLogin({
@@ -226,7 +255,10 @@ const TaskListContent: React.FC = () => {
     setErrorPerList(prev => ({ ...prev, [listId]: null }));
 
     try {
-      if (!gapiLoadedRef.current) await loadGapiClient();
+      if (!isGapiClientLoaded) await loadGapiClient();
+      if (!window.gapi || !window.gapi.client || !window.gapi.client.tasks) {
+        throw new Error("Google Tasks API client is not available for adding task.");
+      }
       window.gapi.client.setToken({ access_token: accessToken });
       const response = await window.gapi.client.tasks.tasks.insert({
         tasklist: listId,
@@ -236,7 +268,7 @@ const TaskListContent: React.FC = () => {
         ...prevTasks,
         [listId]: [response.result, ...(prevTasks[listId] || [])]
       }));
-      setNewTaskTitles(prev => ({ ...prev, [listId]: '' })); // Clear input for this list
+      setNewTaskTitles(prev => ({ ...prev, [listId]: '' }));
       toast({ title: "Task Added", description: `"${response.result.title}" added to ${taskLists.find(l=>l.id === listId)?.title}.` });
     } catch (err: any) {
       console.error('TaskListWidget: Error adding task:', err);
@@ -259,12 +291,15 @@ const TaskListContent: React.FC = () => {
     }));
 
     try {
-      if (!gapiLoadedRef.current) await loadGapiClient();
+      if (!isGapiClientLoaded) await loadGapiClient();
+       if (!window.gapi || !window.gapi.client || !window.gapi.client.tasks) {
+        throw new Error("Google Tasks API client is not available for updating task.");
+      }
       window.gapi.client.setToken({ access_token: accessToken });
       await window.gapi.client.tasks.tasks.update({
         tasklist: listId,
         task: task.id,
-        resource: { id: task.id, status: newStatus, title: task.title }, // title is required by API for update
+        resource: { id: task.id, status: newStatus, title: task.title },
       });
       toast({ title: "Task Updated", description: `"${task.title}" marked as ${newStatus === 'completed' ? 'complete' : 'incomplete'}.`});
        if (newStatus === 'completed') {
@@ -278,7 +313,7 @@ const TaskListContent: React.FC = () => {
     } catch (err: any) {
       console.error('TaskListWidget: Error updating task:', err);
       setErrorPerList(prev => ({ ...prev, [listId]: `Failed to update task: ${err.result?.error?.message || err.message || 'Unknown error'}.`}));
-      setTasksByListId(prev => ({ ...prev, [listId]: originalTasksForList })); // Revert on error
+      setTasksByListId(prev => ({ ...prev, [listId]: originalTasksForList }));
       if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
     }
   };
@@ -288,7 +323,10 @@ const TaskListContent: React.FC = () => {
     setIsCreatingList(true);
     setError(null);
     try {
-      if (!gapiLoadedRef.current) await loadGapiClient();
+      if (!isGapiClientLoaded) await loadGapiClient();
+      if (!window.gapi || !window.gapi.client || !window.gapi.client.tasks) {
+        throw new Error("Google Tasks API client is not available for creating list.");
+      }
       window.gapi.client.setToken({ access_token: accessToken });
       const response = await window.gapi.client.tasks.tasklists.insert({
         resource: { title: newTaskListTitle.trim() },
@@ -296,12 +334,20 @@ const TaskListContent: React.FC = () => {
       const newList = response.result;
       toast({ title: "Task List Created", description: `"${newList.title}" created.` });
       setNewTaskListTitle('');
-      setTaskLists(prev => [...prev, newList]); // Add to local list
-      setVisibleListIds(prev => ({ ...prev, [newList.id]: true })); // Default new list to visible
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(VISIBLE_LISTS_STORAGE_KEY, JSON.stringify({ ...visibleListIds, [newList.id]: true }));
-      }
-      fetchAndSetTasksForList(accessToken, newList.id); // Fetch tasks for new list
+      
+      // Update taskLists state and auto-select new list
+      setTaskLists(prev => {
+          const updatedLists = [...prev, newList];
+          // Auto-make new list visible and fetch its tasks
+          const newVisible = { ...visibleListIds, [newList.id]: true };
+          setVisibleListIds(newVisible);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(VISIBLE_LISTS_STORAGE_KEY, JSON.stringify(newVisible));
+          }
+          fetchAndSetTasksForList(accessToken, newList.id); 
+          return updatedLists;
+      });
+
     } catch (err: any) {
       console.error('TaskListWidget: Error creating task list:', err);
       setError(`Failed to create task list: ${err.result?.error?.message || err.message || 'Unknown error'}.`);
@@ -317,8 +363,7 @@ const TaskListContent: React.FC = () => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(VISIBLE_LISTS_STORAGE_KEY, JSON.stringify(newVisibleListIds));
     }
-    if (checked && accessToken && !tasksByListId[listId] && !isLoadingTasksForList[listId]) {
-      // If made visible and tasks not yet fetched (and not already loading)
+    if (checked && accessToken && !tasksByListId[listId] && !isLoadingTasksForList[listId] && isGapiClientLoaded) {
       fetchAndSetTasksForList(accessToken, listId);
     }
   };
@@ -326,8 +371,8 @@ const TaskListContent: React.FC = () => {
   const visibleListsToDisplay = taskLists.filter(list => visibleListIds[list.id]);
 
   return (
-      <div className="flex flex-col"> {/* Removed Card to allow multiple cards for lists */}
-        <div className="p-4 border-b mb-4"> {/* Header-like section */}
+      <div className="flex flex-col">
+        <div className="p-4 border-b mb-4">
           <div className="flex justify-between items-center">
             <SectionTitle icon={ListChecks} title="Google Tasks" className="mb-0" />
             <div className="flex items-center gap-1">
@@ -349,8 +394,8 @@ const TaskListContent: React.FC = () => {
           {!isSignedIn ? (
              <div className="flex flex-col items-center justify-center py-8 text-center">
                 <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
-                <Button onClick={() => login()} variant="default" disabled={!gapiLoadedRef.current}>
-                   {gapiLoadedRef.current ? <LogIn className="mr-2 h-4 w-4" /> : <Loader2 className="mr-2 h-4 w-4 animate-spin" /> }
+                <Button onClick={() => login()} variant="default" disabled={!isGapiClientLoaded}>
+                   {!isGapiClientLoaded ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" /> }
                    Sign In with Google
                 </Button>
                 {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
@@ -416,13 +461,12 @@ const TaskListContent: React.FC = () => {
                 </Card>
               )}
 
-              {/* Task Display Area for Visible Lists */}
               {isLoadingLists && !taskLists.length ? (
                   <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</div>
               ) : visibleListsToDisplay.length > 0 ? (
                 <div className="space-y-6">
                   {visibleListsToDisplay.map(list => (
-                    <Card key={list.id} className="shadow-lg flex flex-col">
+                    <Card key={list.id} className="shadow-lg flex flex-col max-h-96">
                       <CardHeader>
                         <CardTitle className="text-md">{list.title}</CardTitle>
                       </CardHeader>
@@ -446,11 +490,11 @@ const TaskListContent: React.FC = () => {
                           </Button>
                         </div>
                         {isLoadingTasksForList[list.id] ? (
-                           <div className="flex items-center justify-center py-4"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading tasks for {list.title}...</div>
+                           <div className="flex items-center justify-center py-4"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading tasks...</div>
                         ) : errorPerList[list.id] ? (
                            <Alert variant="destructive" className="text-xs my-2"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{errorPerList[list.id]}</AlertDescription></Alert>
                         ) : (tasksByListId[list.id] || []).length > 0 ? (
-                          <ScrollArea className="pr-1 max-h-60 flex-grow">
+                          <ScrollArea className="pr-1 flex-grow max-h-60"> {/* Added max-h-60 */}
                             <ul className="space-y-2">
                               {(tasksByListId[list.id] || []).map((task) => (
                                 <li key={task.id} className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted/50 transition-colors">
@@ -499,23 +543,21 @@ export function TaskListWidget() {
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    setIsClient(true);
-    if (typeof window !== 'undefined') {
-      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-      if (clientId) {
-        setGoogleClientId(clientId);
-      } else {
-        console.error("TaskListWidget: NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set in .env.local");
-        setProviderError("Google Client ID not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env.local file and restart the server.");
-      }
+    setIsClient(true); 
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (clientId) {
+      setGoogleClientId(clientId);
+    } else {
+      console.error("TaskListWidget: NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set in .env.local or not exposed to client.");
+      setProviderError("Google Client ID not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env.local file, expose it to the client, and restart the server.");
     }
   }, []);
 
   if (!isClient) {
     return (
-       <div className="p-4 border rounded-lg shadow-lg"> {/* Replaced Card with div for outer container */}
+       <div className="p-4 border rounded-lg shadow-lg">
         <div className="p-4 border-b"><SectionTitle icon={ListChecks} title="Google Tasks" /></div>
-        <div className="p-6"><p className="text-sm text-muted-foreground">Loading Google Tasks...</p></div>
+        <div className="p-6"><Skeleton className="h-10 w-full" /></div>
       </div>
     );
   }
@@ -543,3 +585,5 @@ export function TaskListWidget() {
     </GoogleOAuthProvider>
   );
 }
+
+    
