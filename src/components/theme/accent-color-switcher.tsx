@@ -15,8 +15,8 @@ interface AccentPalette {
 
 const ACCENT_COLOR_STORAGE_KEY = 'lifeos-accent-color-hex_v1';
 
+// Removed "Default Purple"
 const predefinedPalettes: AccentPalette[] = [
-  { name: 'Default Purple', hex: '#9575CD' },
   { name: 'Red', hex: '#F44336' },
   { name: 'Blue', hex: '#2196F3' },
   { name: 'Orange', hex: '#FF9800' },
@@ -25,7 +25,7 @@ const predefinedPalettes: AccentPalette[] = [
   { name: 'Purple', hex: '#9C27B0' },
 ];
 
-const defaultAccentHex = predefinedPalettes[0].hex;
+const defaultAccentHex = predefinedPalettes[0].hex; // Default to Red now
 
 const isValidHexColor = (color: string): boolean => {
   return /^#([0-9A-Fa-f]{3}){1,2}$/.test(color);
