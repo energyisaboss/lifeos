@@ -469,7 +469,7 @@ export function NewsWidget() {
         </div>
       )}
 
-      <div className={cn(showFeedManagement ? "mt-6" : "mt-0")}>
+      <div className={cn("space-y-6", showFeedManagement ? "mt-6" : "mt-0")}>
         {isLoading && !showFeedManagement && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
            <div className="space-y-4">
               {Array.from({length: Math.min(2, categories.filter(c => c.feeds.some(f=>f.url.trim())).length || 1)}).map((_, i) => (
@@ -497,81 +497,79 @@ export function NewsWidget() {
         )}
 
         {!isLoading && !error && (
-          <div className={cn("space-y-6", showFeedManagement ? "mt-6" : "mt-0")}>
-            {categories.map(category => {
-              const categoryArticles = articlesByCategoryId(category.id);
-               if (categoryArticles.length === 0 && !isLoading && !showFeedManagement && !category.feeds.some(f=>f.url.trim())) return null;
+          categories.map(category => {
+            const categoryArticles = articlesByCategoryId(category.id);
+             if (categoryArticles.length === 0 && !isLoading && !showFeedManagement && !category.feeds.some(f=>f.url.trim())) return null;
 
-              return (
-                <Card 
-                    key={category.id} 
-                    className="shadow-md mb-6"
-                    style={{ borderTop: `4px solid ${isValidHexColor(category.color) ? category.color : predefinedNewsCategoryColors[0]}` }}
-                >
-                  <CardHeader>
-                    <CardTitle className="text-xl flex items-center" style={{ color: isValidHexColor(category.color) ? category.color : undefined }}>
-                      <Newspaper className="mr-2 h-5 w-5" style={{ color: isValidHexColor(category.color) ? category.color : 'hsl(var(--muted-foreground))' }} />
-                      {category.name}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-4 py-0">
-                    {isLoading && categoryArticles.length === 0 && category.feeds.some(f => f.url.trim()) && ( 
-                       <div className="py-2">
-                          <Skeleton className="h-5 w-3/4 mb-1.5" />
-                          <Skeleton className="h-3 w-1/2 mb-2" />
-                          <Skeleton className="h-4 w-full mb-1" />
-                          <Skeleton className="h-4 w-5/6" />
-                       </div>
-                    )}
-                    {!isLoading && categoryArticles.length === 0 && (
-                       <p className="text-sm text-muted-foreground py-4 px-2 text-center">
-                        {category.feeds.some(f=>f.url.trim()) ? "No articles for this category currently." : "No feeds configured for this category."}
-                       </p>
-                    )}
-                    {categoryArticles.length > 0 && (
-                      <ScrollArea className="h-[300px] pr-3 py-2">
-                        <ul className="space-y-4">
-                          {categoryArticles.map((article) => (
-                            <li key={article.id} className="pb-3 border-b border-border last:border-b-0">
-                              {article.imageUrl && (
-                                 <a href={article.link} target="_blank" rel="noopener noreferrer" className="block mb-2 rounded-md overflow-hidden aspect-[16/9] max-h-32">
-                                    <Image
-                                        src={article.imageUrl}
-                                        alt={article.title || 'Article image'}
-                                        width={300}
-                                        height={169} 
-                                        className="object-cover w-full h-full hover:scale-105 transition-transform duration-200"
-                                        data-ai-hint="news article"
-                                        onError={(e) => (e.currentTarget.style.display = 'none')}
-                                    />
-                                 </a>
-                              )}
-                              <a href={article.link} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
-                                <h4 className="font-medium text-card-foreground leading-tight">{article.title || 'Untitled Article'}</h4>
-                              </a>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {article.sourceName} 
-                                {article.isoDate && ` - ${formatDistanceToNow(new Date(article.isoDate), { addSuffix: true })}`}
-                              </p>
-                              {article.contentSnippet && (
-                                <p className="text-sm text-muted-foreground mt-1.5 line-clamp-3">{article.contentSnippet}</p>
-                              )}
-                              {article.category && (
-                                <Badge variant="secondary" className="mt-2 text-xs">
-                                  <Tag className="w-3 h-3 mr-1" />
-                                  {article.category}
-                                </Badge>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      </ScrollArea>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+            return (
+              <Card 
+                  key={category.id} 
+                  className="shadow-md mb-6"
+                  style={{ borderTop: `4px solid ${isValidHexColor(category.color) ? category.color : predefinedNewsCategoryColors[0]}` }}
+              >
+                <CardHeader>
+                  <CardTitle className="text-xl flex items-center">
+                    <Newspaper className="mr-2 h-5 w-5" style={{ color: isValidHexColor(category.color) ? category.color : 'hsl(var(--muted-foreground))' }} />
+                    {category.name}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 py-0">
+                  {isLoading && categoryArticles.length === 0 && category.feeds.some(f => f.url.trim()) && ( 
+                     <div className="py-2">
+                        <Skeleton className="h-5 w-3/4 mb-1.5" />
+                        <Skeleton className="h-3 w-1/2 mb-2" />
+                        <Skeleton className="h-4 w-full mb-1" />
+                        <Skeleton className="h-4 w-5/6" />
+                     </div>
+                  )}
+                  {!isLoading && categoryArticles.length === 0 && (
+                     <p className="text-sm text-muted-foreground py-4 px-2 text-center">
+                      {category.feeds.some(f=>f.url.trim()) ? "No articles for this category currently." : "No feeds configured for this category."}
+                     </p>
+                  )}
+                  {categoryArticles.length > 0 && (
+                    <ScrollArea className="h-[300px] pr-3 py-2">
+                      <ul className="space-y-4">
+                        {categoryArticles.map((article) => (
+                          <li key={article.id} className="pb-3 border-b border-border last:border-b-0">
+                            {article.imageUrl && (
+                               <a href={article.link} target="_blank" rel="noopener noreferrer" className="block mb-2 rounded-md overflow-hidden aspect-[16/9] max-h-32">
+                                  <Image
+                                      src={article.imageUrl}
+                                      alt={article.title || 'Article image'}
+                                      width={300}
+                                      height={169} 
+                                      className="object-cover w-full h-full hover:scale-105 transition-transform duration-200"
+                                      data-ai-hint="news article"
+                                      onError={(e) => (e.currentTarget.style.display = 'none')}
+                                  />
+                               </a>
+                            )}
+                            <a href={article.link} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
+                              <h4 className="font-medium text-card-foreground leading-tight">{article.title || 'Untitled Article'}</h4>
+                            </a>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {article.sourceName} 
+                              {article.isoDate && ` - ${formatDistanceToNow(new Date(article.isoDate), { addSuffix: true })}`}
+                            </p>
+                            {article.contentSnippet && (
+                              <p className="text-sm text-muted-foreground mt-1.5 line-clamp-3">{article.contentSnippet}</p>
+                            )}
+                            {article.category && (
+                              <Badge variant="secondary" className="mt-2 text-xs">
+                                <Tag className="w-3 h-3 mr-1" />
+                                {article.category}
+                              </Badge>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })
         )}
       </div>
     </React.Fragment>
