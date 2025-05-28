@@ -4,13 +4,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   GoogleOAuthProvider,
-  GoogleLogin,
   googleLogout,
-  hasGrantedAllScopesGoogle,
   useGoogleLogin,
-  TokenResponse
+  type TokenResponse
 } from '@react-oauth/google';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -19,8 +17,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SectionTitle } from './section-title';
 import { ListChecks, LogIn, LogOut, PlusCircle, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// Ensure gapi types are available, can be enhanced with more specific types
+// Ensure gapi types are available
 declare global {
   interface Window {
     gapi: any;
@@ -42,14 +41,21 @@ interface Task {
 
 const GOOGLE_TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
 
-export function TaskListWidget() {
-  const [googleClientId, setGoogleClientId] = useState<string | null>(null);
-  const [tokenClient, setTokenClient] = useState<any>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(localStorage.getItem('googleTasksAccessToken'));
-  const [isSignedIn, setIsSignedIn] = useState<boolean>(!!localStorage.getItem('googleTasksAccessToken'));
+const TaskListContent: React.FC = () => {
+  const [accessToken, setAccessToken] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('googleTasksAccessToken');
+    return null;
+  });
+  const [isSignedIn, setIsSignedIn] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') return !!localStorage.getItem('googleTasksAccessToken');
+    return false;
+  });
 
   const [taskLists, setTaskLists] = useState<TaskList[]>([]);
-  const [selectedTaskListId, setSelectedTaskListId] = useState<string | null>(localStorage.getItem('selectedGoogleTaskListId'));
+  const [selectedTaskListId, setSelectedTaskListId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('selectedGoogleTaskListId');
+    return null;
+  });
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
 
@@ -58,24 +64,19 @@ export function TaskListWidget() {
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (clientId) {
-      setGoogleClientId(clientId);
-    } else {
-      console.error("TaskListWidget: NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set in .env.local");
-      setError("Google Client ID not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env.local");
-    }
-  }, []);
-
   const loadGapiClient = useCallback(async () => {
+    if (window.gapi && window.gapi.client && window.gapi.client.tasks) {
+      return; // Already loaded
+    }
     await new Promise<void>((resolve, reject) => {
       const script = document.createElement('script');
       script.src = 'https://apis.google.com/js/api.js';
+      script.async = true;
+      script.defer = true;
       script.onload = () => {
         window.gapi.load('client', async () => {
           try {
-            await window.gapi.client.init({}); // Minimal init, discoveryDocs loaded per API
+            await window.gapi.client.init({}); // Minimal init
             console.log('TaskListWidget: GAPI client initialized.');
             resolve();
           } catch (initError) {
@@ -110,6 +111,22 @@ export function TaskListWidget() {
     }
   }, [loadGapiClient]);
 
+  const handleSignOut = useCallback(() => {
+    googleLogout();
+    setAccessToken(null);
+    setIsSignedIn(false);
+    setTaskLists([]);
+    setSelectedTaskListId(null);
+    setTasks([]);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('googleTasksAccessToken');
+      localStorage.removeItem('selectedGoogleTaskListId');
+    }
+    if (window.gapi && window.gapi.client) {
+        window.gapi.client.setToken(null);
+    }
+    console.log('TaskListWidget: Signed out.');
+  }, []);
 
   const fetchTaskLists = useCallback(async (token: string) => {
     if (!token) return;
@@ -120,10 +137,15 @@ export function TaskListWidget() {
       window.gapi.client.setToken({ access_token: token });
       const response = await window.gapi.client.tasks.tasklists.list();
       setTaskLists(response.result.items || []);
-      if (response.result.items && response.result.items.length > 0 && !selectedTaskListId) {
-        const defaultListId = response.result.items[0].id;
-        setSelectedTaskListId(defaultListId);
-        localStorage.setItem('selectedGoogleTaskListId', defaultListId);
+      const currentStoredListId = typeof window !== 'undefined' ? localStorage.getItem('selectedGoogleTaskListId') : null;
+      if (response.result.items && response.result.items.length > 0) {
+        if (currentStoredListId && response.result.items.find((l: TaskList) => l.id === currentStoredListId)) {
+            setSelectedTaskListId(currentStoredListId);
+        } else {
+            const defaultListId = response.result.items[0].id;
+            setSelectedTaskListId(defaultListId);
+            if (typeof window !== 'undefined') localStorage.setItem('selectedGoogleTaskListId', defaultListId);
+        }
       }
     } catch (err: any) {
       console.error('TaskListWidget: Error fetching task lists:', err);
@@ -132,7 +154,7 @@ export function TaskListWidget() {
     } finally {
       setIsLoadingLists(false);
     }
-  }, [discoverTasksAPI, selectedTaskListId]);
+  }, [discoverTasksAPI, handleSignOut]);
 
   const fetchTasks = useCallback(async (token: string, listId: string) => {
     if (!token || !listId) return;
@@ -143,8 +165,9 @@ export function TaskListWidget() {
       window.gapi.client.setToken({ access_token: token });
       const response = await window.gapi.client.tasks.tasks.list({
         tasklist: listId,
-        showCompleted: false, // Optionally fetch completed tasks too
+        showCompleted: false,
         showHidden: false,
+        maxResults: 100, // Fetch more tasks
       });
       setTasks(response.result.items || []);
     } catch (err: any) {
@@ -154,7 +177,7 @@ export function TaskListWidget() {
     } finally {
       setIsLoadingTasks(false);
     }
-  }, [discoverTasksAPI]);
+  }, [discoverTasksAPI, handleSignOut]);
 
   useEffect(() => {
     if (accessToken && isSignedIn) {
@@ -166,7 +189,7 @@ export function TaskListWidget() {
     if (accessToken && selectedTaskListId && isSignedIn) {
       fetchTasks(accessToken, selectedTaskListId);
     } else {
-      setTasks([]); // Clear tasks if no list selected or not signed in
+      setTasks([]);
     }
   }, [accessToken, selectedTaskListId, isSignedIn, fetchTasks]);
 
@@ -175,7 +198,7 @@ export function TaskListWidget() {
     const newAccessToken = tokenResponse.access_token;
     setAccessToken(newAccessToken);
     setIsSignedIn(true);
-    localStorage.setItem('googleTasksAccessToken', newAccessToken);
+    if (typeof window !== 'undefined') localStorage.setItem('googleTasksAccessToken', newAccessToken);
     console.log('TaskListWidget: Login successful, token acquired.');
     fetchTaskLists(newAccessToken);
   };
@@ -185,26 +208,11 @@ export function TaskListWidget() {
     onError: (errorResponse) => {
       console.error('TaskListWidget: Google Login Failed:', errorResponse);
       setError(`Google Sign-In failed: ${errorResponse.error_description || errorResponse.error || 'Unknown error'}`);
-      handleSignOut(); // Clear any partial state
+      handleSignOut();
     },
     scope: GOOGLE_TASKS_SCOPE,
-    flow: 'implicit', // Use implicit flow to get access token directly
+    flow: 'implicit',
   });
-
-  const handleSignOut = () => {
-    googleLogout();
-    setAccessToken(null);
-    setIsSignedIn(false);
-    setTaskLists([]);
-    setSelectedTaskListId(null);
-    setTasks([]);
-    localStorage.removeItem('googleTasksAccessToken');
-    localStorage.removeItem('selectedGoogleTaskListId');
-    if (window.gapi && window.gapi.client) {
-        window.gapi.client.setToken(null);
-    }
-    console.log('TaskListWidget: Signed out.');
-  };
 
   const handleAddTask = async () => {
     if (!newTaskTitle.trim() || !accessToken || !selectedTaskListId) return;
@@ -234,7 +242,6 @@ export function TaskListWidget() {
 
     const newStatus = task.status === 'completed' ? 'needsAction' : 'completed';
     const originalTasks = tasks;
-    // Optimistically update UI
     setTasks(prevTasks => prevTasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
 
     try {
@@ -243,47 +250,23 @@ export function TaskListWidget() {
       await window.gapi.client.tasks.tasks.update({
         tasklist: selectedTaskListId,
         task: task.id,
-        resource: { id: task.id, status: newStatus, title: task.title }, // title is required by API even if not changing
+        resource: { id: task.id, status: newStatus, title: task.title },
       });
-      // If successful, UI is already updated. We might want to re-fetch to confirm.
-      // For now, let's rely on optimistic update.
       toast({ title: "Task Updated", description: `"${task.title}" marked as ${newStatus === 'completed' ? 'complete' : 'incomplete'}.`});
-       if (newStatus === 'completed') { // If marked complete, remove from active view after a short delay
+       if (newStatus === 'completed') {
         setTimeout(() => {
           setTasks(prev => prev.filter(t => t.id !== task.id));
         }, 1000);
       }
-
     } catch (err: any) {
       console.error('TaskListWidget: Error updating task:', err);
       setError(`Failed to update task: ${err.result?.error?.message || err.message || 'Unknown error'}.`);
-      setTasks(originalTasks); // Revert optimistic update on error
+      setTasks(originalTasks);
       if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
     }
   };
-  
-  if (!googleClientId) {
-    return (
-      <Card className="shadow-lg">
-        <CardHeader>
-          <SectionTitle icon={ListChecks} title="Google Tasks" />
-        </CardHeader>
-        <CardContent>
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Configuration Error</AlertTitle>
-            <AlertDescription>
-              Google Client ID is not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env.local file and restart the server.
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-    );
-  }
-
 
   return (
-    <GoogleOAuthProvider clientId={googleClientId}>
       <Card className="shadow-lg flex flex-col h-full">
         <CardHeader className="flex-shrink-0">
           <div className="flex justify-between items-center">
@@ -315,7 +298,7 @@ export function TaskListWidget() {
                   value={selectedTaskListId || undefined}
                   onValueChange={(value) => {
                     setSelectedTaskListId(value);
-                    localStorage.setItem('selectedGoogleTaskListId', value);
+                    if (typeof window !== 'undefined') localStorage.setItem('selectedGoogleTaskListId', value);
                   }}
                   disabled={isLoadingTasks}
                 >
@@ -384,6 +367,47 @@ export function TaskListWidget() {
           )}
         </CardContent>
       </Card>
+  );
+};
+
+
+export function TaskListWidget() {
+  const [googleClientId, setGoogleClientId] = useState<string | null>(null);
+  const [providerError, setProviderError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (clientId) {
+      setGoogleClientId(clientId);
+    } else {
+      console.error("TaskListWidget: NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set in .env.local");
+      setProviderError("Google Client ID not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env.local file and restart the server.");
+    }
+  }, []);
+
+  if (providerError || !googleClientId) {
+    return (
+      <Card className="shadow-lg">
+        <CardHeader>
+          <SectionTitle icon={ListChecks} title="Google Tasks" />
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Configuration Error</AlertTitle>
+            <AlertDescription>
+              {providerError || "Google Client ID is not available. Please configure it."}
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <GoogleOAuthProvider clientId={googleClientId}>
+      <TaskListContent />
     </GoogleOAuthProvider>
   );
 }
+
