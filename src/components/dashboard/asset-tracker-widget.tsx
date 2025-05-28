@@ -350,22 +350,21 @@ export function AssetTrackerWidget() {
   };
 
   const renderAssetFormFields = (forEditingDialog: boolean = false) => (
-    <div className="grid gap-4 py-4">
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor={forEditingDialog ? "edit-symbol" : "symbol"} className="text-right">Symbol</Label>
+    <div className="grid gap-y-4 gap-x-2 py-4">
+      <div className="space-y-1">
+        <Label htmlFor={forEditingDialog ? "edit-symbol" : "symbol"}>Symbol</Label>
         <Input 
           id={forEditingDialog ? "edit-symbol" : "symbol"}
           name="symbol" 
           value={assetFormData.symbol} 
           onChange={handleInputChange} 
           onBlur={handleSymbolBlur}
-          className="col-span-3" 
           placeholder="e.g., AAPL, FXAIX" 
         />
       </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor={forEditingDialog ? "edit-name" : "name"} className="text-right">Name</Label>
-        <div className="col-span-3 flex items-center">
+      <div className="space-y-1">
+        <Label htmlFor={forEditingDialog ? "edit-name" : "name"}>Name</Label>
+        <div className="flex items-center">
           <Input 
             id={forEditingDialog ? "edit-name" : "name"}
             name="name" 
@@ -378,18 +377,36 @@ export function AssetTrackerWidget() {
           {isFetchingName && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
         </div>
       </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor={forEditingDialog ? "edit-quantity" : "quantity"} className="text-right">Quantity</Label>
-        <Input id={forEditingDialog ? "edit-quantity" : "quantity"} name="quantity" type="number" value={assetFormData.quantity} onChange={handleInputChange} className="col-span-3" placeholder="e.g., 10" min="0" step="any" />
+      <div className="space-y-1">
+        <Label htmlFor={forEditingDialog ? "edit-quantity" : "quantity"}>Quantity</Label>
+        <Input 
+            id={forEditingDialog ? "edit-quantity" : "quantity"} 
+            name="quantity" 
+            type="number" 
+            value={assetFormData.quantity} 
+            onChange={handleInputChange} 
+            placeholder="e.g., 10" 
+            min="0" 
+            step="any" 
+        />
       </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor={forEditingDialog ? "edit-purchasePrice" : "purchasePrice"} className="text-right">Purchase Price</Label>
-        <Input id={forEditingDialog ? "edit-purchasePrice" : "purchasePrice"} name="purchasePrice" type="number" value={assetFormData.purchasePrice} onChange={handleInputChange} className="col-span-3" placeholder="e.g., 150 (per unit)" min="0" step="any" />
+      <div className="space-y-1">
+        <Label htmlFor={forEditingDialog ? "edit-purchasePrice" : "purchasePrice"}>Purchase Price (per unit)</Label>
+        <Input 
+            id={forEditingDialog ? "edit-purchasePrice" : "purchasePrice"} 
+            name="purchasePrice" 
+            type="number" 
+            value={assetFormData.purchasePrice} 
+            onChange={handleInputChange} 
+            placeholder="e.g., 150" 
+            min="0" 
+            step="any" 
+        />
       </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor={forEditingDialog ? "edit-type" : "type"} className="text-right">Type</Label>
+      <div className="space-y-1">
+        <Label htmlFor={forEditingDialog ? "edit-type" : "type"}>Type</Label>
         <Select name="type" value={assetFormData.type} onValueChange={handleTypeChange}>
-          <SelectTrigger className="col-span-3">
+          <SelectTrigger id={forEditingDialog ? "edit-type" : "type"}>
             <SelectValue placeholder="Select asset type" />
           </SelectTrigger>
           <SelectContent>
@@ -400,12 +417,12 @@ export function AssetTrackerWidget() {
         </Select>
       </div>
       {assetFormData.type === 'crypto' && (
-          <p className="col-span-4 text-xs text-muted-foreground text-center px-2 py-1 bg-muted/50 rounded-md">
+          <p className="text-xs text-muted-foreground text-center px-2 py-1 bg-muted/50 rounded-md">
               Automatic price fetching is not available for cryptocurrencies.
           </p>
       )}
        {(assetFormData.type === 'stock' || assetFormData.type === 'fund') && (
-          <p className="col-span-4 text-xs text-muted-foreground text-center px-2 py-1 bg-muted/50 rounded-md">
+          <p className="text-xs text-muted-foreground text-center px-2 py-1 bg-muted/50 rounded-md">
               Price fetching for stocks/funds uses Finnhub. Data availability may vary based on symbol and API plan.
           </p>
       )}
@@ -640,3 +657,5 @@ export function AssetTrackerWidget() {
     </TooltipProvider>
   );
 }
+
+    
