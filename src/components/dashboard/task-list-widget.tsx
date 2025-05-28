@@ -49,7 +49,7 @@ interface TaskListSetting {
 }
 
 const GOOGLE_TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
-const TASK_LIST_SETTINGS_STORAGE_KEY = 'googleTaskListSettings_v1'; 
+const TASK_LIST_SETTINGS_STORAGE_KEY = 'googleTaskListSettings_v2'; // Updated key for new color input
 
 const predefinedTaskColors: string[] = [
   '#F44336', // Red
@@ -66,6 +66,10 @@ const getNextColor = () => {
   return predefinedTaskColors[lastAssignedColorIndex];
 };
 
+const isValidHexColor = (color: string) => {
+  return /^#([0-9A-F]{3}){1,2}$/i.test(color);
+}
+
 
 const TaskListContent: React.FC = () => {
   const [accessToken, setAccessToken] = useState<string | null>(() => {
@@ -79,7 +83,32 @@ const TaskListContent: React.FC = () => {
 
   const [taskLists, setTaskLists] = useState<TaskList[]>([]);
   const [tasksByListId, setTasksByListId] = useState<Record<string, Task[]>>({});
-  const [listSettings, setListSettings] = useState<Record<string, TaskListSetting>>({});
+  const [listSettings, setListSettings] = useState<Record<string, TaskListSetting>>(() => {
+    if (typeof window !== 'undefined') {
+      const savedSettings = localStorage.getItem(TASK_LIST_SETTINGS_STORAGE_KEY);
+      if (savedSettings) {
+        try {
+          const parsedSettings = JSON.parse(savedSettings);
+          if (typeof parsedSettings === 'object' && parsedSettings !== null) {
+            // Ensure all loaded settings have a color property
+            Object.keys(parsedSettings).forEach(key => {
+              if (parsedSettings[key] && !parsedSettings[key].color) {
+                parsedSettings[key].color = getNextColor(); 
+              }
+            });
+            return parsedSettings;
+          } else {
+            console.warn("TaskListWidget: Parsed list settings from localStorage is not an object, ignoring.");
+            localStorage.removeItem(TASK_LIST_SETTINGS_STORAGE_KEY);
+          }
+        } catch (e) {
+          console.error("TaskListWidget: Failed to parse list settings from localStorage", e);
+          localStorage.removeItem(TASK_LIST_SETTINGS_STORAGE_KEY); 
+        }
+      }
+    }
+    return {};
+  });
   
   const [newTaskTitles, setNewTaskTitles] = useState<Record<string, string>>({});
   const [newTaskListTitle, setNewTaskListTitle] = useState('');
@@ -98,25 +127,6 @@ const TaskListContent: React.FC = () => {
   const [editingListTitle, setEditingListTitle] = useState('');
   const [isUpdatingListTitle, setIsUpdatingListTitle] = useState(false);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedSettings = localStorage.getItem(TASK_LIST_SETTINGS_STORAGE_KEY);
-      if (savedSettings) {
-        try {
-          const parsedSettings = JSON.parse(savedSettings);
-          if (typeof parsedSettings === 'object' && parsedSettings !== null) {
-            setListSettings(parsedSettings);
-          } else {
-            console.warn("TaskListWidget: Parsed list settings from localStorage is not an object, ignoring.");
-            localStorage.removeItem(TASK_LIST_SETTINGS_STORAGE_KEY);
-          }
-        } catch (e) {
-          console.error("TaskListWidget: Failed to parse list settings from localStorage", e);
-          localStorage.removeItem(TASK_LIST_SETTINGS_STORAGE_KEY); 
-        }
-      }
-    }
-  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && Object.keys(listSettings).length > 0) {
@@ -182,7 +192,7 @@ const TaskListContent: React.FC = () => {
     setShowTaskSettings(false);
     setError(null);
     setErrorPerList({});
-    setIsGapiClientLoaded(false); // Force GAPI to reload on next sign-in attempt
+    setIsGapiClientLoaded(false); 
     setEditingListId(null);
     setEditingListTitle('');
     if (typeof window !== 'undefined') {
@@ -247,17 +257,20 @@ const TaskListContent: React.FC = () => {
       console.log(`TaskListWidget: Fetched ${fetchedLists.length} task lists from API.`);
       setTaskLists(fetchedLists);
 
-      // Initialize settings for any new lists
       setListSettings(prevSettings => {
         const newSettings = {...prevSettings};
         let settingsChanged = false;
+        let newListsMadeVisible = false;
+        
         fetchedLists.forEach((list, index) => {
             if (!newSettings[list.id]) {
+                const isFirstList = Object.keys(newSettings).length === 0 && index === 0;
                 newSettings[list.id] = {
-                    visible: index === 0, // Default first list to visible
+                    visible: isFirstList, // Make only the very first list visible by default
                     color: getNextColor() 
                 };
                 settingsChanged = true;
+                if (isFirstList) newListsMadeVisible = true;
             } else if (!newSettings[list.id].color) { // Ensure existing entries have a color
                 newSettings[list.id].color = newSettings[list.id].color || getNextColor();
                 settingsChanged = true;
@@ -266,27 +279,32 @@ const TaskListContent: React.FC = () => {
         if (settingsChanged && typeof window !== 'undefined') {
             localStorage.setItem(TASK_LIST_SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
         }
+        if (newListsMadeVisible && accessToken && isGapiClientLoaded) {
+           fetchedLists.forEach(list => {
+             if(newSettings[list.id]?.visible && !tasksByListId[list.id] && !isLoadingTasksForList[list.id]) {
+                 fetchAndSetTasksForList(accessToken, list.id);
+             }
+           });
+        }
         return newSettings;
       });
       
     } catch (err: any) {
       console.error('TaskListWidget: Error fetching task lists:', err);
-      // Check if error message is one set by loadGapiClient to avoid overwriting
-      if (error !== "Failed to initialize Google API client or Tasks API." && error !== "Failed to load Google API script.") {
-        setError(`Failed to fetch task lists: ${err.message || err.result?.error?.message || 'Unknown error'}. Try signing out and in again.`);
-      }
+      const errorMessage = `Failed to fetch task lists: ${err.result?.error?.message || err.message || 'Unknown error'}. Try signing out and in again.`;
+      setError(errorMessage);
       if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
     } finally {
       setIsLoadingLists(false);
     }
-  }, [isGapiClientLoaded, loadGapiClient, handleSignOut, error]); // added `error` to dependencies
+  }, [isGapiClientLoaded, loadGapiClient, handleSignOut, accessToken, tasksByListId, isLoadingTasksForList, fetchAndSetTasksForList]); 
 
   useEffect(() => {
-    if (!isSignedIn && accessToken) { // If signed out but token exists (e.g. from previous session)
+    if (!isSignedIn && accessToken) { 
       setAccessToken(null);
       if (typeof window !== 'undefined') localStorage.removeItem('googleTasksAccessToken');
     }
-    if (isSignedIn || accessToken) { // Attempt to load GAPI if signed in OR if a token exists (for auto-signin)
+    if (isSignedIn || accessToken) { 
        loadGapiClient().catch(e => console.error("TaskListWidget: Failed to load GAPI on mount/auth change", e));
     }
   }, [isSignedIn, accessToken, loadGapiClient]);
@@ -317,7 +335,6 @@ const TaskListContent: React.FC = () => {
     setIsSignedIn(true);
     if (typeof window !== 'undefined') localStorage.setItem('googleTasksAccessToken', newAccessToken);
     console.log('TaskListWidget: Login successful, token acquired.');
-    // GAPI client loading and subsequent fetches are handled by useEffect dependencies
   };
   
   const login = useGoogleLogin({
@@ -449,9 +466,14 @@ const TaskListContent: React.FC = () => {
                 [key]: value
             }
         };
-        // Persist to localStorage is handled by the useEffect watching listSettings
+        if (key === 'color' && typeof value === 'string' && !isValidHexColor(value) && value !== '') {
+            // If hex is partially typed but invalid, don't toast yet, let them finish typing
+            // If it's invalid upon trying to apply fully (e.g. on blur or button), we'd add toast there
+        } else if (key === 'color' && typeof value === 'string' && value !== '' && !isValidHexColor(value)) {
+            toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive" });
+            // Optionally revert to previous color or keep invalid input until corrected
+        }
         
-        // If making a list visible, and tasks aren't loaded/loading, fetch them
         if (key === 'visible' && value === true && accessToken && !tasksByListId[listId] && !isLoadingTasksForList[listId] && isGapiClientLoaded) {
           fetchAndSetTasksForList(accessToken, listId);
         }
@@ -497,219 +519,231 @@ const TaskListContent: React.FC = () => {
   const visibleListsToDisplay = taskLists.filter(list => listSettings[list.id]?.visible);
 
   return (
-      <div className="flex flex-col">
-        <div className="p-4 border-b mb-1">
-          <div className="flex justify-between items-center">
-            <SectionTitle icon={ListChecks} title="Tasks" className="mb-0" />
-            <div className="flex items-center gap-1">
-              {isSignedIn && (
-                <Button variant="ghost" size="sm" onClick={() => setShowTaskSettings(!showTaskSettings)} aria-label="Task Settings">
-                  <Settings className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
+    <>
+      <div className="p-4 border-b mb-1">
+        <div className="flex justify-between items-center">
+          <SectionTitle icon={ListChecks} title="Tasks" className="mb-0" />
+          <div className="flex items-center gap-1">
+            {isSignedIn && (
+              <Button variant="ghost" size="sm" onClick={() => setShowTaskSettings(!showTaskSettings)} aria-label="Task Settings">
+                <Settings className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
-        
-        <div className="px-4 pb-4">
-          {!isSignedIn ? (
-             <div className="flex flex-col items-center justify-center py-8 text-center">
-                <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
-                <Button onClick={() => login()} variant="default" disabled={!isGapiClientLoaded}>
-                   {!isGapiClientLoaded ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" /> }
-                   Sign In with Google
-                </Button>
-                {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
-            </div>
-          ) : (
-            <>
-              {error && <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
-              
-              {showTaskSettings && (
-                <Card className="mb-6 p-4 shadow-md">
-                  <CardHeader className="p-2 pt-0">
-                    <CardTitle className="text-lg">Task List Settings</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4 p-2">
-                    <div>
-                      <h4 className="text-sm font-medium text-muted-foreground mb-2">Visible Task Lists & Colors</h4>
-                      {isLoadingLists ? (
-                        <div className="flex items-center justify-center py-2"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
-                      ) : taskLists.length > 0 ? (
-                        <ScrollArea className="max-h-48 pr-2">
-                          <div className="space-y-3">
-                          {taskLists.map((list) => (
-                            <div key={list.id} className="p-2.5 rounded-md bg-muted/30 hover:bg-muted/50">
-                              <div className="flex items-center justify-between mb-1.5">
-                                {editingListId === list.id ? (
-                                  <div className="flex-grow flex items-center gap-1">
-                                    <Input
-                                      type="text"
-                                      value={editingListTitle}
-                                      onChange={(e) => setEditingListTitle(e.target.value)}
-                                      className="h-8 text-sm flex-grow"
-                                      onKeyDown={(e) => e.key === 'Enter' && !isUpdatingListTitle && handleSaveListTitle()}
-                                      disabled={isUpdatingListTitle}
-                                      autoFocus
-                                    />
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSaveListTitle} disabled={isUpdatingListTitle || !editingListTitle.trim()} aria-label="Save list title">
-                                      {isUpdatingListTitle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCancelEditListTitle} disabled={isUpdatingListTitle} aria-label="Cancel editing list title">
-                                      <XCircle className="w-4 h-4" />
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <Label htmlFor={`vis-${list.id}`} className="text-sm text-card-foreground truncate pr-1" title={list.title}>
-                                    {list.title}
-                                  </Label>
-                                )}
-                                <div className="flex items-center gap-1 flex-shrink-0">
-                                  {editingListId !== list.id && (
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEditListTitle(list)} aria-label="Edit list title">
-                                      <Edit3 className="w-3.5 h-3.5" />
-                                    </Button>
-                                  )}
-                                  <Switch
-                                    id={`vis-${list.id}`}
-                                    checked={!!listSettings[list.id]?.visible}
-                                    onCheckedChange={(checked) => handleListSettingChange(list.id, 'visible', checked)}
-                                    aria-label={`Toggle visibility for ${list.title}`}
-                                    disabled={editingListId === list.id}
+      </div>
+      
+      <div className="px-4 pb-4">
+        {!isSignedIn ? (
+           <div className="flex flex-col items-center justify-center py-8 text-center">
+              <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
+              <Button onClick={() => login()} variant="default" disabled={!isGapiClientLoaded}>
+                 {!isGapiClientLoaded ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" /> }
+                 Sign In with Google
+              </Button>
+              {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
+          </div>
+        ) : (
+          <>
+            {error && <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+            
+            {showTaskSettings && (
+              <Card className="mb-6 p-4 shadow-md">
+                <CardHeader className="p-2 pt-0">
+                  <CardTitle className="text-lg">Task List Settings</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 p-2">
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-2">Visible Task Lists & Colors</h4>
+                    {isLoadingLists ? (
+                      <div className="flex items-center justify-center py-2"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
+                    ) : taskLists.length > 0 ? (
+                      <ScrollArea className="max-h-48 pr-2">
+                        <div className="space-y-3">
+                        {taskLists.map((list) => (
+                          <div key={list.id} className="p-2.5 rounded-md bg-muted/30 hover:bg-muted/50">
+                            <div className="flex items-center justify-between mb-1.5">
+                              {editingListId === list.id ? (
+                                <div className="flex-grow flex items-center gap-1">
+                                  <Input
+                                    type="text"
+                                    value={editingListTitle}
+                                    onChange={(e) => setEditingListTitle(e.target.value)}
+                                    className="h-8 text-sm flex-grow"
+                                    onKeyDown={(e) => e.key === 'Enter' && !isUpdatingListTitle && handleSaveListTitle()}
+                                    disabled={isUpdatingListTitle}
+                                    autoFocus
                                   />
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSaveListTitle} disabled={isUpdatingListTitle || !editingListTitle.trim()} aria-label="Save list title">
+                                    {isUpdatingListTitle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCancelEditListTitle} disabled={isUpdatingListTitle} aria-label="Cancel editing list title">
+                                    <XCircle className="w-4 h-4" />
+                                  </Button>
                                 </div>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                {predefinedTaskColors.map(colorOption => (
-                                  <button
-                                    key={colorOption}
-                                    type="button"
-                                    title={colorOption}
-                                    className={cn(
-                                      "w-5 h-5 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
-                                      listSettings[list.id]?.color === colorOption ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
-                                    )}
-                                    style={{ backgroundColor: colorOption }}
-                                    onClick={() => handleListSettingChange(list.id, 'color', colorOption)}
-                                  />
-                                ))}
+                              ) : (
+                                <Label htmlFor={`vis-${list.id}`} className="text-sm text-card-foreground truncate pr-1" title={list.title}>
+                                  {list.title}
+                                </Label>
+                              )}
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {editingListId !== list.id && (
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEditListTitle(list)} aria-label="Edit list title">
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                                <Switch
+                                  id={`vis-${list.id}`}
+                                  checked={!!listSettings[list.id]?.visible}
+                                  onCheckedChange={(checked) => handleListSettingChange(list.id, 'visible', checked)}
+                                  aria-label={`Toggle visibility for ${list.title}`}
+                                  disabled={editingListId === list.id}
+                                />
                               </div>
                             </div>
-                          ))}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                               <Palette size={16} className="mr-1 text-muted-foreground" />
+                              {predefinedTaskColors.map(colorOption => (
+                                <button
+                                  key={colorOption}
+                                  type="button"
+                                  title={colorOption}
+                                  className={cn(
+                                    "w-5 h-5 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
+                                    listSettings[list.id]?.color === colorOption ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
+                                  )}
+                                  style={{ backgroundColor: colorOption }}
+                                  onClick={() => handleListSettingChange(list.id, 'color', colorOption)}
+                                />
+                              ))}
+                              <Input
+                                type="text"
+                                placeholder="#HEX"
+                                value={listSettings[list.id]?.color || ''}
+                                onChange={(e) => handleListSettingChange(list.id, 'color', e.target.value)}
+                                className={cn(
+                                    "h-7 w-20 text-xs",
+                                    listSettings[list.id]?.color && !isValidHexColor(listSettings[list.id]?.color) && listSettings[list.id]?.color !== '' ? "border-destructive focus-visible:ring-destructive" : ""
+                                )}
+                                maxLength={7}
+                              />
+                            </div>
                           </div>
-                        </ScrollArea>
-                      ) : (
-                        <p className="text-sm text-muted-foreground text-center py-1">No task lists found. Create one below.</p>
-                      )}
+                        ))}
+                        </div>
+                      </ScrollArea>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-1">No task lists found. Create one below.</p>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-2">Create New Task List</h4>
+                    <div className="flex gap-2">
+                      <Input
+                        type="text"
+                        value={newTaskListTitle}
+                        onChange={(e) => setNewTaskListTitle(e.target.value)}
+                        placeholder="New list title..."
+                        className="flex-grow h-9 text-sm"
+                        onKeyPress={(e) => e.key === 'Enter' && !isCreatingList && handleCreateTaskList()}
+                        disabled={isCreatingList}
+                      />
+                      <Button onClick={handleCreateTaskList} disabled={!newTaskListTitle.trim() || isCreatingList} size="sm" className="h-9">
+                        {isCreatingList ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListPlus className="h-4 w-4" />}
+                        Create
+                      </Button>
                     </div>
+                  </div>
+                  <Separator />
+                   <div className="flex justify-center mt-4">
+                      <Button variant="outline" size="sm" onClick={handleSignOut}>
+                          <LogOut className="mr-2 h-4 w-4" /> Sign Out
+                      </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-                    <Separator />
-
-                    <div>
-                      <h4 className="text-sm font-medium text-muted-foreground mb-2">Create New Task List</h4>
-                      <div className="flex gap-2">
+            {isLoadingLists && !taskLists.length && !showTaskSettings ? (
+                <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</div>
+            ) : visibleListsToDisplay.length > 0 ? (
+              <div className="space-y-4 mt-4">
+                {visibleListsToDisplay.map(list => (
+                  <Card 
+                    key={list.id} 
+                    className="shadow-md flex flex-col"
+                    style={{ borderTop: `4px solid ${listSettings[list.id]?.color || predefinedTaskColors[0]}` }}
+                  >
+                    <CardHeader className="py-3 px-4 border-b">
+                      <CardTitle className="text-md">{list.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-3 px-4 pb-3 flex-grow flex flex-col overflow-hidden">
+                      <div className="flex gap-2 mb-3">
                         <Input
                           type="text"
-                          value={newTaskListTitle}
-                          onChange={(e) => setNewTaskListTitle(e.target.value)}
-                          placeholder="New list title..."
+                          value={newTaskTitles[list.id] || ''}
+                          onChange={(e) => setNewTaskTitles(prev => ({...prev, [list.id]: e.target.value}))}
+                          placeholder="Add a task..."
                           className="flex-grow h-9 text-sm"
-                          onKeyPress={(e) => e.key === 'Enter' && !isCreatingList && handleCreateTaskList()}
-                          disabled={isCreatingList}
+                          onKeyPress={(e) => e.key === 'Enter' && !isAddingTaskForList[list.id] && handleAddTask(list.id)}
+                          disabled={isAddingTaskForList[list.id]}
                         />
-                        <Button onClick={handleCreateTaskList} disabled={!newTaskListTitle.trim() || isCreatingList} size="sm" className="h-9">
-                          {isCreatingList ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListPlus className="h-4 w-4" />}
-                          Create
+                        <Button 
+                          onClick={() => handleAddTask(list.id)} 
+                          disabled={!(newTaskTitles[list.id] || '').trim() || isAddingTaskForList[list.id]} 
+                          size="sm"
+                          className="h-9"
+                        >
+                          {isAddingTaskForList[list.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
                         </Button>
                       </div>
-                    </div>
-                    <Separator />
-                     <div className="flex justify-center mt-4">
-                        <Button variant="outline" size="sm" onClick={handleSignOut}>
-                            <LogOut className="mr-2 h-4 w-4" /> Sign Out
-                        </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {isLoadingLists && !taskLists.length && !showTaskSettings ? (
-                  <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</div>
-              ) : visibleListsToDisplay.length > 0 ? (
-                <div className="space-y-4 mt-4">
-                  {visibleListsToDisplay.map(list => (
-                    <Card 
-                      key={list.id} 
-                      className="shadow-md flex flex-col"
-                      style={{ borderTop: `4px solid ${listSettings[list.id]?.color || predefinedTaskColors[0]}` }}
-                    >
-                      <CardHeader className="py-3 px-4 border-b">
-                        <CardTitle className="text-md">{list.title}</CardTitle>
-                      </CardHeader>
-                      <CardContent className="pt-3 px-4 pb-3 flex-grow flex flex-col overflow-hidden">
-                        <div className="flex gap-2 mb-3">
-                          <Input
-                            type="text"
-                            value={newTaskTitles[list.id] || ''}
-                            onChange={(e) => setNewTaskTitles(prev => ({...prev, [list.id]: e.target.value}))}
-                            placeholder="Add a task..."
-                            className="flex-grow h-9 text-sm"
-                            onKeyPress={(e) => e.key === 'Enter' && !isAddingTaskForList[list.id] && handleAddTask(list.id)}
-                            disabled={isAddingTaskForList[list.id]}
-                          />
-                          <Button 
-                            onClick={() => handleAddTask(list.id)} 
-                            disabled={!(newTaskTitles[list.id] || '').trim() || isAddingTaskForList[list.id]} 
-                            size="sm"
-                            className="h-9"
-                          >
-                            {isAddingTaskForList[list.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
-                          </Button>
-                        </div>
-                        {isLoadingTasksForList[list.id] ? (
-                           <div className="flex items-center justify-center py-4"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading tasks...</div>
-                        ) : errorPerList[list.id] ? (
-                           <Alert variant="destructive" className="text-xs my-2"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{errorPerList[list.id]}</AlertDescription></Alert>
-                        ) : (tasksByListId[list.id] || []).length > 0 ? (
-                          <ScrollArea className="pr-1 flex-grow max-h-60">
-                            <ul className="space-y-1.5">
-                              {(tasksByListId[list.id] || []).map((task) => (
-                                <li key={task.id} className="flex items-center space-x-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors">
-                                  <Checkbox
-                                    id={`task-${list.id}-${task.id}`}
-                                    checked={task.status === 'completed'}
-                                    onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
-                                    aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
-                                  />
-                                  <label
-                                    htmlFor={`task-${list.id}-${task.id}`}
-                                    className={`flex-1 text-sm cursor-pointer ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-card-foreground'}`}
-                                  >
-                                    {task.title}
-                                  </label>
-                                </li>
-                              ))}
-                            </ul>
-                          </ScrollArea>
-                        ) : (
-                          <p className="text-xs text-muted-foreground text-center py-3">No active tasks in this list.</p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                 !isLoadingLists && isSignedIn && taskLists.length > 0 && !showTaskSettings && (
-                  <p className="text-sm text-muted-foreground text-center py-6">No task lists are currently visible. Go to settings <Settings className="inline h-3 w-3"/> to select lists to display.</p>
-                 )
-              )}
-               {!isLoadingLists && !taskLists.length && isSignedIn && !error && !showTaskSettings && (
-                 <p className="text-sm text-muted-foreground text-center py-6">No Google Task lists found. Click settings <Settings className="inline h-3 w-3"/> to create one.</p>
-               )}
-            </>
-          )}
-        </div>
+                      {isLoadingTasksForList[list.id] ? (
+                         <div className="flex items-center justify-center py-4"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading tasks...</div>
+                      ) : errorPerList[list.id] ? (
+                         <Alert variant="destructive" className="text-xs my-2"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{errorPerList[list.id]}</AlertDescription></Alert>
+                      ) : (tasksByListId[list.id] || []).length > 0 ? (
+                        <ScrollArea className="pr-1 flex-grow max-h-60">
+                          <ul className="space-y-1.5">
+                            {(tasksByListId[list.id] || []).map((task) => (
+                              <li key={task.id} className="flex items-center space-x-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors">
+                                <Checkbox
+                                  id={`task-${list.id}-${task.id}`}
+                                  checked={task.status === 'completed'}
+                                  onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
+                                  aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
+                                />
+                                <label
+                                  htmlFor={`task-${list.id}-${task.id}`}
+                                  className={`flex-1 text-sm cursor-pointer ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-card-foreground'}`}
+                                >
+                                  {task.title}
+                                </label>
+                              </li>
+                            ))}
+                          </ul>
+                        </ScrollArea>
+                      ) : (
+                        <p className="text-xs text-muted-foreground text-center py-3">No active tasks in this list.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+               !isLoadingLists && isSignedIn && taskLists.length > 0 && !showTaskSettings && (
+                <p className="text-sm text-muted-foreground text-center py-6">No task lists are currently visible. Go to settings <Settings className="inline h-3 w-3"/> to select lists to display.</p>
+               )
+            )}
+             {!isLoadingLists && !taskLists.length && isSignedIn && !error && !showTaskSettings && (
+               <p className="text-sm text-muted-foreground text-center py-6">No Google Task lists found. Click settings <Settings className="inline h-3 w-3"/> to create one.</p>
+             )}
+          </>
+        )}
       </div>
+    </>
   );
 };
 
@@ -721,20 +755,20 @@ export function TaskListWidget() {
 
   useEffect(() => {
     setIsClient(true); 
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (clientId) {
-      setGoogleClientId(clientId);
+    const clientIdFromEnv = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (clientIdFromEnv) {
+      setGoogleClientId(clientIdFromEnv);
     } else {
       console.error("TaskListWidget: NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set in .env.local or not exposed to client.");
-      setProviderError("Google Client ID not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env.local file, expose it to the client, and restart the server.");
+      setProviderError("Google Client ID not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env.local file, ensure it's exposed to the client (prefixed with NEXT_PUBLIC_), and restart the server.");
     }
   }, []);
 
   if (!isClient) {
     return (
-       <div className="p-4 rounded-lg shadow-md">
-        <div className="p-4 border-b"><SectionTitle icon={ListChecks} title="Tasks" /></div>
-        <div className="p-6">
+       <div className="flex flex-col">
+        <div className="p-4 border-b mb-1"><SectionTitle icon={ListChecks} title="Tasks" /></div>
+        <div className="px-4 pb-4">
           <Skeleton className="h-10 w-3/4 mb-4" />
           <Skeleton className="h-8 w-full mb-2" />
           <Skeleton className="h-8 w-full" />
@@ -745,9 +779,9 @@ export function TaskListWidget() {
   
   if (providerError || !googleClientId) {
     return (
-      <div className="p-4 rounded-lg shadow-md">
-        <div className="p-4 border-b"><SectionTitle icon={ListChecks} title="Tasks" /></div>
-        <div className="p-6">
+      <div className="flex flex-col">
+        <div className="p-4 border-b mb-1"><SectionTitle icon={ListChecks} title="Tasks" /></div>
+        <div className="px-4 pb-4">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Configuration Error</AlertTitle>
@@ -766,4 +800,3 @@ export function TaskListWidget() {
     </GoogleOAuthProvider>
   );
 }
-
