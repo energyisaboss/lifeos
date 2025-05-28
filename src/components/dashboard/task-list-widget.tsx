@@ -83,6 +83,7 @@ const TaskListContent: React.FC = () => {
 
   const [taskLists, setTaskLists] = useState<TaskList[]>([]);
   const [tasksByListId, setTasksByListId] = useState<Record<string, Task[]>>({});
+  
   const [listSettings, setListSettings] = useState<Record<string, TaskListSetting>>(() => {
     if (typeof window !== 'undefined') {
       const savedSettings = localStorage.getItem(TASK_LIST_SETTINGS_STORAGE_KEY);
@@ -90,19 +91,16 @@ const TaskListContent: React.FC = () => {
         try {
           const parsedSettings = JSON.parse(savedSettings);
           if (typeof parsedSettings === 'object' && parsedSettings !== null) {
+            // Ensure existing settings have a color, assign if missing
             Object.keys(parsedSettings).forEach(key => {
               if (parsedSettings[key] && (!parsedSettings[key].color || !isValidHexColor(parsedSettings[key].color))) {
                 parsedSettings[key].color = getNextColor(); 
               }
             });
             return parsedSettings;
-          } else {
-            console.warn("TaskListWidget: Parsed list settings from localStorage is not an object, ignoring.");
-            localStorage.removeItem(TASK_LIST_SETTINGS_STORAGE_KEY);
           }
         } catch (e) {
           console.error("TaskListWidget: Failed to parse list settings from localStorage", e);
-          localStorage.removeItem(TASK_LIST_SETTINGS_STORAGE_KEY); 
         }
       }
     }
@@ -163,7 +161,7 @@ const TaskListContent: React.FC = () => {
           } catch (initError: any) {
             const message = `Error initializing GAPI client or Tasks API: ${initError?.message || String(initError)}`;
             console.error(`TaskListWidget: ${message}`, initError);
-            setError(message); 
+            setError(new Error(message).message); 
             setIsGapiClientLoaded(false);
             reject(new Error(message)); 
           }
@@ -172,7 +170,7 @@ const TaskListContent: React.FC = () => {
       script.onerror = (event: Event | string) => {
          const message = `Error loading GAPI script: ${typeof event === 'string' ? event : (event instanceof Event && event.type ? event.type : 'Unknown script load error')}`;
          console.error(`TaskListWidget: ${message}`, event);
-         setError(message);
+         setError(new Error(message).message);
          setIsGapiClientLoaded(false);
          reject(new Error(message));
       }
@@ -262,7 +260,7 @@ const TaskListContent: React.FC = () => {
         
         fetchedLists.forEach((list, index) => {
             if (!newSettings[list.id]) {
-                const isFirstList = Object.keys(newSettings).length === 0 && index === 0;
+                const isFirstList = Object.keys(newSettings).filter(key => newSettings[key]?.visible).length === 0 && index === 0;
                 newSettings[list.id] = {
                     visible: isFirstList, 
                     color: getNextColor() 
@@ -514,17 +512,15 @@ const TaskListContent: React.FC = () => {
 
   return (
     <>
-      <div className="p-4 border-b mb-1">
-        <div className="flex justify-between items-center">
-          <SectionTitle icon={ListChecks} title="Tasks" className="mb-0" />
-          <div className="flex items-center gap-1">
+      <div className="flex justify-between items-center mb-1 p-4 border-b">
+        <SectionTitle icon={ListChecks} title="Tasks" className="mb-0 text-lg" />
+        <div className="flex items-center gap-1">
             {isSignedIn && (
               <Button variant="ghost" size="sm" onClick={() => setShowTaskSettings(!showTaskSettings)} aria-label="Task Settings">
                 <Settings className="h-4 w-4" />
               </Button>
             )}
           </div>
-        </div>
       </div>
       
       <div className="px-4 pb-4">
@@ -595,7 +591,7 @@ const TaskListContent: React.FC = () => {
                                 />
                               </div>
                             </div>
-                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <div className="flex items-center gap-1.5 mt-1">
                                <Palette size={16} className="mr-1 text-muted-foreground" />
                               {predefinedTaskColors.map(colorOption => (
                                 <button
@@ -617,7 +613,7 @@ const TaskListContent: React.FC = () => {
                                 onChange={(e) => handleListSettingChange(list.id, 'color', e.target.value)}
                                 className={cn(
                                     "h-7 w-20 text-xs",
-                                    listSettings[list.id]?.color && !isValidHexColor(listSettings[list.id]?.color) && listSettings[list.id]?.color !== '' ? "border-destructive focus-visible:ring-destructive" : ""
+                                    listSettings[list.id]?.color && !isValidHexColor(listSettings[list.id]?.color || '') && listSettings[list.id]?.color !== '' ? "border-destructive focus-visible:ring-destructive" : ""
                                 )}
                                 maxLength={7}
                               />
@@ -715,11 +711,10 @@ const TaskListContent: React.FC = () => {
                                   checked={task.status === 'completed'}
                                   onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
                                   aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
-                                  style={task.status === 'completed' ? {
-                                    backgroundColor: finalColor,
-                                    borderColor: finalColor,
-                                  } : {}}
-                                  className={cn(task.status === 'completed' && 'text-primary-foreground')}
+                                  className={cn(
+                                    // Conditionally apply styles for checked state
+                                    task.status === 'completed' && `!bg-[${finalColor}] !border-[${finalColor}] text-primary-foreground`
+                                  )}
                                 />
                                 <label
                                   htmlFor={`task-${list.id}-${task.id}`}
