@@ -2,9 +2,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, RefreshCw, AlertCircle, Loader2, Settings, ListTree } from 'lucide-react';
+import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, Loader2, Settings, ListTree, AlertCircle } from 'lucide-react';
 import type { Asset, AssetPortfolio, AssetHolding } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -83,13 +83,16 @@ export function AssetTrackerWidget() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [fetchedPrices, setFetchedPrices] = useState<Record<string, number | null>>({});
   const [portfolio, setPortfolio] = useState<AssetPortfolio | null>(null);
-  const [isFormOpen, setIsFormOpen] = useState(false);
+  
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false); // For editing dialog
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [assetFormData, setAssetFormData] = useState<Omit<Asset, 'id'>>(initialAssetFormState);
+  
   const [isFetchingPrices, setIsFetchingPrices] = useState(false);
   const [priceFetchError, setPriceFetchError] = useState<string | null>(null);
   const [isFetchingName, setIsFetchingName] = useState(false);
   const [showAssetManagement, setShowAssetManagement] = useState(false);
+  const [showNewAssetForm, setShowNewAssetForm] = useState(false); // For inline add form
 
   const isFetchingPricesRef = useRef(isFetchingPrices);
   useEffect(() => {
@@ -105,12 +108,12 @@ export function AssetTrackerWidget() {
           if (Array.isArray(parsedAssets)) {
             setAssets(parsedAssets.filter((asset: any) =>
               typeof asset.id === 'string' &&
-              typeof asset.name === 'string' &&
+              (typeof asset.name === 'string' || asset.name === null) && // Allow null name initially
               typeof asset.symbol === 'string' &&
               typeof asset.quantity === 'number' &&
               typeof asset.purchasePrice === 'number' &&
               ['stock', 'fund', 'crypto'].includes(asset.type)
-            ));
+            ).map((asset: any) => ({...asset, name: asset.name || ''}))); // Ensure name is empty string if null
           }
         } catch (e) {
           console.error("Failed to parse assets from localStorage", e);
@@ -133,7 +136,7 @@ export function AssetTrackerWidget() {
       setPriceFetchError(null);
       return;
     }
-    if (isFetchingPricesRef.current) { // Check ref to prevent overlapping calls
+    if (isFetchingPricesRef.current) { 
       console.log("AssetTracker: Price fetch already in progress, skipping new fetchAllAssetPrices call.");
       return;
     }
@@ -149,7 +152,7 @@ export function AssetTrackerWidget() {
           const priceData = await getAssetPrice({ symbol: asset.symbol });
           prices[asset.id] = priceData.currentPrice;
           if (priceData.currentPrice === null) {
-            console.warn(`Finnhub: Price not found or unavailable for symbol ${asset.symbol} (Type: ${asset.type}). API Response for ${asset.symbol} was ${priceData.currentPrice}`);
+             console.warn(`Finnhub: Price not found or unavailable for symbol ${asset.symbol} (Type: ${asset.type}). API Response for ${asset.symbol} was ${JSON.stringify(priceData)}`);
           }
         } catch (err) {
           console.error(`Error fetching price for ${asset.symbol}:`, err);
@@ -159,7 +162,9 @@ export function AssetTrackerWidget() {
             if (err.message.includes('FINNHUB_API_KEY_NOT_CONFIGURED')) {
               specificErrorMessage = "Finnhub API Key is not configured. Please set FINNHUB_API_KEY in your .env.local file and restart the server.";
             } else if (err.message.startsWith('FINNHUB_API_ERROR')) {
-              specificErrorMessage = `Finnhub API error for ${asset.symbol}: ${err.message.replace('FINNHUB_API_ERROR: ', '')}. Check symbol, API limits, or plan.`;
+               const statusMatch = err.message.match(/FINNHUB_API_ERROR: (\d+)/);
+               const status = statusMatch ? statusMatch[1] : 'Unknown Status';
+               specificErrorMessage = `Finnhub API error for ${asset.symbol} (Status: ${status}). Check symbol, API limits, or plan.`;
             } else if (err.message.startsWith('FETCH_ERROR')) {
                specificErrorMessage = `Network error fetching price for ${asset.symbol}. Check connection or Finnhub status.`;
             }
@@ -180,7 +185,7 @@ export function AssetTrackerWidget() {
           duration: 7000,
         });
     }
-  }, []); // Removed isFetchingPrices from useCallback dependencies as it's handled by the ref
+  }, []); 
 
   useEffect(() => {
     if (assets.length > 0) {
@@ -191,12 +196,10 @@ export function AssetTrackerWidget() {
     }
   }, [assets, fetchAllAssetPrices]);
 
-  // Auto-refresh prices
   useEffect(() => {
     if (assets.length === 0) {
-      return; // No assets, no interval.
+      return; 
     }
-
     const intervalId = setInterval(() => {
       if (!isFetchingPricesRef.current) {
         console.log('AssetTracker: Auto-refreshing prices via interval.');
@@ -210,7 +213,7 @@ export function AssetTrackerWidget() {
       console.log('AssetTracker: Clearing price refresh interval.');
       clearInterval(intervalId);
     };
-  }, [assets, fetchAllAssetPrices]); // fetchAllAssetPrices is stable due to useCallback
+  }, [assets, fetchAllAssetPrices]);
 
   useEffect(() => {
     if (assets.length > 0 || Object.keys(fetchedPrices).length > 0) {
@@ -248,12 +251,15 @@ export function AssetTrackerWidget() {
   };
 
   const handleTypeChange = (value: 'stock' | 'fund' | 'crypto') => {
-    setAssetFormData(prev => ({ ...prev, type: value }));
+    setAssetFormData(prev => ({ ...prev, type: value, name: (value === 'crypto' && !prev.name) ? prev.symbol.toUpperCase() : prev.name }));
+     if (value === 'crypto' && assetFormData.symbol && !assetFormData.name) {
+        setAssetFormData(prev => ({ ...prev, name: prev.symbol.toUpperCase() }));
+    }
   };
-
+  
   const validateForm = () => {
     if (!assetFormData.name.trim() && (assetFormData.type === 'stock' || assetFormData.type === 'fund') && !isFetchingName) {
-      toast({ title: "Validation Error", description: "Asset name is required for stocks/funds.", variant: "destructive" });
+      toast({ title: "Validation Error", description: "Asset name is required for stocks/funds unless it's being fetched.", variant: "destructive" });
       return false;
     }
      if (!assetFormData.symbol.trim()) {
@@ -274,12 +280,14 @@ export function AssetTrackerWidget() {
   const handleSubmitAsset = () => {
     if (!validateForm()) return;
 
-    if (editingAsset) {
+    if (editingAsset) { // This is for editing via dialog
       setAssets(assets.map(asset => 
         asset.id === editingAsset.id ? { id: editingAsset.id, ...assetFormData } : asset
       ));
       toast({ title: "Asset Updated", description: `"${assetFormData.name || assetFormData.symbol}" has been updated.` });
-    } else {
+      setIsEditDialogOpen(false);
+      setEditingAsset(null);
+    } else { // This is for adding new asset via inline form
       const newAsset: Asset = { 
         ...assetFormData, 
         id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
@@ -287,13 +295,12 @@ export function AssetTrackerWidget() {
       };
       setAssets([...assets, newAsset]);
       toast({ title: "Asset Added", description: `"${newAsset.name}" has been added.` });
+      setShowNewAssetForm(false);
     }
-    setIsFormOpen(false);
-    setEditingAsset(null);
     setAssetFormData(initialAssetFormState);
   };
 
-  const handleEditAsset = (assetToEdit: Asset) => {
+  const handleOpenEditDialog = (assetToEdit: Asset) => {
     setEditingAsset(assetToEdit);
     setAssetFormData({
       name: assetToEdit.name,
@@ -302,7 +309,19 @@ export function AssetTrackerWidget() {
       purchasePrice: assetToEdit.purchasePrice,
       type: assetToEdit.type,
     });
-    setIsFormOpen(true);
+    setIsEditDialogOpen(true);
+  };
+  
+  const handleOpenNewAssetForm = () => {
+    setEditingAsset(null);
+    setAssetFormData(initialAssetFormState);
+    setShowNewAssetForm(true);
+  };
+
+  const handleCancelNewAsset = () => {
+    setShowNewAssetForm(false);
+    setAssetFormData(initialAssetFormState);
+    setIsFetchingName(false);
   };
 
   const handleRemoveAsset = (assetId: string) => {
@@ -318,12 +337,6 @@ export function AssetTrackerWidget() {
     }
   };
 
-  const openAddForm = () => {
-    setEditingAsset(null);
-    setAssetFormData(initialAssetFormState);
-    setIsFormOpen(true);
-  };
-
   const formatCurrency = (value: number | undefined | null, placeholder = '$--.--') => {
     if (value === undefined || value === null) return placeholder;
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
@@ -336,12 +349,74 @@ export function AssetTrackerWidget() {
     return `${value.toFixed(2)}%`;
   };
 
+  const renderAssetFormFields = (forEditingDialog: boolean = false) => (
+    <div className="grid gap-4 py-4">
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor={forEditingDialog ? "edit-symbol" : "symbol"} className="text-right">Symbol</Label>
+        <Input 
+          id={forEditingDialog ? "edit-symbol" : "symbol"}
+          name="symbol" 
+          value={assetFormData.symbol} 
+          onChange={handleInputChange} 
+          onBlur={handleSymbolBlur}
+          className="col-span-3" 
+          placeholder="e.g., AAPL, FXAIX" 
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor={forEditingDialog ? "edit-name" : "name"} className="text-right">Name</Label>
+        <div className="col-span-3 flex items-center">
+          <Input 
+            id={forEditingDialog ? "edit-name" : "name"}
+            name="name" 
+            value={assetFormData.name} 
+            onChange={handleInputChange} 
+            className="flex-1" 
+            placeholder="e.g., Apple Inc." 
+            readOnly={isFetchingName && (assetFormData.type === 'stock' || assetFormData.type === 'fund')}
+          />
+          {isFetchingName && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+        </div>
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor={forEditingDialog ? "edit-quantity" : "quantity"} className="text-right">Quantity</Label>
+        <Input id={forEditingDialog ? "edit-quantity" : "quantity"} name="quantity" type="number" value={assetFormData.quantity} onChange={handleInputChange} className="col-span-3" placeholder="e.g., 10" min="0" step="any" />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor={forEditingDialog ? "edit-purchasePrice" : "purchasePrice"} className="text-right">Purchase Price</Label>
+        <Input id={forEditingDialog ? "edit-purchasePrice" : "purchasePrice"} name="purchasePrice" type="number" value={assetFormData.purchasePrice} onChange={handleInputChange} className="col-span-3" placeholder="e.g., 150 (per unit)" min="0" step="any" />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor={forEditingDialog ? "edit-type" : "type"} className="text-right">Type</Label>
+        <Select name="type" value={assetFormData.type} onValueChange={handleTypeChange}>
+          <SelectTrigger className="col-span-3">
+            <SelectValue placeholder="Select asset type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="stock">Stock</SelectItem>
+            <SelectItem value="fund">Fund/ETF</SelectItem>
+            <SelectItem value="crypto">Cryptocurrency</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {assetFormData.type === 'crypto' && (
+          <p className="col-span-4 text-xs text-muted-foreground text-center px-2 py-1 bg-muted/50 rounded-md">
+              Automatic price fetching is not available for cryptocurrencies.
+          </p>
+      )}
+       {(assetFormData.type === 'stock' || assetFormData.type === 'fund') && (
+          <p className="col-span-4 text-xs text-muted-foreground text-center px-2 py-1 bg-muted/50 rounded-md">
+              Price fetching for stocks/funds uses Finnhub. Data availability may vary based on symbol and API plan.
+          </p>
+      )}
+    </div>
+  );
+
   return (
     <TooltipProvider>
       <div className="flex justify-between items-center mb-4">
         <SectionTitle icon={TrendingUp} title="Asset Tracker" className="mb-0" />
         <div className="flex items-center gap-2">
-          {/* Refresh Prices button removed */}
           <Button 
             size="sm" 
             variant="ghost" 
@@ -355,9 +430,30 @@ export function AssetTrackerWidget() {
 
       {showAssetManagement && (
         <div className="mb-6 p-4 border rounded-lg bg-muted/10 shadow-sm">
-          <Button size="sm" onClick={openAddForm} className="w-full mb-4">
-            <PlusCircle className="mr-2 h-4 w-4" /> Add New Asset
-          </Button>
+          {!showNewAssetForm && (
+            <Button size="sm" onClick={handleOpenNewAssetForm} className="w-full mb-4">
+              <PlusCircle className="mr-2 h-4 w-4" /> Add New Asset
+            </Button>
+          )}
+
+          {showNewAssetForm && (
+            <Card className="mb-4 p-4 bg-background">
+              <CardHeader className="p-2 pt-0">
+                <CardTitle className="text-md">Add New Asset</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {renderAssetFormFields()}
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={handleCancelNewAsset}>Cancel</Button>
+                  <Button type="button" onClick={handleSubmitAsset} disabled={isFetchingName}>
+                    {isFetchingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" /> }
+                    Add Asset
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {assets.length > 0 ? (
             <ScrollArea className="h-[200px] pr-1">
               <Table>
@@ -378,7 +474,7 @@ export function AssetTrackerWidget() {
                       <TableCell className="capitalize">{asset.type}</TableCell>
                       <TableCell className="text-center">
                         <div className="flex justify-center items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditAsset(asset)} aria-label="Edit asset">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEditDialog(asset)} aria-label="Edit asset">
                             <Edit3 className="w-4 h-4" />
                           </Button>
                           <AlertDialog>
@@ -410,7 +506,7 @@ export function AssetTrackerWidget() {
               </Table>
             </ScrollArea>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-2">No assets added yet.</p>
+            !showNewAssetForm && <p className="text-sm text-muted-foreground text-center py-2">No assets added yet. Click "Add New Asset" to start.</p>
           )}
         </div>
       )}
@@ -470,7 +566,7 @@ export function AssetTrackerWidget() {
                                 <AlertCircle className="w-3 h-3 inline-block ml-1 text-destructive cursor-help"/>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-xs text-xs">
-                                <p>Price data unavailable. This might be due to an invalid symbol, or limitations of the current API plan for this asset type (e.g. some mutual funds). Check server logs for details.</p>
+                                <p>Price data unavailable. This might be due to an invalid symbol, API plan limitations (e.g. some mutual funds), or temporary API issues. Check server logs for details.</p>
                               </TooltipContent>
                             </Tooltip>
                           )}
@@ -514,8 +610,8 @@ export function AssetTrackerWidget() {
         </CardContent>
       </Card>
 
-      <Dialog open={isFormOpen} onOpenChange={(isOpen) => {
-        setIsFormOpen(isOpen);
+      <Dialog open={isEditDialogOpen} onOpenChange={(isOpen) => {
+        setIsEditDialogOpen(isOpen);
         if (!isOpen) {
           setEditingAsset(null);
           setAssetFormData(initialAssetFormState);
@@ -524,78 +620,19 @@ export function AssetTrackerWidget() {
       }}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>{editingAsset ? 'Edit Asset' : 'Add New Asset'}</DialogTitle>
+            <DialogTitle>Edit Asset</DialogTitle>
             <DialogDescription>
-              {editingAsset ? 'Update the details of your asset.' : 'Enter the details of the asset. Name for stocks/funds will be fetched automatically from symbol.'}
+              Update the details of your asset.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="symbol" className="text-right">Symbol</Label>
-              <Input 
-                id="symbol" 
-                name="symbol" 
-                value={assetFormData.symbol} 
-                onChange={handleInputChange} 
-                onBlur={handleSymbolBlur}
-                className="col-span-3" 
-                placeholder="e.g., AAPL, FXAIX" 
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">Name</Label>
-              <div className="col-span-3 flex items-center">
-                <Input 
-                  id="name" 
-                  name="name" 
-                  value={assetFormData.name} 
-                  onChange={handleInputChange} 
-                  className="flex-1" 
-                  placeholder="e.g., Apple Inc." 
-                  readOnly={isFetchingName && (assetFormData.type === 'stock' || assetFormData.type === 'fund')}
-                />
-                {isFetchingName && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-              </div>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="quantity" className="text-right">Quantity</Label>
-              <Input id="quantity" name="quantity" type="number" value={assetFormData.quantity} onChange={handleInputChange} className="col-span-3" placeholder="e.g., 10" min="0" step="any" />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="purchasePrice" className="text-right">Purchase Price</Label>
-              <Input id="purchasePrice" name="purchasePrice" type="number" value={assetFormData.purchasePrice} onChange={handleInputChange} className="col-span-3" placeholder="e.g., 150 (per unit)" min="0" step="any" />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="type" className="text-right">Type</Label>
-              <Select name="type" value={assetFormData.type} onValueChange={handleTypeChange}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select asset type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="stock">Stock</SelectItem>
-                  <SelectItem value="fund">Fund/ETF</SelectItem>
-                  <SelectItem value="crypto">Cryptocurrency</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {assetFormData.type === 'crypto' && (
-                <p className="col-span-4 text-xs text-muted-foreground text-center px-2 py-1 bg-muted/50 rounded-md">
-                    Automatic price fetching is not available for cryptocurrencies.
-                </p>
-            )}
-             {(assetFormData.type === 'stock' || assetFormData.type === 'fund') && (
-                <p className="col-span-4 text-xs text-muted-foreground text-center px-2 py-1 bg-muted/50 rounded-md">
-                    Price fetching for stocks/funds uses Finnhub. Data availability may vary based on symbol and API plan.
-                </p>
-            )}
-          </div>
+          {renderAssetFormFields(true)}
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline">Cancel</Button>
             </DialogClose>
             <Button type="button" onClick={handleSubmitAsset} disabled={isFetchingName}>
               {isFetchingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" /> }
-              {editingAsset ? 'Save Changes' : 'Add Asset'}
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -603,4 +640,3 @@ export function AssetTrackerWidget() {
     </TooltipProvider>
   );
 }
-
