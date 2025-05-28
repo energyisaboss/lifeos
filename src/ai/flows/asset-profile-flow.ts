@@ -58,8 +58,8 @@ const assetProfileFlow = ai.defineFlow(
         return { assetName: data.name };
       } else {
         // This can happen if the symbol is valid but Finnhub has no profile name (e.g., some indices or very new listings)
-        // or if the data object is empty (Finnhub sometimes returns {} for invalid symbols)
-        console.warn(`Finnhub: Company name not found for symbol ${symbol}. Data:`, data);
+        // or if the data object is empty (Finnhub sometimes returns {} for invalid symbols like mutual funds for this endpoint)
+        console.warn(`Finnhub: Company name not found for symbol ${symbol}. Full API response:`, JSON.stringify(data, null, 2));
         return { assetName: null };
       }
     } catch (error) {

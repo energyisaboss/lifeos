@@ -56,8 +56,8 @@ const assetPriceFlow = ai.defineFlow(
       if (typeof data.c === 'number') {
         return { currentPrice: data.c };
       } else {
-        console.warn(`Finnhub: Current price (c) not found or not a number for symbol ${symbol}. Data:`, data);
-        return { currentPrice: null }; // Symbol might be valid, but no price data (e.g., delisted, or no recent trade)
+        console.warn(`Finnhub: Current price (c) not found or not a number for symbol ${symbol}. Full API response:`, JSON.stringify(data, null, 2));
+        return { currentPrice: null }; // Symbol might be valid, but no price data (e.g., delisted, or no recent trade for stocks, or it's a fund)
       }
     } catch (error) {
       // Handle errors already thrown (like API key or Finnhub API error)
@@ -71,4 +71,3 @@ const assetPriceFlow = ai.defineFlow(
     }
   }
 );
-
