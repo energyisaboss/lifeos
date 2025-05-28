@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 const MAX_CATEGORIES = 7;
 const MAX_FEEDS_PER_CATEGORY = 5;
 const MAX_ARTICLES_DISPLAY_TOTAL = 50;
-const LOCALSTORAGE_KEY_CATEGORIES = 'rssCategoriesLifeOS_v3'; // Updated key
+const LOCALSTORAGE_KEY_CATEGORIES = 'rssCategoriesLifeOS_v3'; 
 
 interface RssFeedSource {
   id: string;
@@ -34,7 +34,7 @@ interface NewsCategory {
   name: string;
   feeds: RssFeedSource[];
   isEditingName?: boolean;
-  color: string; // New field
+  color: string;
 }
 
 interface CategorizedNewsArticle extends AppNewsArticle {
@@ -48,8 +48,6 @@ const predefinedNewsCategoryColors: string[] = [
   '#FFEB3B', // Yellow
   '#4CAF50', // Green
   '#9C27B0', // Purple
-  '#009688', // Teal
-  '#795548', // Brown
 ];
 let lastAssignedCategoryColorIndex = -1;
 
@@ -66,27 +64,27 @@ const isValidHexColor = (color: string) => {
 export function NewsWidget() {
   const [showFeedManagement, setShowFeedManagement] = useState(false);
   const [categories, setCategories] = useState<NewsCategory[]>(() => {
-    if (typeof window !== 'undefined') {
-      const savedCategories = localStorage.getItem(LOCALSTORAGE_KEY_CATEGORIES);
-      try {
-        const parsed = savedCategories ? JSON.parse(savedCategories) : [];
-        return Array.isArray(parsed) ? parsed.map((cat: any, index: number) => ({
-          id: cat.id || `cat-${Date.now()}-${Math.random()}`,
-          name: cat.name || 'Untitled Category',
-          feeds: Array.isArray(cat.feeds) ? cat.feeds.map((feed: any) => ({
-            id: feed.id || `feed-${Date.now()}-${Math.random()}`,
-            url: feed.url || '',
-            userLabel: feed.userLabel || 'Untitled Feed',
-          })) : [],
-          isEditingName: false,
-          color: cat.color || getNextCategoryColor(), // Assign color if missing
-        })) : [];
-      } catch (e) {
-        console.error("Failed to parse RSS categories from localStorage", e);
-        return [];
-      }
+    if (typeof window === 'undefined') {
+      return [];
     }
-    return [];
+    const savedCategories = localStorage.getItem(LOCALSTORAGE_KEY_CATEGORIES);
+    try {
+      const parsed = savedCategories ? JSON.parse(savedCategories) : [];
+      return Array.isArray(parsed) ? parsed.map((cat: any, index: number) => ({
+        id: cat.id || `cat-${Date.now()}-${Math.random()}`,
+        name: cat.name || 'Untitled Category',
+        feeds: Array.isArray(cat.feeds) ? cat.feeds.map((feed: any) => ({
+          id: feed.id || `feed-${Date.now()}-${Math.random()}`,
+          url: feed.url || '',
+          userLabel: feed.userLabel || 'Untitled Feed',
+        })) : [],
+        isEditingName: false,
+        color: cat.color && isValidHexColor(cat.color) ? cat.color : getNextCategoryColor(), 
+      })) : [];
+    } catch (e) {
+      console.error("Failed to parse RSS categories from localStorage", e);
+      return [];
+    }
   });
 
   const [allArticles, setAllArticles] = useState<CategorizedNewsArticle[]>([]);
@@ -211,7 +209,7 @@ export function NewsWidget() {
         name: newCategoryName.trim(), 
         feeds: [], 
         isEditingName: false,
-        color: getNextCategoryColor() // Assign default color
+        color: getNextCategoryColor()
       }
     ]);
     setNewCategoryName('');
@@ -297,10 +295,6 @@ export function NewsWidget() {
   };
   
   const handleCategoryColorChange = (categoryId: string, newColor: string) => {
-    if (!isValidHexColor(newColor) && newColor !== '') {
-        // Do not toast immediately for partial input, allow user to finish typing
-        // toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive" });
-    }
     setCategories(prev => prev.map(cat => 
       cat.id === categoryId ? { ...cat, color: newColor } : cat
     ));
@@ -475,7 +469,7 @@ export function NewsWidget() {
         </div>
       )}
 
-      <div className={cn("space-y-6", showFeedManagement ? "mt-6" : "")}>
+      <div className={cn(showFeedManagement ? "mt-6" : "")}>
         {isLoading && !showFeedManagement && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
            <div className="space-y-4">
               {Array.from({length: Math.min(2, categories.filter(c => c.feeds.some(f=>f.url.trim())).length || 1)}).map((_, i) => (
@@ -583,4 +577,3 @@ export function NewsWidget() {
     </React.Fragment>
   );
 }
-
