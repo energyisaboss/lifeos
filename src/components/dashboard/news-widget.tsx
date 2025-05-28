@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { Newspaper, Settings, PlusCircle, Trash2, LinkIcon, RefreshCw, Tag, Edit3, FolderPlus, FolderMinus, FilePlus, CheckCircle, XCircle } from 'lucide-react';
+import { Newspaper, Settings, PlusCircle, Trash2, LinkIcon, RefreshCw, Tag, Edit3, FolderPlus, FolderMinus, FilePlus, CheckCircle, XCircle, GripVertical, Palette } from 'lucide-react';
 import type { NewsArticle as AppNewsArticle } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -20,7 +20,8 @@ import { cn } from '@/lib/utils';
 
 const MAX_CATEGORIES = 7;
 const MAX_FEEDS_PER_CATEGORY = 5;
-const MAX_ARTICLES_DISPLAY_TOTAL = 50; 
+const MAX_ARTICLES_DISPLAY_TOTAL = 50;
+const LOCALSTORAGE_KEY_CATEGORIES = 'rssCategoriesLifeOS_v3'; // Updated key
 
 interface RssFeedSource {
   id: string;
@@ -32,21 +33,44 @@ interface NewsCategory {
   id: string;
   name: string;
   feeds: RssFeedSource[];
-  isEditingName?: boolean; 
+  isEditingName?: boolean;
+  color: string; // New field
 }
 
 interface CategorizedNewsArticle extends AppNewsArticle {
   categoryId: string;
 }
 
+const predefinedNewsCategoryColors: string[] = [
+  '#F44336', // Red
+  '#2196F3', // Blue
+  '#FF9800', // Orange
+  '#FFEB3B', // Yellow
+  '#4CAF50', // Green
+  '#9C27B0', // Purple
+  '#009688', // Teal
+  '#795548', // Brown
+];
+let lastAssignedCategoryColorIndex = -1;
+
+const getNextCategoryColor = () => {
+  lastAssignedCategoryColorIndex = (lastAssignedCategoryColorIndex + 1) % predefinedNewsCategoryColors.length;
+  return predefinedNewsCategoryColors[lastAssignedCategoryColorIndex];
+};
+
+const isValidHexColor = (color: string) => {
+  return /^#([0-9A-F]{3}){1,2}$/i.test(color);
+}
+
+
 export function NewsWidget() {
   const [showFeedManagement, setShowFeedManagement] = useState(false);
   const [categories, setCategories] = useState<NewsCategory[]>(() => {
     if (typeof window !== 'undefined') {
-      const savedCategories = localStorage.getItem('rssCategoriesLifeOS_v2');
+      const savedCategories = localStorage.getItem(LOCALSTORAGE_KEY_CATEGORIES);
       try {
         const parsed = savedCategories ? JSON.parse(savedCategories) : [];
-        return Array.isArray(parsed) ? parsed.map((cat: any) => ({
+        return Array.isArray(parsed) ? parsed.map((cat: any, index: number) => ({
           id: cat.id || `cat-${Date.now()}-${Math.random()}`,
           name: cat.name || 'Untitled Category',
           feeds: Array.isArray(cat.feeds) ? cat.feeds.map((feed: any) => ({
@@ -55,6 +79,7 @@ export function NewsWidget() {
             userLabel: feed.userLabel || 'Untitled Feed',
           })) : [],
           isEditingName: false,
+          color: cat.color || getNextCategoryColor(), // Assign color if missing
         })) : [];
       } catch (e) {
         console.error("Failed to parse RSS categories from localStorage", e);
@@ -76,7 +101,7 @@ export function NewsWidget() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('rssCategoriesLifeOS_v2', JSON.stringify(categories.map(c => ({...c, isEditingName: undefined}))));
+      localStorage.setItem(LOCALSTORAGE_KEY_CATEGORIES, JSON.stringify(categories.map(c => ({...c, isEditingName: undefined}))));
     }
   }, [categories]);
 
@@ -98,7 +123,7 @@ export function NewsWidget() {
     }
 
     setIsLoading(true);
-    setError(null); // Clear previous errors at the start of a fetch
+    setError(null); 
     let collectedErrorMessages: string[] = [];
     
     const articlePromises = allFeedsWithCategory.map(async ({ categoryId, feed }) => {
@@ -114,8 +139,6 @@ export function NewsWidget() {
         console.error(`Error processing RSS feed ${feed.userLabel || 'feed'} (${feed.url}):`, err);
         let detail = "Failed to fetch or parse feed.";
         if (err instanceof Error) {
-           // Check if the error message already contains "Failed to process RSS feed"
-           // to avoid redundant messaging from the flow.
            if (err.message.startsWith('Failed to process RSS feed')) {
              detail = err.message;
            } else {
@@ -125,12 +148,11 @@ export function NewsWidget() {
           detail = err;
         }
         
-        // Collect unique error messages to avoid spamming if multiple feeds fail similarly
         const feedIdentifier = feed.userLabel || feed.url;
         if (collectedErrorMessages.length < 3 && !collectedErrorMessages.some(msg => msg.includes(feedIdentifier))) {
             collectedErrorMessages.push(detail.substring(0, 150) + (detail.length > 150 ? '...' : ''));
         }
-        return []; // Return empty for this failed feed
+        return []; 
       }
     });
 
@@ -184,7 +206,13 @@ export function NewsWidget() {
     }
     setCategories(prev => [
       ...prev,
-      { id: `cat-${Date.now()}`, name: newCategoryName.trim(), feeds: [], isEditingName: false }
+      { 
+        id: `cat-${Date.now()}`, 
+        name: newCategoryName.trim(), 
+        feeds: [], 
+        isEditingName: false,
+        color: getNextCategoryColor() // Assign default color
+      }
     ]);
     setNewCategoryName('');
     toast({ title: "Category Added", description: `"${newCategoryName.trim()}" added.`});
@@ -268,14 +296,24 @@ export function NewsWidget() {
     toast({ title: "Feed Deleted" });
   };
   
+  const handleCategoryColorChange = (categoryId: string, newColor: string) => {
+    if (!isValidHexColor(newColor) && newColor !== '') {
+        // Do not toast immediately for partial input, allow user to finish typing
+        // toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive" });
+    }
+    setCategories(prev => prev.map(cat => 
+      cat.id === categoryId ? { ...cat, color: newColor } : cat
+    ));
+  };
+
   const articlesByCategoryId = (catId: string) => {
     return allArticles.filter(article => article.categoryId === catId);
   }
 
   return (
     <React.Fragment>
-      <div className="flex justify-between items-center mb-4">
-        <SectionTitle icon={Newspaper} title="Categorized News" className="mb-0" />
+      <div className="flex justify-between items-center mb-4 p-4 border-b">
+        <SectionTitle icon={Newspaper} title="Categorized News" className="mb-0 text-lg" />
         <Button 
           variant="ghost" 
           size="sm" 
@@ -342,7 +380,7 @@ export function NewsWidget() {
             </Card>
           )}
           
-          <ScrollArea className="max-h-[300px] pr-1 calendar-feed-scroll-area">
+          <ScrollArea className="max-h-[400px] pr-1 calendar-feed-scroll-area">
             <div className="space-y-3">
               {categories.map((category) => (
                 <Card key={category.id} className="p-3 bg-muted/30">
@@ -355,7 +393,8 @@ export function NewsWidget() {
                            onChange={(e) => setEditingCategoryState(prev => ({...prev, [category.id]: e.target.value}))}
                            className="h-8 text-sm flex-grow"
                            onKeyDown={(e) => e.key === 'Enter' && handleSaveCategoryName(category.id)}
-                           onBlur={() => handleSaveCategoryName(category.id)} // Save on blur as well
+                           onBlur={() => handleSaveCategoryName(category.id)} 
+                           autoFocus
                          />
                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleSaveCategoryName(category.id)}><CheckCircle size={16}/></Button>
                       </div>
@@ -368,6 +407,38 @@ export function NewsWidget() {
                        {!category.isEditingName && <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleToggleEditCategoryName(category.id)} title="Edit category name"><Edit3 size={14}/></Button>}
                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteCategory(category.id)} title="Delete category"><FolderMinus size={14}/></Button>
                      </div>
+                  </div>
+
+                  <div className="mb-3 pl-1">
+                    <Label className="text-xs flex items-center mb-1.5">
+                      <Palette size={14} className="mr-1.5 text-muted-foreground" /> Category Color
+                    </Label>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {predefinedNewsCategoryColors.map(colorOption => (
+                        <button
+                          key={colorOption}
+                          type="button"
+                          title={colorOption}
+                          className={cn(
+                            "w-5 h-5 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
+                            category.color === colorOption ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
+                          )}
+                          style={{ backgroundColor: colorOption }}
+                          onClick={() => handleCategoryColorChange(category.id, colorOption)}
+                        />
+                      ))}
+                       <Input
+                        type="text"
+                        placeholder="#HEX"
+                        value={category.color}
+                        onChange={(e) => handleCategoryColorChange(category.id, e.target.value)}
+                        className={cn(
+                            "h-7 w-20 text-xs",
+                            category.color && !isValidHexColor(category.color) && category.color !== '' ? "border-destructive focus-visible:ring-destructive" : ""
+                        )}
+                        maxLength={7}
+                      />
+                    </div>
                   </div>
                   
                   <div className="pl-2 border-l-2 border-border/50 space-y-2 mb-2">
@@ -404,106 +475,111 @@ export function NewsWidget() {
         </div>
       )}
 
-      {isLoading && !showFeedManagement && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
-         <div className="space-y-4">
-            {Array.from({length: Math.min(2, categories.length || 1)}).map((_, i) => (
-              <Card key={`skel-cat-${i}`} className="mb-4 shadow-md">
-                <CardHeader><Skeleton className="h-6 w-1/3 mb-1" /></CardHeader>
-                <CardContent className="px-4 py-0">
-                  <div className="py-2 border-b border-border last:border-b-0">
-                      <Skeleton className="h-5 w-3/4 mb-1.5" />
-                      <Skeleton className="h-3 w-1/2 mb-2" />
-                      <Skeleton className="h-4 w-full mb-1" />
-                      <Skeleton className="h-4 w-5/6" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-         </div>
-      )}
-      {error && <p className="text-sm text-destructive p-2 py-2">Error loading articles: {error}</p>}
-      
-      {!isLoading && categories.length === 0 && !showFeedManagement && (
-         <p className="text-sm text-muted-foreground p-2 py-2">No news articles. Add categories and RSS feeds in settings <Settings className="inline h-4 w-4" />.</p>
-      )}
-       {!isLoading && !error && allArticles.length === 0 && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && !showFeedManagement && (
-         <p className="text-sm text-muted-foreground p-2 py-2">No articles found from active feeds, or feeds might need updating/checking.</p>
-      )}
-
-
-      {!isLoading && !error && (
-        <div className={cn("space-y-6", showFeedManagement ? "mt-6" : "")}>
-          {categories.map(category => {
-            const categoryArticles = articlesByCategoryId(category.id);
-             if (categoryArticles.length === 0 && !isLoading && !showFeedManagement && !category.feeds.some(f=>f.url.trim())) return null;
-
-            return (
-              <Card key={category.id} className="shadow-md mb-6">
-                <CardHeader>
-                  <CardTitle className="text-xl flex items-center">
-                    <Newspaper className="mr-2 h-5 w-5 text-muted-foreground" />
-                    {category.name}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 py-0">
-                  {isLoading && categoryArticles.length === 0 && category.feeds.some(f => f.url.trim()) && ( 
-                     <div className="py-2">
+      <div className={cn("space-y-6", showFeedManagement ? "mt-6" : "")}>
+        {isLoading && !showFeedManagement && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
+           <div className="space-y-4">
+              {Array.from({length: Math.min(2, categories.filter(c => c.feeds.some(f=>f.url.trim())).length || 1)}).map((_, i) => (
+                <Card key={`skel-cat-${i}`} className="mb-4 shadow-md">
+                  <CardHeader><Skeleton className="h-6 w-1/3 mb-1" /></CardHeader>
+                  <CardContent className="px-4 py-0">
+                    <div className="py-2 border-b border-border last:border-b-0">
                         <Skeleton className="h-5 w-3/4 mb-1.5" />
                         <Skeleton className="h-3 w-1/2 mb-2" />
                         <Skeleton className="h-4 w-full mb-1" />
                         <Skeleton className="h-4 w-5/6" />
-                     </div>
-                  )}
-                  {!isLoading && categoryArticles.length === 0 && (
-                     <p className="text-sm text-muted-foreground py-4 px-2 text-center">
-                      {category.feeds.some(f=>f.url.trim()) ? "No articles for this category currently." : "No feeds configured for this category."}
-                     </p>
-                  )}
-                  {categoryArticles.length > 0 && (
-                    <ScrollArea className="h-[300px] pr-3 py-2">
-                      <ul className="space-y-4">
-                        {categoryArticles.map((article) => (
-                          <li key={article.id} className="pb-3 border-b border-border last:border-b-0">
-                            {article.imageUrl && (
-                               <a href={article.link} target="_blank" rel="noopener noreferrer" className="block mb-2 rounded-md overflow-hidden aspect-[16/9] max-h-32">
-                                  <Image
-                                      src={article.imageUrl}
-                                      alt={article.title || 'Article image'}
-                                      width={300}
-                                      height={169} 
-                                      className="object-cover w-full h-full hover:scale-105 transition-transform duration-200"
-                                      data-ai-hint="news article"
-                                      onError={(e) => (e.currentTarget.style.display = 'none')}
-                                  />
-                               </a>
-                            )}
-                            <a href={article.link} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
-                              <h4 className="font-medium text-card-foreground leading-tight">{article.title || 'Untitled Article'}</h4>
-                            </a>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {article.sourceName} 
-                              {article.isoDate && ` - ${formatDistanceToNow(new Date(article.isoDate), { addSuffix: true })}`}
-                            </p>
-                            {article.contentSnippet && (
-                              <p className="text-sm text-muted-foreground mt-1.5 line-clamp-3">{article.contentSnippet}</p>
-                            )}
-                            {article.category && (
-                              <Badge variant="secondary" className="mt-2 text-xs">
-                                <Tag className="w-3 h-3 mr-1" />
-                                {article.category}
-                              </Badge>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </ScrollArea>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+           </div>
+        )}
+        {error && <p className="text-sm text-destructive p-2 py-2">Error loading articles: {error}</p>}
+        
+        {!isLoading && categories.length === 0 && !showFeedManagement && (
+           <p className="text-sm text-muted-foreground p-2 py-2 text-center">No news articles. Add categories and RSS feeds in settings <Settings className="inline h-4 w-4" />.</p>
+        )}
+         {!isLoading && !error && allArticles.length === 0 && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && !showFeedManagement && (
+           <p className="text-sm text-muted-foreground p-2 py-2 text-center">No articles found from active feeds, or feeds might need updating/checking.</p>
+        )}
+
+        {!isLoading && !error && (
+          <div className={cn("space-y-6", showFeedManagement ? "mt-6" : "")}>
+            {categories.map(category => {
+              const categoryArticles = articlesByCategoryId(category.id);
+               if (categoryArticles.length === 0 && !isLoading && !showFeedManagement && !category.feeds.some(f=>f.url.trim())) return null;
+
+              return (
+                <Card 
+                    key={category.id} 
+                    className="shadow-md mb-6"
+                    style={{ borderTop: `4px solid ${isValidHexColor(category.color) ? category.color : predefinedNewsCategoryColors[0]}` }}
+                >
+                  <CardHeader>
+                    <CardTitle className="text-xl flex items-center">
+                      <Newspaper className="mr-2 h-5 w-5 text-muted-foreground" />
+                      {category.name}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 py-0">
+                    {isLoading && categoryArticles.length === 0 && category.feeds.some(f => f.url.trim()) && ( 
+                       <div className="py-2">
+                          <Skeleton className="h-5 w-3/4 mb-1.5" />
+                          <Skeleton className="h-3 w-1/2 mb-2" />
+                          <Skeleton className="h-4 w-full mb-1" />
+                          <Skeleton className="h-4 w-5/6" />
+                       </div>
+                    )}
+                    {!isLoading && categoryArticles.length === 0 && (
+                       <p className="text-sm text-muted-foreground py-4 px-2 text-center">
+                        {category.feeds.some(f=>f.url.trim()) ? "No articles for this category currently." : "No feeds configured for this category."}
+                       </p>
+                    )}
+                    {categoryArticles.length > 0 && (
+                      <ScrollArea className="h-[300px] pr-3 py-2">
+                        <ul className="space-y-4">
+                          {categoryArticles.map((article) => (
+                            <li key={article.id} className="pb-3 border-b border-border last:border-b-0">
+                              {article.imageUrl && (
+                                 <a href={article.link} target="_blank" rel="noopener noreferrer" className="block mb-2 rounded-md overflow-hidden aspect-[16/9] max-h-32">
+                                    <Image
+                                        src={article.imageUrl}
+                                        alt={article.title || 'Article image'}
+                                        width={300}
+                                        height={169} 
+                                        className="object-cover w-full h-full hover:scale-105 transition-transform duration-200"
+                                        data-ai-hint="news article"
+                                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                                    />
+                                 </a>
+                              )}
+                              <a href={article.link} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
+                                <h4 className="font-medium text-card-foreground leading-tight">{article.title || 'Untitled Article'}</h4>
+                              </a>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {article.sourceName} 
+                                {article.isoDate && ` - ${formatDistanceToNow(new Date(article.isoDate), { addSuffix: true })}`}
+                              </p>
+                              {article.contentSnippet && (
+                                <p className="text-sm text-muted-foreground mt-1.5 line-clamp-3">{article.contentSnippet}</p>
+                              )}
+                              {article.category && (
+                                <Badge variant="secondary" className="mt-2 text-xs">
+                                  <Tag className="w-3 h-3 mr-1" />
+                                  {article.category}
+                                </Badge>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </ScrollArea>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </React.Fragment>
   );
 }
