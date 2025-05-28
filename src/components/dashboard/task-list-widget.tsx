@@ -420,11 +420,6 @@ const TaskListContent: React.FC = () => {
                   <Settings className="h-4 w-4" />
                 </Button>
               )}
-              {isSignedIn && (
-                <Button variant="outline" size="sm" onClick={handleSignOut}>
-                  <LogOut className="mr-2 h-4 w-4" /> Sign Out
-                </Button>
-              )}
             </div>
           </div>
         </div>
@@ -523,6 +518,12 @@ const TaskListContent: React.FC = () => {
                           Create
                         </Button>
                       </div>
+                    </div>
+                    <Separator />
+                     <div className="flex justify-center mt-4">
+                        <Button variant="outline" size="sm" onClick={handleSignOut}>
+                            <LogOut className="mr-2 h-4 w-4" /> Sign Out of Google Tasks
+                        </Button>
                     </div>
                   </CardContent>
                 </Card>
