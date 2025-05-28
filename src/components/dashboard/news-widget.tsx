@@ -469,7 +469,7 @@ export function NewsWidget() {
         </div>
       )}
 
-      <div className={cn(showFeedManagement ? "mt-6" : "")}>
+      <div className={cn(showFeedManagement ? "mt-6" : "mt-0")}>
         {isLoading && !showFeedManagement && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
            <div className="space-y-4">
               {Array.from({length: Math.min(2, categories.filter(c => c.feeds.some(f=>f.url.trim())).length || 1)}).map((_, i) => (
@@ -497,7 +497,7 @@ export function NewsWidget() {
         )}
 
         {!isLoading && !error && (
-          <div className={cn("space-y-6", showFeedManagement ? "mt-6" : "")}>
+          <div className={cn("space-y-6", showFeedManagement ? "mt-6" : "mt-0")}>
             {categories.map(category => {
               const categoryArticles = articlesByCategoryId(category.id);
                if (categoryArticles.length === 0 && !isLoading && !showFeedManagement && !category.feeds.some(f=>f.url.trim())) return null;
@@ -509,8 +509,8 @@ export function NewsWidget() {
                     style={{ borderTop: `4px solid ${isValidHexColor(category.color) ? category.color : predefinedNewsCategoryColors[0]}` }}
                 >
                   <CardHeader>
-                    <CardTitle className="text-xl flex items-center">
-                      <Newspaper className="mr-2 h-5 w-5 text-muted-foreground" />
+                    <CardTitle className="text-xl flex items-center" style={{ color: isValidHexColor(category.color) ? category.color : undefined }}>
+                      <Newspaper className="mr-2 h-5 w-5" style={{ color: isValidHexColor(category.color) ? category.color : 'hsl(var(--muted-foreground))' }} />
                       {category.name}
                     </CardTitle>
                   </CardHeader>
@@ -577,3 +577,4 @@ export function NewsWidget() {
     </React.Fragment>
   );
 }
+
