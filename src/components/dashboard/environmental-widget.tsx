@@ -9,7 +9,7 @@ import type { EnvironmentalData } from '@/lib/types';
 import { getEnvironmentalData } from '@/ai/flows/environmental-data-flow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal, MapPinOff, Gauge, Smile, Meh, Frown, CloudFog, Skull, HelpCircle, Cloud, Sun, Eclipse, CircleHalf, Moon, SunOff } from "lucide-react";
+import { Terminal, MapPinOff, Gauge, Smile, Meh, Frown, CloudFog, Skull, HelpCircle, Cloud, Sun, Eclipse, CircleHalf, Moon } from "lucide-react"; // Removed SunOff
 import { cn } from '@/lib/utils';
 import { Progress } from "@/components/ui/progress";
 
@@ -122,7 +122,8 @@ export function EnvironmentalWidget() {
       }
     };
     fetchData();
-  }, [latitude, longitude, locationError]); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latitude, longitude]); 
 
   const getMoonIconStyle = (phaseName?: string): React.CSSProperties => {
     if (!phaseName) return {};
@@ -175,7 +176,7 @@ export function EnvironmentalWidget() {
           <SectionTitle icon={Cloud} title="Environment" />
         </CardHeader>
         <CardContent className="space-y-6">
-           <div className="p-3 rounded-md bg-muted/30">
+           <div className="p-4 rounded-md bg-muted/30 shadow-md">
              <Skeleton className="h-8 w-1/2 mb-2" />
              <Skeleton className="h-6 w-full" />
              <Skeleton className="h-4 w-3/4 mt-1" />
@@ -185,7 +186,7 @@ export function EnvironmentalWidget() {
             <Skeleton className="h-20 w-full" />
             <Skeleton className="h-20 w-full md:col-span-1" />
           </div>
-          <div>
+          <div className="flex flex-col items-center">
             <Skeleton className="h-8 w-1/3 mb-2" />
             <div className="flex flex-wrap justify-center gap-2 text-center">
               {Array.from({ length: 7 }).map((_, i) => (
@@ -232,10 +233,10 @@ export function EnvironmentalWidget() {
     );
   }
 
-  const { moonPhase, uvIndex, airQuality, currentWeather, weeklyWeather, locationName } = data;
+  const { moonPhase, uvIndex, airQuality, currentWeather, locationName } = data;
   const moonIconStyle = getMoonIconStyle(moonPhase?.name);
   const moonIconName = (moonPhase?.iconName && typeof moonPhase.iconName === 'string') ? moonPhase.iconName : "Moon";
-  const uvProgressValue = uvIndex ? Math.min(100, (uvIndex.value / 11) * 100) : 0;
+  const uvProgressValue = uvIndex ? Math.min(100, (uvIndex.value / 11) * 100) : 0; // Assuming max relevant UV is 11 for 100% bar
 
   return (
     <Card className="shadow-lg">
@@ -248,48 +249,7 @@ export function EnvironmentalWidget() {
         )}
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {moonPhase ? (
-             <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
-              <IconComponent name={moonIconName || "Moon"} className="w-8 h-8 mb-1 text-primary" style={moonIconStyle} />
-              <p className="text-md font-medium text-card-foreground">{moonPhase.name}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Illumination: {moonPhase.illumination}%</p>
-            </div>
-          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Moon phase data N/A</p></div>}
-
-          {uvIndex ? (
-             <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center space-y-1">
-              <div className="flex items-center text-sm text-muted-foreground">
-                <LucideIcons.Sun className="w-4 h-4 mr-2 text-primary" />
-                UV Index
-              </div>
-              <p className={cn("text-2xl font-semibold", getUvIndexTextColor(uvIndex.description))}>{uvIndex.value}</p>
-              <p className="text-sm text-card-foreground">{uvIndex.description}</p>
-              <Progress
-                value={uvProgressValue}
-                className={cn("h-2 w-3/4 mt-1", getUvBarClass(uvIndex.description))}
-                aria-label={`UV Index level: ${uvIndex.description}, value ${uvIndex.value}`}
-              />
-            </div>
-          ) : (
-            <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
-                <LucideIcons.SunOff size={24} className="mb-1 text-muted-foreground" />
-                <p className="text-xs text-muted-foreground">UV index data N/A.</p>
-                <p className="text-xs text-muted-foreground/80 mt-0.5 px-1">
-                  Check <code className="text-xs bg-muted/70 px-1 py-0.5 rounded">.env.local</code> for <code className="text-xs bg-muted/70 px-1 py-0.5 rounded">OPENUV_API_KEY</code> &amp; server logs for details.
-                </p>
-            </div>
-          )}
-
-          {airQuality ? (
-            <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
-                <IconComponent name={airQuality.iconName || "HelpCircle"} className={cn("w-8 h-8 mb-1", airQuality.colorClass || 'text-primary')} />
-                <p className={cn("text-md font-medium", airQuality.colorClass || 'text-card-foreground')}>{airQuality.level}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">AQI (1-5): {airQuality.aqi}</p>
-            </div>
-          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Air Quality data N/A</p></div>}
-        </div>
-
+        
         {currentWeather && (
           <div className="p-4 rounded-md bg-muted/30 shadow-md">
             <div className="flex flex-col sm:flex-row items-center justify-between mb-2">
@@ -313,15 +273,57 @@ export function EnvironmentalWidget() {
           </div>
         )}
 
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {moonPhase ? (
+             <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
+              <IconComponent name={moonIconName || "Moon"} className="w-8 h-8 mb-1 text-primary" style={moonIconStyle} />
+              <p className="text-md font-medium text-card-foreground">{moonPhase.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Illumination: {moonPhase.illumination}%</p>
+            </div>
+          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Moon phase data N/A</p></div>}
+
+          {uvIndex ? (
+             <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center space-y-1">
+              <div className="flex items-center text-sm text-muted-foreground">
+                <Sun className="w-4 h-4 mr-2 text-primary" />
+                UV Index
+              </div>
+              <p className={cn("text-2xl font-semibold", getUvIndexTextColor(uvIndex.description))}>{uvIndex.value}</p>
+              <p className="text-sm text-card-foreground">{uvIndex.description}</p>
+              <Progress
+                value={uvProgressValue}
+                className={cn("h-2 w-3/4 mt-1", getUvBarClass(uvIndex.description))}
+                aria-label={`UV Index level: ${uvIndex.description}, value ${uvIndex.value}`}
+              />
+            </div>
+          ) : (
+            <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
+                <HelpCircle size={24} className="mb-1 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">UV index data N/A.</p>
+                <p className="text-xs text-muted-foreground/80 mt-0.5 px-1">
+                  Check <code className="text-xs bg-muted/70 px-1 py-0.5 rounded">.env.local</code> for <code className="text-xs bg-muted/70 px-1 py-0.5 rounded">OPENUV_API_KEY</code> &amp; server logs for details.
+                </p>
+            </div>
+          )}
+
+          {airQuality ? (
+            <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
+                <IconComponent name={airQuality.iconName || "HelpCircle"} className={cn("w-8 h-8 mb-1", airQuality.colorClass || 'text-primary')} />
+                <p className={cn("text-md font-medium", airQuality.colorClass || 'text-card-foreground')}>{airQuality.level}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">AQI (1-5): {airQuality.aqi}</p>
+            </div>
+          ) : <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex items-center justify-center"><p className="text-xs text-muted-foreground">Air Quality data N/A</p></div>}
+        </div>
+         
          <div className="flex flex-col items-center">
             <h4 className="text-sm font-medium text-muted-foreground mb-2 text-center">Weekly Weather</h4>
-            {weeklyWeather && weeklyWeather.length > 0 ? (
+            {data.weeklyWeather && data.weeklyWeather.length > 0 ? (
                 <div className="flex flex-wrap justify-center gap-2 text-center">
-                {weeklyWeather.map((dayWeather) => (
+                {data.weeklyWeather.map((dayWeather) => (
                     <div key={dayWeather.day} className="w-16 p-2 rounded-md bg-muted/30 flex flex-col items-center justify-between min-h-[90px] text-center">
                     <p className="text-xs font-medium text-card-foreground">{dayWeather.day}</p>
                     <IconComponent name={dayWeather.iconName || "Cloud"} className="my-1 text-2xl text-primary" />
-                    <p className="text-xs text-card-foreground">{dayWeather.tempHigh}° / {dayWeather.tempLow}°F</p>
+                    <p className="text-xs text-card-foreground">{dayWeather.tempHigh}°F / {dayWeather.tempLow}°F</p>
                     <div className="flex items-center text-xs text-muted-foreground mt-1">
                         <LucideIcons.Droplets className="w-3 h-3 mr-1" />
                         <span>{dayWeather.rainPercentage}%</span>
@@ -338,3 +340,5 @@ export function EnvironmentalWidget() {
   );
 }
 
+
+    
