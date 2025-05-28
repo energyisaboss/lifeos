@@ -12,12 +12,12 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
 const AssetPriceInputSchema = z.object({
-  symbol: z.string().describe('The stock/asset symbol (e.g., AAPL, MSFT).'),
+  symbol: z.string().describe('The stock/asset symbol (e.g., AAPL, MSFT, FXAIX).'),
 });
 export type AssetPriceInput = z.infer<typeof AssetPriceInputSchema>;
 
 const AssetPriceOutputSchema = z.object({
-  currentPrice: z.number().nullable().describe('The current market price of the asset. Null if not found or error.'),
+  currentPrice: z.number().nullable().describe('The current market price or previous closing price of the asset. Null if not found or error.'),
 });
 export type AssetPriceOutput = z.infer<typeof AssetPriceOutputSchema>;
 
@@ -48,16 +48,32 @@ const assetPriceFlow = ai.defineFlow(
         const errorText = await response.text();
         const detailedErrorMsg = `Finnhub API Error for symbol ${symbol}: ${response.status} ${errorText}`;
         console.error(detailedErrorMsg);
+        // Log more for specific errors if needed for debugging
+        if (response.status === 401 || response.status === 403) {
+           console.error(`Finnhub API Unauthorized/Forbidden for symbol ${symbol}. Check API key and permissions.`);
+        }
         throw new Error(`FINNHUB_API_ERROR: ${response.status} for ${symbol}`);
       }
       const data = await response.json();
+      console.log(`Finnhub API response for ${symbol}:`, JSON.stringify(data, null, 2));
 
-      // 'c' is the current price in Finnhub's quote response
-      if (typeof data.c === 'number') {
-        return { currentPrice: data.c };
+
+      // 'c' is the current price, 'pc' is the previous close price.
+      // For mutual funds, 'c' might be 0 or missing, but 'pc' might be available.
+      let priceToUse: number | null = null;
+
+      if (typeof data.c === 'number' && data.c > 0) {
+        priceToUse = data.c;
+      } else if (typeof data.pc === 'number' && data.pc > 0) {
+        priceToUse = data.pc; // Use previous close if current is not valid
+        console.log(`Finnhub: Using previous close price (pc: ${data.pc}) for symbol ${symbol} as current price (c) was ${data.c}.`);
+      }
+
+      if (priceToUse !== null) {
+        return { currentPrice: priceToUse };
       } else {
-        console.warn(`Finnhub: Current price (c) not found or not a number for symbol ${symbol}. Full API response:`, JSON.stringify(data, null, 2));
-        return { currentPrice: null }; // Symbol might be valid, but no price data (e.g., delisted, or no recent trade for stocks, or it's a fund)
+        console.warn(`Finnhub: Neither current price (c) nor previous close price (pc) found or valid for symbol ${symbol}. Full API response:`, JSON.stringify(data, null, 2));
+        return { currentPrice: null };
       }
     } catch (error) {
       // Handle errors already thrown (like API key or Finnhub API error)
