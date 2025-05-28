@@ -68,13 +68,11 @@ export interface AssetHolding extends Asset {
   currentPricePerUnit?: number | null; // Fetched current price per unit
   totalValue: number; // quantity * currentPricePerUnit
   profitLoss: number;
-  profitLossPercentage: number;
 }
 
 export interface AssetPortfolio {
   holdings: AssetHolding[];
   totalPortfolioValue: number;
   totalProfitLoss: number;
-  // totalProfitLossPercentage field was removed as per user request
 }
 

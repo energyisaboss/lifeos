@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, Loader2, Settings, ListTree, AlertCircle, RefreshCw } from 'lucide-react';
+import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, Loader2, Settings, AlertCircle, RefreshCw } from 'lucide-react';
 import type { Asset, AssetPortfolio, AssetHolding } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -66,7 +66,6 @@ function calculateAssetPortfolio(
       currentPricePerUnit: currentPricePerUnit === undefined ? null : currentPricePerUnit,
       totalValue: currentValue,
       profitLoss,
-      profitLossPercentage: initialCost === 0 && profitLoss > 0 ? Infinity : (initialCost === 0 ? 0 : (profitLoss / initialCost) * 100),
     };
   });
 
@@ -82,7 +81,7 @@ function calculateAssetPortfolio(
 export function AssetTrackerWidget() {
   const [assets, setAssets] = useState<Asset[]>(() => {
     if (typeof window === 'undefined') {
-      return []; // Return empty array during SSR or if window is not available
+      return []; 
     }
     console.log("AssetTracker: useState initializer - Attempting to load assets from localStorage.");
     const savedAssetsString = localStorage.getItem(LOCALSTORAGE_KEY);
@@ -109,7 +108,6 @@ export function AssetTrackerWidget() {
           console.log("AssetTracker: useState initializer - Valid assets after filtering:", validAssets);
           if (validAssets.length < parsedAssetsArray.length) {
              console.warn("AssetTracker: useState initializer - Some saved assets had invalid data and were not loaded.");
-             // Toast will be shown in a useEffect to avoid issues during render
           }
           return validAssets;
         } else {
@@ -146,7 +144,6 @@ export function AssetTrackerWidget() {
     isFetchingPricesRef.current = isFetchingPrices;
   }, [isFetchingPrices]);
 
-  // Effect to show toasts for loading issues, runs once after mount and initial state load
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedAssetsString = localStorage.getItem(LOCALSTORAGE_KEY);
@@ -251,7 +248,7 @@ export function AssetTrackerWidget() {
           }
         }
       } else {
-        prices[asset.id] = null;
+        prices[asset.id] = null; // For crypto or assets without symbols, set price to null
       }
     }
     console.log("AssetTracker: Finished fetching all asset prices. Result:", prices);
@@ -275,7 +272,8 @@ export function AssetTrackerWidget() {
       setFetchedPrices({});
       setPortfolio(null);
     }
-  }, [assets, fetchAllAssetPrices]); // fetchAllAssetPrices is memoized so this is okay
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assets]); 
 
   useEffect(() => {
     if (assets.length === 0) {
@@ -296,7 +294,8 @@ export function AssetTrackerWidget() {
       console.log('AssetTracker: Clearing price refresh interval (Tiingo).');
       clearInterval(intervalId);
     };
-  }, [assets, fetchAllAssetPrices]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assets]);
 
 
   useEffect(() => {
@@ -328,18 +327,17 @@ export function AssetTrackerWidget() {
         if (profile.assetName) {
           setAssetFormData(prev => ({ ...prev, name: profile.assetName! }));
         } else {
-          setAssetFormData(prev => ({ ...prev, name: symbol })); // Fallback to symbol if name not found
+          setAssetFormData(prev => ({ ...prev, name: symbol })); 
           toast({ title: "Name Fetch", description: `Could not fetch name for ${symbol} from Tiingo. Using symbol as name.`, variant: "default", duration: 3000});
         }
       } catch (error) {
         console.error("Error fetching asset profile for symbol from Tiingo:", symbol, error);
-        setAssetFormData(prev => ({ ...prev, name: symbol })); // Fallback on error
+        setAssetFormData(prev => ({ ...prev, name: symbol })); 
         toast({ title: "Name Fetch Error", description: `Error fetching name for ${symbol} from Tiingo. Using symbol as name.`, variant: "destructive"});
       } finally {
         setIsFetchingName(false);
       }
     } else if (assetFormData.type === 'crypto') {
-      // For crypto, automatically set name to symbol (or let user edit it if 'name' field was present)
       setAssetFormData(prev => ({ ...prev, name: symbol }));
     }
   };
@@ -349,10 +347,9 @@ export function AssetTrackerWidget() {
     setAssetFormData(prev => ({
         ...prev,
         type: value,
-        name: (value === 'crypto' && currentSymbol) ? currentSymbol : prev.name // Reset or set name based on type
+        name: (value === 'crypto' && currentSymbol) ? currentSymbol : (prev.name || '')
     }));
     if ((value === 'stock' || value === 'fund') && currentSymbol) {
-        // Trigger name fetch if symbol exists and type is stock/fund
         handleSymbolBlur({ target: { value: currentSymbol } } as React.FocusEvent<HTMLInputElement>);
     }
   };
@@ -376,11 +373,10 @@ export function AssetTrackerWidget() {
   const handleSubmitAsset = () => {
     if (!validateForm()) return;
 
-    // Ensure name is set, defaulting to symbol if empty (e.g., after type change or failed fetch)
     const finalName = (assetFormData.name || assetFormData.symbol).trim();
     const finalSymbol = assetFormData.symbol.toUpperCase();
 
-    if (!finalName || !finalSymbol) { // Should be covered by validateForm symbol check, but good to be defensive
+    if (!finalName || !finalSymbol) {
         toast({ title: "Validation Error", description: "Asset name and symbol are required.", variant: "destructive" });
         return;
     }
@@ -388,7 +384,7 @@ export function AssetTrackerWidget() {
 
     if (editingAsset) {
       setAssets(assets.map(asset =>
-        asset.id === editingAsset.id ? { ...asset, ...assetFormData, name: finalName, symbol: finalSymbol } : asset
+        asset.id === editingAsset.id ? { ...asset, symbol: finalSymbol, quantity: assetFormData.quantity, purchasePrice: assetFormData.purchasePrice, type: assetFormData.type, name: finalName } : asset
       ));
       toast({ title: "Asset Updated", description: `"${finalName}" has been updated.` });
       setIsEditDialogOpen(false);
@@ -400,7 +396,7 @@ export function AssetTrackerWidget() {
         quantity: assetFormData.quantity,
         purchasePrice: assetFormData.purchasePrice,
         type: assetFormData.type,
-        name: finalName, // Use the finalized name
+        name: finalName,
       };
       setAssets(prevAssets => [...prevAssets, newAsset]);
       toast({ title: "Asset Added", description: `"${newAsset.name}" has been added.` });
@@ -411,7 +407,7 @@ export function AssetTrackerWidget() {
 
   const handleOpenEditDialog = (assetToEdit: Asset) => {
     setEditingAsset(assetToEdit);
-    setAssetFormData({ // Populate form with existing asset data
+    setAssetFormData({ 
       name: assetToEdit.name,
       symbol: assetToEdit.symbol,
       quantity: assetToEdit.quantity,
@@ -419,14 +415,14 @@ export function AssetTrackerWidget() {
       type: assetToEdit.type,
     });
     setIsEditDialogOpen(true);
-    setShowNewAssetForm(false); // Ensure inline add form is hidden
+    setShowNewAssetForm(false); 
   };
 
   const handleOpenNewAssetForm = () => {
     setEditingAsset(null);
     setAssetFormData(initialAssetFormState);
     setShowNewAssetForm(true);
-    setIsEditDialogOpen(false); // Ensure edit dialog is hidden
+    setIsEditDialogOpen(false); 
   };
 
   const handleCancelNewAsset = () => {
@@ -438,7 +434,6 @@ export function AssetTrackerWidget() {
   const handleRemoveAsset = (assetId: string) => {
     const assetToRemove = assets.find(a => a.id === assetId);
     setAssets(assets.filter(asset => asset.id !== assetId));
-    // Also remove from fetchedPrices to keep it clean, though not strictly necessary for calculation
     setFetchedPrices(prevPrices => {
         const newPrices = {...prevPrices};
         delete newPrices[assetId];
@@ -452,13 +447,6 @@ export function AssetTrackerWidget() {
   const formatCurrency = (value: number | undefined | null, placeholder = '$--.--') => {
     if (value === undefined || value === null) return placeholder;
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
-  };
-
-  const formatPercentage = (value: number) => {
-    if (value === Infinity) return "+∞%";
-    if (value === -Infinity) return "-∞%";
-    if (isNaN(value)) return "N/A %";
-    return `${value.toFixed(2)}%`;
   };
 
   const renderAssetFormFields = (forEditingDialog: boolean = false) => (
@@ -666,7 +654,6 @@ export function AssetTrackerWidget() {
                       <TableHead className="p-2 text-xs text-right h-10">Current Price</TableHead>
                       <TableHead className="p-2 text-xs text-right h-10">Value</TableHead>
                       <TableHead className="p-2 text-xs text-right h-10">P/L</TableHead>
-                      <TableHead className="p-2 text-xs text-right h-10">P/L %</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -701,12 +688,6 @@ export function AssetTrackerWidget() {
                           asset.profitLoss >= 0 ? "text-green-500" : "text-red-500"
                         )}>
                           {formatCurrency(asset.profitLoss)}
-                        </TableCell>
-                        <TableCell className={cn(
-                          "p-2 text-xs text-right",
-                          asset.profitLossPercentage >= 0 ? "text-green-500" : "text-red-500"
-                        )}>
-                          {formatPercentage(asset.profitLossPercentage)}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -764,5 +745,3 @@ export function AssetTrackerWidget() {
     </TooltipProvider>
   );
 }
-
-    
