@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, Loader2, Settings, ListTree, AlertCircle } from 'lucide-react';
+import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, Loader2, Settings, ListTree, AlertCircle, RefreshCw } from 'lucide-react';
 import type { Asset, AssetPortfolio, AssetHolding } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -30,7 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
-const initialAssetFormState: Omit<Asset, 'id' | 'name'> & { name?: string } = { 
+const initialAssetFormState: Omit<Asset, 'id' | 'name'> & { name?: string } = {
   symbol: '',
   quantity: 0,
   purchasePrice: 0,
@@ -38,6 +38,7 @@ const initialAssetFormState: Omit<Asset, 'id' | 'name'> & { name?: string } = {
 };
 
 const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes (Tiingo free tier has stricter limits)
+const LOCALSTORAGE_KEY = 'userAssetsLifeOS_Tiingo_v1';
 
 function calculateAssetPortfolio(
   assets: Asset[],
@@ -49,13 +50,13 @@ function calculateAssetPortfolio(
   const holdings: AssetHolding[] = assets.map(asset => {
     const currentPricePerUnit = fetchedPrices[asset.id];
     const initialCost = asset.quantity * asset.purchasePrice;
-    
+
     let currentValue = 0;
     if (typeof currentPricePerUnit === 'number') {
       currentValue = asset.quantity * currentPricePerUnit;
     }
 
-    const profitLoss = typeof currentPricePerUnit === 'number' ? currentValue - initialCost : 0 - initialCost; 
+    const profitLoss = typeof currentPricePerUnit === 'number' ? currentValue - initialCost : 0 - initialCost;
 
     totalPortfolioValue += currentValue;
     totalInitialCost += initialCost;
@@ -82,11 +83,11 @@ export function AssetTrackerWidget() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [fetchedPrices, setFetchedPrices] = useState<Record<string, number | null>>({});
   const [portfolio, setPortfolio] = useState<AssetPortfolio | null>(null);
-  
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false); 
+
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [assetFormData, setAssetFormData] = useState<Omit<Asset, 'id' | 'name'> & { name?: string }>(initialAssetFormState);
-  
+
   const [isFetchingPrices, setIsFetchingPrices] = useState(false);
   const [priceFetchError, setPriceFetchError] = useState<string | null>(null);
   const [isFetchingName, setIsFetchingName] = useState(false);
@@ -100,31 +101,75 @@ export function AssetTrackerWidget() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const savedAssets = localStorage.getItem('userAssetsLifeOS_Tiingo_v1'); // New key for Tiingo
-      if (savedAssets) {
+      console.log("AssetTracker: Attempting to load assets from localStorage.");
+      const savedAssetsString = localStorage.getItem(LOCALSTORAGE_KEY);
+      console.log(`AssetTracker: Raw data from localStorage using key "${LOCALSTORAGE_KEY}":`, savedAssetsString);
+      if (savedAssetsString) {
         try {
-          const parsedAssets = JSON.parse(savedAssets);
-          if (Array.isArray(parsedAssets)) {
-            setAssets(parsedAssets.filter((asset: any) =>
-              typeof asset.id === 'string' &&
-              typeof asset.name === 'string' && 
-              typeof asset.symbol === 'string' &&
-              typeof asset.quantity === 'number' &&
-              typeof asset.purchasePrice === 'number' &&
-              ['stock', 'fund', 'crypto'].includes(asset.type)
-            ));
+          const parsedAssetsArray = JSON.parse(savedAssetsString);
+          console.log("AssetTracker: Parsed assets from localStorage:", parsedAssetsArray);
+          if (Array.isArray(parsedAssetsArray)) {
+            const validAssets = parsedAssetsArray.filter((asset: any) => {
+              const isValid =
+                asset && // check if asset is not null or undefined
+                typeof asset.id === 'string' &&
+                typeof asset.name === 'string' && asset.name.trim() !== '' &&
+                typeof asset.symbol === 'string' && asset.symbol.trim() !== '' &&
+                typeof asset.quantity === 'number' && asset.quantity > 0 &&
+                typeof asset.purchasePrice === 'number' && asset.purchasePrice >= 0 &&
+                ['stock', 'fund', 'crypto'].includes(asset.type);
+              if (!isValid) {
+                console.warn("AssetTracker: Filtering out invalid asset from localStorage:", asset);
+              }
+              return isValid;
+            });
+            console.log("AssetTracker: Valid assets after filtering:", validAssets);
+            setAssets(validAssets);
+            if (validAssets.length < parsedAssetsArray.length) {
+              toast({
+                title: "Data Integrity Check",
+                description: "Some saved assets had invalid data and were not loaded.",
+                variant: "default",
+                duration: 5000,
+              });
+            }
+          } else {
+            console.warn("AssetTracker: Parsed data from localStorage is not an array. Resetting assets and clearing corrupted localStorage item.");
+            setAssets([]);
+            localStorage.removeItem(LOCALSTORAGE_KEY);
           }
         } catch (e) {
-          console.error("Failed to parse assets from localStorage", e);
+          console.error("AssetTracker: Failed to parse assets from localStorage. Resetting assets and clearing corrupted localStorage item.", e);
           setAssets([]);
+          localStorage.removeItem(LOCALSTORAGE_KEY);
+          toast({
+            title: "Storage Error",
+            description: "Could not load saved assets due to a data error. Previous data has been cleared.",
+            variant: "destructive",
+            duration: 7000,
+          });
         }
+      } else {
+        console.log(`AssetTracker: No assets found in localStorage with key "${LOCALSTORAGE_KEY}".`);
       }
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array: run only on mount
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('userAssetsLifeOS_Tiingo_v1', JSON.stringify(assets));
+      try {
+        console.log("AssetTracker: Attempting to save assets to localStorage:", assets);
+        localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(assets));
+        console.log(`AssetTracker: Successfully saved assets to localStorage with key "${LOCALSTORAGE_KEY}".`);
+      } catch (error) {
+        console.error("AssetTracker: Error saving assets to localStorage:", error);
+        toast({
+          title: "Storage Error",
+          description: "Could not save asset changes. Your browser storage might be full or unavailable.",
+          variant: "destructive",
+        });
+      }
     }
   }, [assets]);
 
@@ -135,28 +180,31 @@ export function AssetTrackerWidget() {
       setPriceFetchError(null);
       return;
     }
-    if (isFetchingPricesRef.current) { 
+    if (isFetchingPricesRef.current) {
       console.log("AssetTracker: Price fetch already in progress, skipping new fetchAllAssetPrices call.");
       return;
     }
     setIsFetchingPrices(true);
     setPriceFetchError(null);
+    console.log("AssetTracker: Starting to fetch all asset prices for:", currentAssets.map(a => a.symbol));
     const prices: Record<string, number | null> = {};
     let anErrorOccurred = false;
     let specificErrorMessage = "Could not fetch prices for some assets. Ensure symbols are correct and Tiingo API key is set in .env.local.";
 
     for (const asset of currentAssets) {
-      // For now, assume Tiingo EOD can handle stocks and funds. Crypto would need a different Tiingo endpoint.
       if ((asset.type === 'stock' || asset.type === 'fund') && asset.symbol) {
         try {
+          console.log(`AssetTracker: Fetching price for ${asset.symbol}`);
           const priceData = await getAssetPrice({ symbol: asset.symbol });
           prices[asset.id] = priceData.currentPrice;
           if (priceData.currentPrice === null) {
              console.warn(`Tiingo: Price not found or unavailable for symbol ${asset.symbol} (Type: ${asset.type}). API Response for ${asset.symbol} was ${JSON.stringify(priceData)}`);
+          } else {
+            console.log(`AssetTracker: Price for ${asset.symbol} fetched: ${priceData.currentPrice}`);
           }
         } catch (err) {
           console.error(`Error fetching price for ${asset.symbol} from Tiingo:`, err);
-          prices[asset.id] = null; 
+          prices[asset.id] = null;
           anErrorOccurred = true;
           if (err instanceof Error) {
             if (err.message.includes('TIINGO_API_KEY_NOT_CONFIGURED')) {
@@ -171,9 +219,10 @@ export function AssetTrackerWidget() {
           }
         }
       } else {
-        prices[asset.id] = null; // No price fetching for 'crypto' type with this flow yet
+        prices[asset.id] = null;
       }
     }
+    console.log("AssetTracker: Finished fetching all asset prices. Result:", prices);
     setFetchedPrices(prices);
     setIsFetchingPrices(false);
     if (anErrorOccurred) {
@@ -185,21 +234,24 @@ export function AssetTrackerWidget() {
           duration: 7000,
         });
     }
-  }, []); 
+  }, []);
 
   useEffect(() => {
     if (assets.length > 0) {
       fetchAllAssetPrices(assets);
     } else {
-      setFetchedPrices({}); 
-      setPortfolio(null); 
+      setFetchedPrices({});
+      setPortfolio(null);
     }
-  }, [assets, fetchAllAssetPrices]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assets]); // Removed fetchAllAssetPrices from deps to avoid re-triggering by its own recreation
 
   useEffect(() => {
     if (assets.length === 0) {
-      return; 
+      console.log('AssetTracker: No assets, clearing price refresh interval.');
+      return;
     }
+    console.log('AssetTracker: Setting up price refresh interval.');
     const intervalId = setInterval(() => {
       if (!isFetchingPricesRef.current) {
         console.log('AssetTracker: Auto-refreshing prices (Tiingo) via interval.');
@@ -213,7 +265,9 @@ export function AssetTrackerWidget() {
       console.log('AssetTracker: Clearing price refresh interval (Tiingo).');
       clearInterval(intervalId);
     };
-  }, [assets, fetchAllAssetPrices]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assets]); // Removed fetchAllAssetPrices from deps
+
 
   useEffect(() => {
     if (assets.length > 0 || Object.keys(fetchedPrices).length > 0) {
@@ -231,25 +285,25 @@ export function AssetTrackerWidget() {
   const handleSymbolBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
     const symbol = e.target.value.trim().toUpperCase();
     if (!symbol) {
-        setAssetFormData(prev => ({ ...prev, name: prev.type === 'crypto' ? '' : undefined }));
+        setAssetFormData(prev => ({ ...prev, name: prev.type === 'crypto' ? '' : undefined, symbol: '' }));
         return;
     }
-    
-    setAssetFormData(prev => ({ ...prev, symbol })); 
 
-    if (assetFormData.type === 'stock' || assetFormData.type === 'fund') { 
+    setAssetFormData(prev => ({ ...prev, symbol }));
+
+    if (assetFormData.type === 'stock' || assetFormData.type === 'fund') {
       setIsFetchingName(true);
       try {
         const profile = await getAssetProfile({ symbol });
         if (profile.assetName) {
           setAssetFormData(prev => ({ ...prev, name: profile.assetName! }));
-        } else { 
-          setAssetFormData(prev => ({ ...prev, name: symbol })); 
+        } else {
+          setAssetFormData(prev => ({ ...prev, name: symbol }));
           toast({ title: "Name Fetch", description: `Could not fetch name for ${symbol} from Tiingo. Using symbol as name.`, variant: "default", duration: 3000});
         }
       } catch (error) {
         console.error("Error fetching asset profile for symbol from Tiingo:", symbol, error);
-        setAssetFormData(prev => ({ ...prev, name: symbol })); 
+        setAssetFormData(prev => ({ ...prev, name: symbol }));
         toast({ title: "Name Fetch Error", description: `Error fetching name for ${symbol} from Tiingo. Using symbol as name.`, variant: "destructive"});
       } finally {
         setIsFetchingName(false);
@@ -261,16 +315,17 @@ export function AssetTrackerWidget() {
 
   const handleTypeChange = (value: 'stock' | 'fund' | 'crypto') => {
     const currentSymbol = assetFormData.symbol.toUpperCase();
-    setAssetFormData(prev => ({ 
-        ...prev, 
-        type: value, 
-        name: (value === 'crypto' && currentSymbol) ? currentSymbol : prev.name 
+    setAssetFormData(prev => ({
+        ...prev,
+        type: value,
+        name: (value === 'crypto' && currentSymbol) ? currentSymbol : prev.name
     }));
     if ((value === 'stock' || value === 'fund') && currentSymbol) {
+        // Trigger name fetch if symbol exists and type is stock/fund
         handleSymbolBlur({ target: { value: currentSymbol } } as React.FocusEvent<HTMLInputElement>);
     }
   };
-  
+
   const validateForm = () => {
      if (!assetFormData.symbol || !assetFormData.symbol.trim()) {
       toast({ title: "Validation Error", description: "Asset symbol/ticker is required.", variant: "destructive" });
@@ -291,24 +346,31 @@ export function AssetTrackerWidget() {
     if (!validateForm()) return;
 
     const finalName = (assetFormData.name || assetFormData.symbol || 'Unknown Asset').trim();
+    const finalSymbol = (assetFormData.symbol || '').toUpperCase();
 
-    if (editingAsset) { 
-      setAssets(assets.map(asset => 
-        asset.id === editingAsset.id ? { ...asset, ...assetFormData, name: finalName, symbol: (assetFormData.symbol || asset.symbol).toUpperCase() } : asset
+    if (!finalName || !finalSymbol) {
+        toast({ title: "Validation Error", description: "Asset name and symbol are required.", variant: "destructive" });
+        return;
+    }
+
+
+    if (editingAsset) {
+      setAssets(assets.map(asset =>
+        asset.id === editingAsset.id ? { ...asset, ...assetFormData, name: finalName, symbol: finalSymbol } : asset
       ));
       toast({ title: "Asset Updated", description: `"${finalName}" has been updated.` });
       setIsEditDialogOpen(false);
       setEditingAsset(null);
-    } else { 
-      const newAsset: Asset = { 
+    } else {
+      const newAsset: Asset = {
         id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
-        symbol: (assetFormData.symbol || '').toUpperCase(),
+        symbol: finalSymbol,
         quantity: assetFormData.quantity,
         purchasePrice: assetFormData.purchasePrice,
         type: assetFormData.type,
         name: finalName,
       };
-      setAssets([...assets, newAsset]);
+      setAssets(prevAssets => [...prevAssets, newAsset]);
       toast({ title: "Asset Added", description: `"${newAsset.name}" has been added.` });
       setShowNewAssetForm(false);
     }
@@ -317,20 +379,22 @@ export function AssetTrackerWidget() {
 
   const handleOpenEditDialog = (assetToEdit: Asset) => {
     setEditingAsset(assetToEdit);
-    setAssetFormData({ 
-      name: assetToEdit.name, 
+    setAssetFormData({
+      name: assetToEdit.name,
       symbol: assetToEdit.symbol,
       quantity: assetToEdit.quantity,
       purchasePrice: assetToEdit.purchasePrice,
       type: assetToEdit.type,
     });
     setIsEditDialogOpen(true);
+    setShowNewAssetForm(false); // Ensure inline add form is hidden
   };
-  
+
   const handleOpenNewAssetForm = () => {
     setEditingAsset(null);
     setAssetFormData(initialAssetFormState);
     setShowNewAssetForm(true);
+    setIsEditDialogOpen(false); // Ensure edit dialog is hidden
   };
 
   const handleCancelNewAsset = () => {
@@ -368,14 +432,15 @@ export function AssetTrackerWidget() {
     <div className="grid gap-y-4 gap-x-2 py-4">
       <div className="space-y-1">
         <Label htmlFor={forEditingDialog ? "edit-symbol" : "symbol"}>Symbol {isFetchingName && <Loader2 className="ml-1 h-3 w-3 inline-block animate-spin" />}</Label>
-        <Input 
+        <Input
           id={forEditingDialog ? "edit-symbol" : "symbol"}
-          name="symbol" 
-          value={assetFormData.symbol} 
-          onChange={handleInputChange} 
+          name="symbol"
+          value={assetFormData.symbol}
+          onChange={handleInputChange}
           onBlur={handleSymbolBlur}
-          placeholder="e.g., AAPL, FXAIX, BTC" 
+          placeholder="e.g., AAPL, FXAIX, BTC"
           disabled={isFetchingName}
+          className="text-sm"
         />
          {assetFormData.name && (assetFormData.type === 'stock' || assetFormData.type === 'fund') && !isFetchingName && (
             <p className="text-xs text-muted-foreground pt-1">Fetched Name: {assetFormData.name}</p>
@@ -383,34 +448,36 @@ export function AssetTrackerWidget() {
       </div>
       <div className="space-y-1">
         <Label htmlFor={forEditingDialog ? "edit-quantity" : "quantity"}>Quantity</Label>
-        <Input 
-            id={forEditingDialog ? "edit-quantity" : "quantity"} 
-            name="quantity" 
-            type="number" 
-            value={assetFormData.quantity} 
-            onChange={handleInputChange} 
-            placeholder="e.g., 10" 
-            min="0" 
-            step="any" 
+        <Input
+            id={forEditingDialog ? "edit-quantity" : "quantity"}
+            name="quantity"
+            type="number"
+            value={assetFormData.quantity}
+            onChange={handleInputChange}
+            placeholder="e.g., 10"
+            min="0"
+            step="any"
+            className="text-sm"
         />
       </div>
       <div className="space-y-1">
         <Label htmlFor={forEditingDialog ? "edit-purchasePrice" : "purchasePrice"}>Purchase Price (per unit)</Label>
-        <Input 
-            id={forEditingDialog ? "edit-purchasePrice" : "purchasePrice"} 
-            name="purchasePrice" 
-            type="number" 
-            value={assetFormData.purchasePrice} 
-            onChange={handleInputChange} 
-            placeholder="e.g., 150" 
-            min="0" 
-            step="any" 
+        <Input
+            id={forEditingDialog ? "edit-purchasePrice" : "purchasePrice"}
+            name="purchasePrice"
+            type="number"
+            value={assetFormData.purchasePrice}
+            onChange={handleInputChange}
+            placeholder="e.g., 150"
+            min="0"
+            step="any"
+            className="text-sm"
         />
       </div>
       <div className="space-y-1">
         <Label htmlFor={forEditingDialog ? "edit-type" : "type"}>Type</Label>
         <Select name="type" value={assetFormData.type} onValueChange={handleTypeChange} disabled={isFetchingName}>
-          <SelectTrigger id={forEditingDialog ? "edit-type" : "type"}>
+          <SelectTrigger id={forEditingDialog ? "edit-type" : "type"} className="text-sm">
             <SelectValue placeholder="Select asset type" />
           </SelectTrigger>
           <SelectContent>
@@ -438,9 +505,9 @@ export function AssetTrackerWidget() {
       <div className="flex justify-between items-center mb-4">
         <SectionTitle icon={TrendingUp} title="Asset Tracker" className="mb-0" />
         <div className="flex items-center gap-2">
-          <Button 
-            size="sm" 
-            variant="ghost" 
+          <Button
+            size="sm"
+            variant="ghost"
             onClick={() => setShowAssetManagement(!showAssetManagement)}
             aria-label="Manage Assets"
           >
@@ -664,3 +731,5 @@ export function AssetTrackerWidget() {
     </TooltipProvider>
   );
 }
+
+    
