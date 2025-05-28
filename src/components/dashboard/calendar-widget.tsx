@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { SectionTitle } from './section-title';
-import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw, LinkIcon, Palette, Check, Edit3, XCircle, GripVertical } from 'lucide-react';
+import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw, LinkIcon, Palette, Check, Edit3, XCircle } from 'lucide-react';
 import type { CalendarEvent as AppCalendarEvent } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -81,31 +81,35 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
   const [isClientLoaded, setIsClientLoaded] = useState(false);
 
   useEffect(() => {
-    const savedFeedsString = localStorage.getItem(LOCALSTORAGE_KEY_ICAL_FEEDS);
-    let loadedFeeds: IcalFeedItem[] = [];
-    if (savedFeedsString) {
-      try {
-        const parsed = JSON.parse(savedFeedsString);
-        if (Array.isArray(parsed)) {
-          loadedFeeds = parsed.map((item: any, index: number) => ({
-            id: item.id || `feed-${Date.now()}-${Math.random().toString(36).substring(2,9)}`,
-            url: item.url || '',
-            label: item.label || `Feed ${index + 1}`,
-            color: (item.color && isValidHexColor(item.color)) ? item.color : getNextFeedColor(),
-          })).filter(item => typeof item.url === 'string' && typeof item.label === 'string' && typeof item.color === 'string');
+    if (displayMode === 'widgetOnly' && !isClientLoaded) return;
+    if (typeof window !== 'undefined') {
+      const savedFeedsString = localStorage.getItem(LOCALSTORAGE_KEY_ICAL_FEEDS);
+      let loadedFeeds: IcalFeedItem[] = [];
+      if (savedFeedsString) {
+        try {
+          const parsed = JSON.parse(savedFeedsString);
+          if (Array.isArray(parsed)) {
+            loadedFeeds = parsed.map((item: any, index: number) => ({
+              id: item.id || `feed-${Date.now()}-${Math.random().toString(36).substring(2,9)}`,
+              url: item.url || '',
+              label: item.label || `Feed ${index + 1}`,
+              color: (item.color && isValidHexColor(item.color)) ? item.color : getNextFeedColor(),
+            })).filter(item => typeof item.url === 'string' && typeof item.label === 'string' && typeof item.color === 'string');
+          }
+        } catch (e) {
+          console.error("Failed to parse iCal feeds from localStorage", e);
+          toast({ title: "Storage Error", description: "Could not load saved iCal feeds.", variant: "destructive" });
         }
-      } catch (e) {
-        console.error("Failed to parse iCal feeds from localStorage", e);
-        toast({ title: "Storage Error", description: "Could not load saved iCal feeds.", variant: "destructive" });
       }
+      setIcalFeeds(loadedFeeds);
     }
-    setIcalFeeds(loadedFeeds);
     setIsClientLoaded(true);
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayMode]);
 
 
   useEffect(() => {
-    if (isClientLoaded) {
+    if (isClientLoaded && typeof window !== 'undefined') {
       localStorage.setItem(LOCALSTORAGE_KEY_ICAL_FEEDS, JSON.stringify(icalFeeds));
     }
   }, [icalFeeds, isClientLoaded]);
@@ -122,13 +126,13 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
 
   const fetchAndProcessEvents = useCallback(async () => {
     const validFeeds = icalFeeds.filter(feed => (feed.url.trim().toLowerCase().startsWith('http') || feed.url.trim().toLowerCase().startsWith('webcal')) && (feed.url.trim().toLowerCase().endsWith('.ics') || feed.url.includes('format=ical')));
-    if (validFeeds.length === 0 && isClientLoaded) { // Only clear if client loaded to avoid race condition
+    if (validFeeds.length === 0 && isClientLoaded) { 
       setAllEvents([]);
       setIsLoading(false);
       setError(null);
       return;
     }
-    if (validFeeds.length === 0) return; // Don't fetch if no valid feeds
+    if (validFeeds.length === 0) return;
 
     setIsLoading(true);
     setError(null);
@@ -203,21 +207,21 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     setNewIcalUrl('');
     setNewIcalLabel('');
     toast({ title: "Feed Added", description: `"${newFeed.label}" added. Events refreshing.` });
-  }, [icalFeeds, newIcalUrl, newIcalLabel, setIcalFeeds, setJustAddedFeedId, setNewIcalUrl, setNewIcalLabel]);
+  }, [icalFeeds, newIcalUrl, newIcalLabel]);
 
   const handleRemoveIcalFeed = useCallback((idToRemove: string) => {
     const feedLabel = icalFeeds.find(f => f.id === idToRemove)?.label || "Feed";
     setIcalFeeds(prev => prev.filter(feed => feed.id !== idToRemove));
     toast({ title: "Feed Removed", description: `"${feedLabel}" has been removed.` });
-  }, [icalFeeds, setIcalFeeds]);
+  }, [icalFeeds]);
 
   const getUpcomingEventsForFeed = useCallback((feedId: string): AppCalendarEvent[] => {
     const feed = icalFeeds.find(f => f.id === feedId);
     if (!feed) return [];
     return allEvents
       .filter(event => event.calendarSource === feed.label && event.color.toLowerCase() === feed.color.toLowerCase())
-      .filter(event => new Date(event.endTime) >= new Date(new Date().setHours(0,0,0,0))) // Only future or current events
-      .slice(0, 15); // Limit to 15 events per feed for performance
+      .filter(event => new Date(event.endTime) >= new Date(new Date().setHours(0,0,0,0)))
+      .slice(0, 15); 
   }, [icalFeeds, allEvents]);
 
   const formatEventTime = (event: AppCalendarEvent) => {
@@ -242,14 +246,14 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     setEditFeedUrl(feed.url);
     setEditFeedLabel(feed.label);
     setEditFeedColor(feed.color);
-  }, [setEditingFeed, setEditFeedUrl, setEditFeedLabel, setEditFeedColor]);
+  }, []);
 
   const handleCloseEditDialog = useCallback(() => {
     setEditingFeed(null);
     setEditFeedUrl('');
     setEditFeedLabel('');
     setEditFeedColor('');
-  }, [setEditingFeed, setEditFeedUrl, setEditFeedLabel, setEditFeedColor]);
+  }, []);
 
   const handleSaveChangesToFeed = useCallback(() => {
     if (!editingFeed) return;
@@ -273,7 +277,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     toast({ title: "Feed Updated", description: `Feed "${editFeedLabel || editFeedUrl}" settings saved. Events refreshing.` });
     handleCloseEditDialog();
     fetchAndProcessEvents(); 
-  }, [editingFeed, editFeedUrl, editFeedLabel, editFeedColor, setIcalFeeds, handleCloseEditDialog, fetchAndProcessEvents]);
+  }, [editingFeed, editFeedUrl, editFeedLabel, editFeedColor, handleCloseEditDialog, fetchAndProcessEvents]);
 
   const handleFeedColorChange = useCallback((feedId: string, newColor: string) => {
     if (newColor !== '' && !isValidHexColor(newColor)) {
@@ -282,7 +286,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     setIcalFeeds(prevFeeds => prevFeeds.map(f =>
       f.id === feedId ? { ...f, color: newColor } : f
     ));
-  }, [setIcalFeeds]);
+  }, []);
 
 
   const renderSettings = () => (
@@ -328,7 +332,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
         {icalFeeds.length > 0 && (
           <div>
             <h4 className="text-sm font-medium text-muted-foreground mb-2">Active Feeds</h4>
-            <ScrollArea className="max-h-[160px] pr-1 calendar-feed-scroll-area" ref={feedListManagementRef}>
+            <ScrollArea className="max-h-[240px] pr-1 calendar-feed-scroll-area" ref={feedListManagementRef}>
               <div className="space-y-3">
                 {icalFeeds.map((feed) => (
                   <div key={feed.id} data-feed-id={feed.id} className="p-2.5 rounded-md bg-muted/30 flex flex-col">
@@ -409,10 +413,10 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
         ))
       )}
 
-      {!isLoading && error && isClientLoaded && <Card className="shadow-md"><CardContent className="pt-4"><p className="text-sm text-destructive p-2 py-2">{error}</p></CardContent></Card>}
+      {!isLoading && error && isClientLoaded && <div className="p-4 border rounded-md bg-destructive/10 text-destructive mb-4"><p className="text-sm p-2 py-2">{error}</p></div>}
       
       {!isLoading && !error && isClientLoaded && icalFeeds.filter(f => f.url.trim()).length === 0 && (
-          <Card className="shadow-md"><CardContent className="pt-4"><p className="text-sm text-muted-foreground p-2 py-2 text-center">No upcoming events. Open settings to add an iCal feed.</p></CardContent></Card>
+          <Card className="shadow-md mb-4"><CardContent className="pt-4"><p className="text-sm text-muted-foreground p-2 py-2 text-center">No upcoming events. Open settings to add an iCal feed.</p></CardContent></Card>
       )}
 
       {!isLoading && !error && isClientLoaded && (
@@ -460,7 +464,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
         })
       )}
        {!isLoading && !error && isClientLoaded && icalFeeds.filter(f=>f.url.trim()).length > 0 && allEvents.length === 0 && (
-        <Card className="shadow-md"><CardContent className="pt-4"><p className="text-sm text-muted-foreground p-2 py-2 text-center">No upcoming events from any active feeds for the next 30 days, or feeds might need updating/checking.</p></CardContent></Card>
+        <Card className="shadow-md mb-4"><CardContent className="pt-4"><p className="text-sm text-muted-foreground p-2 py-2 text-center">No upcoming events from any active feeds for the next 30 days, or feeds might need updating/checking.</p></CardContent></Card>
       )}
     </>
   );
@@ -524,17 +528,15 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     </Dialog>
   );
 
-  // Logic for 'settingsOnly' mode (global settings panel)
   if (displayMode === 'settingsOnly') {
     return settingsOpen ? (
       <>
-        {renderSettings()} {/* This includes the list with edit/delete buttons */}
-        {editDialog}      {/* This is the modal for editing */}
+        {renderSettings()}
+        {editDialog}
       </>
     ) : null;
   }
 
-  // Logic for 'widgetOnly' mode (main dashboard display)
   if (!isClientLoaded && displayMode === 'widgetOnly') {
     return (
       <div className="space-y-4">
