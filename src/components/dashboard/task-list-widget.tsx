@@ -14,13 +14,13 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SectionTitle } from './section-title';
-import { ListChecks, LogIn, LogOut, PlusCircle, Loader2, AlertCircle, Settings, ListPlus, Eye, EyeOff } from 'lucide-react';
+import { ListChecks, LogIn, LogOut, PlusCircle, Loader2, AlertCircle, Settings, ListPlus, Eye, EyeOff, Edit3, Check, XCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from '@/components/ui/separator';
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from '@/components/ui/skeleton'; // Added import
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Ensure gapi types are available
 declare global {
@@ -71,6 +71,11 @@ const TaskListContent: React.FC = () => {
   const [showTaskSettings, setShowTaskSettings] = useState(false);
   
   const [isGapiClientLoaded, setIsGapiClientLoaded] = useState(false);
+
+  const [editingListId, setEditingListId] = useState<string | null>(null);
+  const [editingListTitle, setEditingListTitle] = useState('');
+  const [isUpdatingListTitle, setIsUpdatingListTitle] = useState(false);
+
 
   const loadGapiClient = useCallback(async () => {
     if (isGapiClientLoaded && window.gapi && window.gapi.client && window.gapi.client.tasks) {
@@ -128,6 +133,8 @@ const TaskListContent: React.FC = () => {
     setError(null);
     setErrorPerList({});
     setIsGapiClientLoaded(false);
+    setEditingListId(null);
+    setEditingListTitle('');
     if (typeof window !== 'undefined') {
       localStorage.removeItem('googleTasksAccessToken');
       localStorage.removeItem(VISIBLE_LISTS_STORAGE_KEY);
@@ -232,7 +239,6 @@ const TaskListContent: React.FC = () => {
     if (typeof window !== 'undefined') localStorage.setItem('googleTasksAccessToken', newAccessToken);
     console.log('TaskListWidget: Login successful, token acquired.');
     loadGapiClient().then(() => {
-        // fetchTaskLists will be called by the useEffect hook reacting to isGapiClientLoaded and accessToken changes
         console.log('TaskListWidget: GAPI client loaded post-login. Fetch should be triggered by useEffect.');
     }).catch(e => console.error("TaskListWidget: GAPI load failed post-login", e));
   };
@@ -335,10 +341,8 @@ const TaskListContent: React.FC = () => {
       toast({ title: "Task List Created", description: `"${newList.title}" created.` });
       setNewTaskListTitle('');
       
-      // Update taskLists state and auto-select new list
       setTaskLists(prev => {
           const updatedLists = [...prev, newList];
-          // Auto-make new list visible and fetch its tasks
           const newVisible = { ...visibleListIds, [newList.id]: true };
           setVisibleListIds(newVisible);
           if (typeof window !== 'undefined') {
@@ -368,11 +372,46 @@ const TaskListContent: React.FC = () => {
     }
   };
 
+  const handleStartEditListTitle = (list: TaskList) => {
+    setEditingListId(list.id);
+    setEditingListTitle(list.title);
+  };
+
+  const handleCancelEditListTitle = () => {
+    setEditingListId(null);
+    setEditingListTitle('');
+  };
+
+  const handleSaveListTitle = async () => {
+    if (!editingListId || !editingListTitle.trim() || !accessToken) return;
+    setIsUpdatingListTitle(true);
+    try {
+      if (!isGapiClientLoaded) await loadGapiClient();
+      if (!window.gapi || !window.gapi.client || !window.gapi.client.tasks) {
+        throw new Error("Google Tasks API client is not available for updating list title.");
+      }
+      window.gapi.client.setToken({ access_token: accessToken });
+      const response = await window.gapi.client.tasks.tasklists.update({
+        tasklist: editingListId,
+        resource: { id: editingListId, title: editingListTitle.trim() },
+      });
+      setTaskLists(prev => prev.map(list => list.id === editingListId ? response.result : list));
+      toast({ title: "Task List Updated", description: `List name changed to "${response.result.title}".` });
+      handleCancelEditListTitle();
+    } catch (err: any) {
+      console.error('TaskListWidget: Error updating task list title:', err);
+      toast({ title: "Update Failed", description: `Could not update list title: ${err.result?.error?.message || err.message}`, variant: "destructive" });
+      if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
+    } finally {
+      setIsUpdatingListTitle(false);
+    }
+  };
+
   const visibleListsToDisplay = taskLists.filter(list => visibleListIds[list.id]);
 
   return (
       <div className="flex flex-col">
-        <div className="p-4 border-b mb-4">
+        <div className="p-4 border-b mb-1">
           <div className="flex justify-between items-center">
             <SectionTitle icon={ListChecks} title="Google Tasks" className="mb-0" />
             <div className="flex items-center gap-1">
@@ -418,16 +457,44 @@ const TaskListContent: React.FC = () => {
                         <ScrollArea className="max-h-40 pr-2">
                           <div className="space-y-2">
                           {taskLists.map((list) => (
-                            <div key={list.id} className="flex items-center justify-between p-2 rounded-md bg-muted/30">
-                              <Label htmlFor={`vis-${list.id}`} className="text-sm text-card-foreground truncate pr-2" title={list.title}>
-                                {list.title}
-                              </Label>
-                              <Switch
-                                id={`vis-${list.id}`}
-                                checked={!!visibleListIds[list.id]}
-                                onCheckedChange={(checked) => handleVisibilityChange(list.id, checked)}
-                                aria-label={`Toggle visibility for ${list.title}`}
-                              />
+                            <div key={list.id} className="flex items-center justify-between p-2 rounded-md bg-muted/30 hover:bg-muted/50">
+                              {editingListId === list.id ? (
+                                <div className="flex-grow flex items-center gap-1">
+                                  <Input
+                                    type="text"
+                                    value={editingListTitle}
+                                    onChange={(e) => setEditingListTitle(e.target.value)}
+                                    className="h-8 text-sm flex-grow"
+                                    onKeyDown={(e) => e.key === 'Enter' && !isUpdatingListTitle && handleSaveListTitle()}
+                                    disabled={isUpdatingListTitle}
+                                    autoFocus
+                                  />
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSaveListTitle} disabled={isUpdatingListTitle || !editingListTitle.trim()} aria-label="Save list title">
+                                    {isUpdatingListTitle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCancelEditListTitle} disabled={isUpdatingListTitle} aria-label="Cancel editing list title">
+                                    <XCircle className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Label htmlFor={`vis-${list.id}`} className="text-sm text-card-foreground truncate pr-1" title={list.title}>
+                                  {list.title}
+                                </Label>
+                              )}
+                              <div className="flex items-center gap-1">
+                                {editingListId !== list.id && (
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEditListTitle(list)} aria-label="Edit list title">
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                                <Switch
+                                  id={`vis-${list.id}`}
+                                  checked={!!visibleListIds[list.id]}
+                                  onCheckedChange={(checked) => handleVisibilityChange(list.id, checked)}
+                                  aria-label={`Toggle visibility for ${list.title}`}
+                                  disabled={editingListId === list.id}
+                                />
+                              </div>
                             </div>
                           ))}
                           </div>
@@ -461,23 +528,23 @@ const TaskListContent: React.FC = () => {
                 </Card>
               )}
 
-              {isLoadingLists && !taskLists.length ? (
+              {isLoadingLists && !taskLists.length && !showTaskSettings ? (
                   <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</div>
               ) : visibleListsToDisplay.length > 0 ? (
-                <div className="space-y-6">
+                <div className="space-y-4 mt-4">
                   {visibleListsToDisplay.map(list => (
-                    <Card key={list.id} className="shadow-lg flex flex-col max-h-96">
-                      <CardHeader>
+                    <Card key={list.id} className="shadow-md flex flex-col">
+                      <CardHeader className="py-3 px-4 border-b">
                         <CardTitle className="text-md">{list.title}</CardTitle>
                       </CardHeader>
-                      <CardContent className="pt-2 flex-grow flex flex-col overflow-hidden">
+                      <CardContent className="pt-3 px-4 pb-3 flex-grow flex flex-col overflow-hidden">
                         <div className="flex gap-2 mb-3">
                           <Input
                             type="text"
                             value={newTaskTitles[list.id] || ''}
                             onChange={(e) => setNewTaskTitles(prev => ({...prev, [list.id]: e.target.value}))}
                             placeholder="Add a task..."
-                            className="flex-grow"
+                            className="flex-grow h-9 text-sm"
                             onKeyPress={(e) => e.key === 'Enter' && !isAddingTaskForList[list.id] && handleAddTask(list.id)}
                             disabled={isAddingTaskForList[list.id]}
                           />
@@ -494,10 +561,10 @@ const TaskListContent: React.FC = () => {
                         ) : errorPerList[list.id] ? (
                            <Alert variant="destructive" className="text-xs my-2"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{errorPerList[list.id]}</AlertDescription></Alert>
                         ) : (tasksByListId[list.id] || []).length > 0 ? (
-                          <ScrollArea className="pr-1 flex-grow max-h-60"> {/* Added max-h-60 */}
-                            <ul className="space-y-2">
+                          <ScrollArea className="pr-1 flex-grow max-h-60">
+                            <ul className="space-y-1.5">
                               {(tasksByListId[list.id] || []).map((task) => (
-                                <li key={task.id} className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted/50 transition-colors">
+                                <li key={task.id} className="flex items-center space-x-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors">
                                   <Checkbox
                                     id={`task-${list.id}-${task.id}`}
                                     checked={task.status === 'completed'}
@@ -515,19 +582,19 @@ const TaskListContent: React.FC = () => {
                             </ul>
                           </ScrollArea>
                         ) : (
-                          <p className="text-sm text-muted-foreground text-center py-4">No active tasks in this list.</p>
+                          <p className="text-xs text-muted-foreground text-center py-3">No active tasks in this list.</p>
                         )}
                       </CardContent>
                     </Card>
                   ))}
                 </div>
               ) : (
-                 !isLoadingLists && isSignedIn && taskLists.length > 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">No task lists are currently visible. Go to settings <Settings className="inline h-3 w-3"/> to select lists to display.</p>
+                 !isLoadingLists && isSignedIn && taskLists.length > 0 && !showTaskSettings && (
+                  <p className="text-sm text-muted-foreground text-center py-6">No task lists are currently visible. Go to settings <Settings className="inline h-3 w-3"/> to select lists to display.</p>
                  )
               )}
-               {!isLoadingLists && !taskLists.length && isSignedIn && !error && (
-                 <p className="text-sm text-muted-foreground text-center py-4">No Google Task lists found. Click settings <Settings className="inline h-3 w-3"/> to create one.</p>
+               {!isLoadingLists && !taskLists.length && isSignedIn && !error && !showTaskSettings && (
+                 <p className="text-sm text-muted-foreground text-center py-6">No Google Task lists found. Click settings <Settings className="inline h-3 w-3"/> to create one.</p>
                )}
             </>
           )}
@@ -557,7 +624,11 @@ export function TaskListWidget() {
     return (
        <div className="p-4 border rounded-lg shadow-lg">
         <div className="p-4 border-b"><SectionTitle icon={ListChecks} title="Google Tasks" /></div>
-        <div className="p-6"><Skeleton className="h-10 w-full" /></div>
+        <div className="p-6">
+          <Skeleton className="h-10 w-3/4 mb-4" />
+          <Skeleton className="h-8 w-full mb-2" />
+          <Skeleton className="h-8 w-full" />
+        </div>
       </div>
     );
   }
@@ -585,5 +656,3 @@ export function TaskListWidget() {
     </GoogleOAuthProvider>
   );
 }
-
-    
