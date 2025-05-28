@@ -1,9 +1,9 @@
 
 'use server';
 /**
- * @fileOverview A Genkit flow to fetch the current price of an asset using Finnhub API.
+ * @fileOverview A Genkit flow to fetch the current price of an asset using Tiingo API.
  *
- * - getAssetPrice - Fetches the current price for a given asset symbol.
+ * - getAssetPrice - Fetches the latest end-of-day price for a given asset symbol.
  * - AssetPriceInput - Input schema (symbol).
  * - AssetPriceOutput - Output schema (price).
  */
@@ -17,7 +17,7 @@ const AssetPriceInputSchema = z.object({
 export type AssetPriceInput = z.infer<typeof AssetPriceInputSchema>;
 
 const AssetPriceOutputSchema = z.object({
-  currentPrice: z.number().nullable().describe('The current market price or previous closing price of the asset. Null if not found or error.'),
+  currentPrice: z.number().nullable().describe('The latest end-of-day market price of the asset. Null if not found or error.'),
 });
 export type AssetPriceOutput = z.infer<typeof AssetPriceOutputSchema>;
 
@@ -32,57 +32,75 @@ const assetPriceFlow = ai.defineFlow(
     outputSchema: AssetPriceOutputSchema,
   },
   async ({ symbol }) => {
-    const finnhubApiKey = process.env.FINNHUB_API_KEY;
+    const tiingoApiKey = process.env.TIINGO_API_KEY;
 
-    if (!finnhubApiKey) {
-      const errorMsg = 'Finnhub API key (FINNHUB_API_KEY) is not configured in .env.local. Cannot fetch asset prices.';
+    if (!tiingoApiKey) {
+      const errorMsg = 'Tiingo API key (TIINGO_API_KEY) is not configured in .env.local. Cannot fetch asset prices.';
       console.error(errorMsg);
-      throw new Error('FINNHUB_API_KEY_NOT_CONFIGURED');
+      throw new Error('TIINGO_API_KEY_NOT_CONFIGURED');
     }
 
-    const apiUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol.toUpperCase()}&token=${finnhubApiKey}`;
+    // Tiingo EOD prices endpoint. Fetches historical data, we'll take the most recent.
+    const apiUrl = `https://api.tiingo.com/tiingo/daily/${symbol.toUpperCase()}/prices`;
 
     try {
-      const response = await fetch(apiUrl);
-      const responseDataText = await response.text(); // Get text for logging regardless of ok status
-      console.log(`Finnhub API response text for ${symbol}:`, responseDataText);
+      const response = await fetch(apiUrl, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${tiingoApiKey}`
+        }
+      });
 
+      const responseDataText = await response.text();
+      console.log(`Tiingo API EOD price response text for ${symbol}:`, responseDataText);
 
       if (!response.ok) {
-        const detailedErrorMsg = `Finnhub API Error for symbol ${symbol}: ${response.status} ${responseDataText}`;
+        const detailedErrorMsg = `Tiingo API Error for symbol ${symbol}: ${response.status} ${responseDataText}`;
         console.error(detailedErrorMsg);
         if (response.status === 401 || response.status === 403) {
-           console.error(`Finnhub API Unauthorized/Forbidden for symbol ${symbol} (Status: ${response.status}). Check API key, permissions, and subscription plan.`);
-           throw new Error(`FINNHUB_API_ERROR: ${response.status} Unauthorized/Forbidden for ${symbol}. Check API key and plan.`);
+           console.error(`Tiingo API Unauthorized/Forbidden for symbol ${symbol} (Status: ${response.status}). Check API key, permissions, and subscription plan.`);
+           throw new Error(`TIINGO_API_ERROR: ${response.status} Unauthorized/Forbidden for ${symbol}. Check API key and plan.`);
         }
-        throw new Error(`FINNHUB_API_ERROR: ${response.status} for ${symbol}`);
+         if (response.status === 404) {
+            console.warn(`Tiingo: Symbol ${symbol} not found (404). API response: ${responseDataText}`);
+            return { currentPrice: null }; // Symbol not found by Tiingo
+        }
+        throw new Error(`TIINGO_API_ERROR: ${response.status} for ${symbol}`);
       }
       
-      const data = JSON.parse(responseDataText); // Parse after checking response.ok and logging text
-      console.log(`Finnhub API parsed data for ${symbol}:`, JSON.stringify(data, null, 2));
+      const data = JSON.parse(responseDataText); 
 
+      if (!Array.isArray(data) || data.length === 0) {
+        console.warn(`Tiingo: No price data returned for symbol ${symbol}. API response:`, JSON.stringify(data, null, 2));
+        return { currentPrice: null };
+      }
+
+      // Data is an array of daily prices, sorted most recent first by default by Tiingo EOD.
+      const latestPriceData = data[0];
       let priceToUse: number | null = null;
 
-      if (typeof data.c === 'number' && data.c > 0) {
-        priceToUse = data.c;
-      } else if (typeof data.pc === 'number' && data.pc > 0) {
-        priceToUse = data.pc; 
-        console.log(`Finnhub: Using previous close price (pc: ${data.pc}) for symbol ${symbol} as current price (c) was ${data.c}.`);
+      if (latestPriceData && typeof latestPriceData.adjClose === 'number' && latestPriceData.adjClose > 0) {
+        priceToUse = latestPriceData.adjClose;
+      } else if (latestPriceData && typeof latestPriceData.close === 'number' && latestPriceData.close > 0) {
+        priceToUse = latestPriceData.close;
+        console.log(`Tiingo: Using close price (${latestPriceData.close}) for symbol ${symbol} as adjClose was ${latestPriceData.adjClose}.`);
       }
 
       if (priceToUse !== null) {
+        console.log(`Tiingo: Using price ${priceToUse} from date ${latestPriceData.date} for symbol ${symbol}.`);
         return { currentPrice: priceToUse };
       } else {
-        console.warn(`Finnhub: Valid price (c or pc) not found for symbol ${symbol}. API status was ${response.status}. Response data:`, JSON.stringify(data, null, 2));
+        console.warn(`Tiingo: Valid price (adjClose or close) not found in latest data for symbol ${symbol}. Latest data point:`, JSON.stringify(latestPriceData, null, 2));
         return { currentPrice: null };
       }
+
     } catch (error) {
-      if (error instanceof Error && (error.message.startsWith('FINNHUB_API_KEY_NOT_CONFIGURED') || error.message.startsWith('FINNHUB_API_ERROR'))) {
+      if (error instanceof Error && (error.message.startsWith('TIINGO_API_KEY_NOT_CONFIGURED') || error.message.startsWith('TIINGO_API_ERROR'))) {
         throw error; 
       }
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`Failed to fetch price for symbol ${symbol} from Finnhub (generic catch): ${errorMessage}`);
-      throw new Error(`FETCH_ERROR: Could not fetch price for ${symbol} from Finnhub.`);
+      console.error(`Failed to fetch price for symbol ${symbol} from Tiingo (generic catch): ${errorMessage}`);
+      throw new Error(`FETCH_ERROR: Could not fetch price for ${symbol} from Tiingo.`);
     }
   }
 );

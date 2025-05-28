@@ -30,14 +30,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
-const initialAssetFormState: Omit<Asset, 'id' | 'name'> & { name?: string } = { // Name is optional here as it's auto-populated
+const initialAssetFormState: Omit<Asset, 'id' | 'name'> & { name?: string } = { 
   symbol: '',
   quantity: 0,
   purchasePrice: 0,
   type: 'stock',
 };
 
-const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes (Tiingo free tier has stricter limits)
 
 function calculateAssetPortfolio(
   assets: Asset[],
@@ -100,14 +100,14 @@ export function AssetTrackerWidget() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const savedAssets = localStorage.getItem('userAssetsLifeOS_v2');
+      const savedAssets = localStorage.getItem('userAssetsLifeOS_Tiingo_v1'); // New key for Tiingo
       if (savedAssets) {
         try {
           const parsedAssets = JSON.parse(savedAssets);
           if (Array.isArray(parsedAssets)) {
             setAssets(parsedAssets.filter((asset: any) =>
               typeof asset.id === 'string' &&
-              typeof asset.name === 'string' && // Name must exist now
+              typeof asset.name === 'string' && 
               typeof asset.symbol === 'string' &&
               typeof asset.quantity === 'number' &&
               typeof asset.purchasePrice === 'number' &&
@@ -124,7 +124,7 @@ export function AssetTrackerWidget() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('userAssetsLifeOS_v2', JSON.stringify(assets));
+      localStorage.setItem('userAssetsLifeOS_Tiingo_v1', JSON.stringify(assets));
     }
   }, [assets]);
 
@@ -143,34 +143,35 @@ export function AssetTrackerWidget() {
     setPriceFetchError(null);
     const prices: Record<string, number | null> = {};
     let anErrorOccurred = false;
-    let specificErrorMessage = "Could not fetch prices for some assets. Ensure symbols are correct and Finnhub API key is set in .env.local.";
+    let specificErrorMessage = "Could not fetch prices for some assets. Ensure symbols are correct and Tiingo API key is set in .env.local.";
 
     for (const asset of currentAssets) {
+      // For now, assume Tiingo EOD can handle stocks and funds. Crypto would need a different Tiingo endpoint.
       if ((asset.type === 'stock' || asset.type === 'fund') && asset.symbol) {
         try {
           const priceData = await getAssetPrice({ symbol: asset.symbol });
           prices[asset.id] = priceData.currentPrice;
           if (priceData.currentPrice === null) {
-             console.warn(`Finnhub: Price not found or unavailable for symbol ${asset.symbol} (Type: ${asset.type}). API Response for ${asset.symbol} was ${JSON.stringify(priceData)}`);
+             console.warn(`Tiingo: Price not found or unavailable for symbol ${asset.symbol} (Type: ${asset.type}). API Response for ${asset.symbol} was ${JSON.stringify(priceData)}`);
           }
         } catch (err) {
-          console.error(`Error fetching price for ${asset.symbol}:`, err);
+          console.error(`Error fetching price for ${asset.symbol} from Tiingo:`, err);
           prices[asset.id] = null; 
           anErrorOccurred = true;
           if (err instanceof Error) {
-            if (err.message.includes('FINNHUB_API_KEY_NOT_CONFIGURED')) {
-              specificErrorMessage = "Finnhub API Key is not configured. Please set FINNHUB_API_KEY in your .env.local file and restart the server.";
-            } else if (err.message.startsWith('FINNHUB_API_ERROR')) {
-               const statusMatch = err.message.match(/FINNHUB_API_ERROR: (\d+)/);
+            if (err.message.includes('TIINGO_API_KEY_NOT_CONFIGURED')) {
+              specificErrorMessage = "Tiingo API Key is not configured. Please set TIINGO_API_KEY in your .env.local file and restart the server.";
+            } else if (err.message.startsWith('TIINGO_API_ERROR')) {
+               const statusMatch = err.message.match(/TIINGO_API_ERROR: (\d+)/);
                const status = statusMatch ? statusMatch[1] : 'Unknown Status';
-               specificErrorMessage = `Finnhub API error for ${asset.symbol} (Status: ${status}). Check symbol, API limits, or plan.`;
+               specificErrorMessage = `Tiingo API error for ${asset.symbol} (Status: ${status}). Check symbol, API limits, or plan.`;
             } else if (err.message.startsWith('FETCH_ERROR')) {
-               specificErrorMessage = `Network error fetching price for ${asset.symbol}. Check connection or Finnhub status.`;
+               specificErrorMessage = `Network error fetching price for ${asset.symbol}. Check connection or Tiingo status.`;
             }
           }
         }
       } else {
-        prices[asset.id] = null; 
+        prices[asset.id] = null; // No price fetching for 'crypto' type with this flow yet
       }
     }
     setFetchedPrices(prices);
@@ -201,15 +202,15 @@ export function AssetTrackerWidget() {
     }
     const intervalId = setInterval(() => {
       if (!isFetchingPricesRef.current) {
-        console.log('AssetTracker: Auto-refreshing prices via interval.');
+        console.log('AssetTracker: Auto-refreshing prices (Tiingo) via interval.');
         fetchAllAssetPrices(assets);
       } else {
-        console.log('AssetTracker: Interval tick - skipping auto-refresh, a fetch is already in progress.');
+        console.log('AssetTracker: Interval tick - skipping auto-refresh (Tiingo), a fetch is already in progress.');
       }
     }, REFRESH_INTERVAL_MS);
 
     return () => {
-      console.log('AssetTracker: Clearing price refresh interval.');
+      console.log('AssetTracker: Clearing price refresh interval (Tiingo).');
       clearInterval(intervalId);
     };
   }, [assets, fetchAllAssetPrices]);
@@ -234,7 +235,7 @@ export function AssetTrackerWidget() {
         return;
     }
     
-    setAssetFormData(prev => ({ ...prev, symbol })); // Update symbol in form state
+    setAssetFormData(prev => ({ ...prev, symbol })); 
 
     if (assetFormData.type === 'stock' || assetFormData.type === 'fund') { 
       setIsFetchingName(true);
@@ -243,13 +244,13 @@ export function AssetTrackerWidget() {
         if (profile.assetName) {
           setAssetFormData(prev => ({ ...prev, name: profile.assetName! }));
         } else { 
-          setAssetFormData(prev => ({ ...prev, name: symbol })); // Fallback to symbol if API gives no name
-          toast({ title: "Name Fetch", description: `Could not fetch name for ${symbol}. Using symbol as name.`, variant: "default", duration: 3000});
+          setAssetFormData(prev => ({ ...prev, name: symbol })); 
+          toast({ title: "Name Fetch", description: `Could not fetch name for ${symbol} from Tiingo. Using symbol as name.`, variant: "default", duration: 3000});
         }
       } catch (error) {
-        console.error("Error fetching asset profile for symbol:", symbol, error);
-        setAssetFormData(prev => ({ ...prev, name: symbol })); // Fallback to symbol on error
-        toast({ title: "Name Fetch Error", description: `Error fetching name for ${symbol}. Using symbol as name.`, variant: "destructive"});
+        console.error("Error fetching asset profile for symbol from Tiingo:", symbol, error);
+        setAssetFormData(prev => ({ ...prev, name: symbol })); 
+        toast({ title: "Name Fetch Error", description: `Error fetching name for ${symbol} from Tiingo. Using symbol as name.`, variant: "destructive"});
       } finally {
         setIsFetchingName(false);
       }
@@ -263,11 +264,9 @@ export function AssetTrackerWidget() {
     setAssetFormData(prev => ({ 
         ...prev, 
         type: value, 
-        name: (value === 'crypto' && currentSymbol) ? currentSymbol : prev.name // Keep name if stock/fund, set to symbol if crypto
+        name: (value === 'crypto' && currentSymbol) ? currentSymbol : prev.name 
     }));
-    // If type changed to stock/fund and a symbol exists, trigger name fetch
     if ((value === 'stock' || value === 'fund') && currentSymbol) {
-        // Simulate blur event to trigger name fetch
         handleSymbolBlur({ target: { value: currentSymbol } } as React.FocusEvent<HTMLInputElement>);
     }
   };
@@ -318,7 +317,7 @@ export function AssetTrackerWidget() {
 
   const handleOpenEditDialog = (assetToEdit: Asset) => {
     setEditingAsset(assetToEdit);
-    setAssetFormData({ // Ensure all fields, including name, are populated for editing
+    setAssetFormData({ 
       name: assetToEdit.name, 
       symbol: assetToEdit.symbol,
       quantity: assetToEdit.quantity,
@@ -382,7 +381,6 @@ export function AssetTrackerWidget() {
             <p className="text-xs text-muted-foreground pt-1">Fetched Name: {assetFormData.name}</p>
         )}
       </div>
-      {/* Name input field removed */}
       <div className="space-y-1">
         <Label htmlFor={forEditingDialog ? "edit-quantity" : "quantity"}>Quantity</Label>
         <Input 
@@ -429,7 +427,7 @@ export function AssetTrackerWidget() {
       )}
        {(assetFormData.type === 'stock' || assetFormData.type === 'fund') && (
           <p className="text-xs text-muted-foreground text-center px-2 py-1 bg-muted/50 rounded-md">
-              Stock/Fund name is auto-fetched. Price fetching uses Finnhub. Data availability may vary.
+              Stock/Fund name is auto-fetched. Price fetching uses Tiingo (EOD prices). Data availability may vary.
           </p>
       )}
     </div>
@@ -592,7 +590,7 @@ export function AssetTrackerWidget() {
                                 <AlertCircle className="w-3 h-3 inline-block ml-1 text-destructive cursor-help"/>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-xs text-xs">
-                                <p>Price data unavailable. This might be due to an invalid symbol, API plan limitations (e.g. some mutual funds), or temporary API issues. Check server logs for details.</p>
+                                <p>Price data unavailable (Tiingo EOD). This might be due to an invalid symbol, API plan limitations (e.g., some mutual funds require higher tiers or are not covered), or temporary API issues. Check server logs for details.</p>
                               </TooltipContent>
                             </Tooltip>
                           )}

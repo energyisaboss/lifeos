@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview A Genkit flow to fetch asset profile information (like company name) using Finnhub API.
+ * @fileOverview A Genkit flow to fetch asset profile information (like company name) using Tiingo API.
  *
  * - getAssetProfile - Fetches the profile for a given asset symbol.
  * - AssetProfileInput - Input schema (symbol).
@@ -12,7 +12,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
 const AssetProfileInputSchema = z.object({
-  symbol: z.string().describe('The stock/asset symbol (e.g., AAPL, MSFT).'),
+  symbol: z.string().describe('The stock/asset symbol (e.g., AAPL, MSFT, FXAIX).'),
 });
 export type AssetProfileInput = z.infer<typeof AssetProfileInputSchema>;
 
@@ -32,39 +32,49 @@ const assetProfileFlow = ai.defineFlow(
     outputSchema: AssetProfileOutputSchema,
   },
   async ({ symbol }) => {
-    const finnhubApiKey = process.env.FINNHUB_API_KEY;
+    const tiingoApiKey = process.env.TIINGO_API_KEY;
 
-    if (!finnhubApiKey) {
-      const errorMsg = 'Finnhub API key (FINNHUB_API_KEY) is not configured in .env.local. Cannot fetch asset profiles.';
+    if (!tiingoApiKey) {
+      const errorMsg = 'Tiingo API key (TIINGO_API_KEY) is not configured in .env.local. Cannot fetch asset profiles.';
       console.error(errorMsg);
-      // Not throwing a hard error here, as the primary price fetching might still work.
-      // The widget should handle a null assetName gracefully.
-      return { assetName: null };
+      // Do not throw hard error, allow graceful degradation in UI if name isn't found.
+      return { assetName: null }; 
     }
 
-    const apiUrl = `https://finnhub.io/api/v1/stock/profile2?symbol=${symbol.toUpperCase()}&token=${finnhubApiKey}`;
+    // Tiingo metadata endpoint
+    const apiUrl = `https://api.tiingo.com/tiingo/daily/${symbol.toUpperCase()}`;
 
     try {
-      const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${tiingoApiKey}`
+        }
+      });
+      
+      const responseDataText = await response.text();
+      console.log(`Tiingo API metadata response text for ${symbol}:`, responseDataText);
+
+
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Finnhub Profile API Error for symbol ${symbol}: ${response.status} ${errorText}`);
+        console.error(`Tiingo Profile API Error for symbol ${symbol}: ${response.status} ${responseDataText}`);
+         if (response.status === 404) {
+            console.warn(`Tiingo: Symbol ${symbol} not found for profile (404). API response: ${responseDataText}`);
+        }
         return { assetName: null };
       }
-      const data = await response.json();
+      
+      const data = JSON.parse(responseDataText);
 
-      // 'name' is the company name in Finnhub's profile2 response
       if (data && typeof data.name === 'string' && data.name.trim() !== '') {
         return { assetName: data.name };
       } else {
-        // This can happen if the symbol is valid but Finnhub has no profile name (e.g., some indices or very new listings)
-        // or if the data object is empty (Finnhub sometimes returns {} for invalid symbols like mutual funds for this endpoint)
-        console.warn(`Finnhub: Company name not found for symbol ${symbol}. Full API response:`, JSON.stringify(data, null, 2));
+        console.warn(`Tiingo: Company name not found for symbol ${symbol} in metadata. Full API response:`, JSON.stringify(data, null, 2));
         return { assetName: null };
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`Failed to fetch profile for symbol ${symbol} from Finnhub: ${errorMessage}`);
+      console.error(`Failed to fetch profile for symbol ${symbol} from Tiingo: ${errorMessage}`);
       return { assetName: null };
     }
   }
