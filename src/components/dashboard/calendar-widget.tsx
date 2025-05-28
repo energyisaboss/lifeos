@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { SectionTitle } from './section-title';
-import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw, LinkIcon, Palette, Check, Edit3, XCircle } from 'lucide-react';
+import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw, LinkIcon, Palette, Check, Edit3, XCircle, GripVertical } from 'lucide-react';
 import type { CalendarEvent as AppCalendarEvent } from '@/lib/types'; // String dates
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -59,6 +59,7 @@ const getNextFeedColor = () => {
 const isValidHexColor = (color: string) => {
   return /^#([0-9A-F]{3}){1,2}$/i.test(color);
 }
+
 
 export function CalendarWidget() {
   const [showFeedManagement, setShowFeedManagement] = useState(false);
@@ -342,7 +343,7 @@ export function CalendarWidget() {
             <Settings className="w-4 h-4" />
           </Button>
         </div>
-        <Card className="shadow-md mt-4">
+        <Card className="shadow-md mt-4 mx-4">
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground p-2 py-2 text-center">
               Loading calendars...
@@ -493,7 +494,7 @@ export function CalendarWidget() {
                   <Card key={feed.id} className="shadow-md">
                       <CardHeader>
                       <CardTitle className="text-lg flex items-center">
-                          <div className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{ backgroundColor: feed.color }} />
+                          <CalendarDays className="w-5 h-5 mr-2" style={{ color: feed.color }} />
                           {feed.label}
                       </CardTitle>
                       </CardHeader>
@@ -511,7 +512,7 @@ export function CalendarWidget() {
             <Card key={feed.id} className="shadow-md">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center">
-                   <div className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{ backgroundColor: feed.color }} />
+                   <CalendarDays className="w-5 h-5 mr-2" style={{ color: feed.color }} />
                   {feed.label}
                 </CardTitle>
               </CardHeader>
@@ -521,7 +522,7 @@ export function CalendarWidget() {
                     <ul className="space-y-3">
                       {eventsForThisFeed.map((event) => (
                         <li key={event.id} className="flex items-start space-x-3 pb-2 border-b border-border last:border-b-0">
-                          <CalendarDays className="flex-shrink-0 w-4 h-4 mt-1" style={{ color: event.color }} />
+                           <div className="flex-shrink-0 w-2 h-6 mt-1 rounded-full" style={{ backgroundColor: event.color }} />
                           <div>
                             <p className="font-medium text-card-foreground">{event.title}</p>
                             <p className="text-xs text-muted-foreground">{formatEventDate(event)} - {formatEventTime(event)}</p>
@@ -541,7 +542,7 @@ export function CalendarWidget() {
         </div>
       )}
       {!isLoading && !error && icalFeeds.filter(f=>f.url.trim()).length > 0 && allEvents.length === 0 && !showFeedManagement && (
-        <Card className="shadow-md mx-4 mt-4"><CardContent className="pt-6"><p className="text-sm text-muted-foreground p-2 py-2 text-center">No upcoming events from any active feeds for the next 30 days, or feeds might need updating.</p></CardContent></Card>
+        <Card className="shadow-md mx-4 mt-4"><CardContent className="pt-6"><p className="text-sm text-muted-foreground p-2 py-2 text-center">No upcoming events from any active feeds for the next 30 days, or feeds might need updating/checking.</p></CardContent></Card>
         )}
 
         <Dialog open={!!editingFeed} onOpenChange={(isOpen) => !isOpen && handleCloseEditDialog()}>
