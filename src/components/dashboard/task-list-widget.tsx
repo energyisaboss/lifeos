@@ -1,24 +1,25 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   GoogleOAuthProvider,
   googleLogout,
   useGoogleLogin,
   type TokenResponse
 } from '@react-oauth/google';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SectionTitle } from './section-title';
-import { ListChecks, LogIn, LogOut, PlusCircle, Loader2, AlertCircle, Settings, ListPlus } from 'lucide-react';
+import { ListChecks, LogIn, LogOut, PlusCircle, Loader2, AlertCircle, Settings, ListPlus, Eye, EyeOff } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from '@/components/ui/separator';
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 // Ensure gapi types are available
 declare global {
@@ -41,6 +42,7 @@ interface Task {
 }
 
 const GOOGLE_TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
+const VISIBLE_LISTS_STORAGE_KEY = 'visibleGoogleTaskListIds_v1';
 
 const TaskListContent: React.FC = () => {
   const [accessToken, setAccessToken] = useState<string | null>(() => {
@@ -53,27 +55,27 @@ const TaskListContent: React.FC = () => {
   });
 
   const [taskLists, setTaskLists] = useState<TaskList[]>([]);
-  const [selectedTaskListId, setSelectedTaskListId] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('selectedGoogleTaskListId');
-    return null;
-  });
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [tasksByListId, setTasksByListId] = useState<Record<string, Task[]>>({});
+  const [visibleListIds, setVisibleListIds] = useState<Record<string, boolean>>({});
+  
+  const [newTaskTitles, setNewTaskTitles] = useState<Record<string, string>>({}); // For new task inputs per list
   const [newTaskListTitle, setNewTaskListTitle] = useState('');
 
   const [isLoadingLists, setIsLoadingLists] = useState(false);
-  const [isLoadingTasks, setIsLoadingTasks] = useState(false);
-  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [isLoadingTasksForList, setIsLoadingTasksForList] = useState<Record<string, boolean>>({});
+  const [isAddingTaskForList, setIsAddingTaskForList] = useState<Record<string, boolean>>({});
   const [isCreatingList, setIsCreatingList] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null); // General error
+  const [errorPerList, setErrorPerList] = useState<Record<string, string | null>>({});
   const [showTaskSettings, setShowTaskSettings] = useState(false);
-
+  
+  const gapiLoadedRef = useRef(false);
 
   const loadGapiClient = useCallback(async () => {
-    if (window.gapi && window.gapi.client && window.gapi.client.tasks) {
+    if (gapiLoadedRef.current && window.gapi && window.gapi.client && window.gapi.client.tasks) {
       return; // Already loaded
     }
-    await new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       const script = document.createElement('script');
       script.src = 'https://apis.google.com/js/api.js';
       script.async = true;
@@ -83,10 +85,13 @@ const TaskListContent: React.FC = () => {
           try {
             await window.gapi.client.init({}); // Minimal init
             console.log('TaskListWidget: GAPI client initialized.');
+            await window.gapi.client.load('https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest');
+            console.log('TaskListWidget: Google Tasks API discovered.');
+            gapiLoadedRef.current = true;
             resolve();
           } catch (initError) {
-            console.error('TaskListWidget: Error initializing GAPI client:', initError);
-            setError('Failed to initialize Google API client.');
+            console.error('TaskListWidget: Error initializing GAPI client or Tasks API:', initError);
+            setError('Failed to initialize Google API client or Tasks API.');
             reject(initError);
           }
         });
@@ -100,63 +105,73 @@ const TaskListContent: React.FC = () => {
     });
   }, []);
 
-  const discoverTasksAPI = useCallback(async () => {
-    if (!window.gapi || !window.gapi.client) {
-        await loadGapiClient();
-    }
-    if (window.gapi && window.gapi.client && !window.gapi.client.tasks) {
-        try {
-            await window.gapi.client.load('https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest');
-            console.log('TaskListWidget: Google Tasks API discovered.');
-        } catch (e) {
-            console.error('TaskListWidget: Error loading Tasks API discovery document:', e);
-            setError('Failed to load Tasks API. Please refresh.');
-            throw e;
-        }
-    }
-  }, [loadGapiClient]);
 
   const handleSignOut = useCallback(() => {
     googleLogout();
     setAccessToken(null);
     setIsSignedIn(false);
     setTaskLists([]);
-    setSelectedTaskListId(null);
-    setTasks([]);
+    setTasksByListId({});
+    setVisibleListIds({});
     setShowTaskSettings(false);
+    setError(null);
+    setErrorPerList({});
     if (typeof window !== 'undefined') {
       localStorage.removeItem('googleTasksAccessToken');
-      localStorage.removeItem('selectedGoogleTaskListId');
+      localStorage.removeItem(VISIBLE_LISTS_STORAGE_KEY); // Clear visibility preferences
     }
     if (window.gapi && window.gapi.client) {
         window.gapi.client.setToken(null);
     }
+    gapiLoadedRef.current = false; // Reset GAPI loaded state
     console.log('TaskListWidget: Signed out.');
   }, []);
+
+  const fetchAndSetTasksForList = useCallback(async (token: string, listId: string) => {
+    if (!token || !listId) return;
+    setIsLoadingTasksForList(prev => ({ ...prev, [listId]: true }));
+    setErrorPerList(prev => ({ ...prev, [listId]: null }));
+
+    try {
+      if (!gapiLoadedRef.current) await loadGapiClient();
+      window.gapi.client.setToken({ access_token: token });
+      const response = await window.gapi.client.tasks.tasks.list({
+        tasklist: listId,
+        showCompleted: false,
+        showHidden: false,
+        maxResults: 100,
+      });
+      setTasksByListId(prev => ({ ...prev, [listId]: response.result.items || [] }));
+    } catch (err: any) {
+      console.error(`TaskListWidget: Error fetching tasks for list ${listId}:`, err);
+      setErrorPerList(prev => ({ ...prev, [listId]: `Failed to fetch tasks: ${err.result?.error?.message || err.message || 'Unknown error'}.`}));
+      if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
+    } finally {
+      setIsLoadingTasksForList(prev => ({ ...prev, [listId]: false }));
+    }
+  }, [loadGapiClient, handleSignOut]);
 
   const fetchTaskLists = useCallback(async (token: string) => {
     if (!token) return;
     setIsLoadingLists(true);
     setError(null);
     try {
-      await discoverTasksAPI();
+      if (!gapiLoadedRef.current) await loadGapiClient();
       window.gapi.client.setToken({ access_token: token });
       const response = await window.gapi.client.tasks.tasklists.list();
-      setTaskLists(response.result.items || []);
-      const currentStoredListId = typeof window !== 'undefined' ? localStorage.getItem('selectedGoogleTaskListId') : null;
-      if (response.result.items && response.result.items.length > 0) {
-        if (currentStoredListId && response.result.items.find((l: TaskList) => l.id === currentStoredListId)) {
-            setSelectedTaskListId(currentStoredListId);
-        } else {
-            // Do not auto-select
+      const fetchedLists = response.result.items || [];
+      setTaskLists(fetchedLists);
+
+      const storedVisibleIds = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem(VISIBLE_LISTS_STORAGE_KEY) || '{}') : {};
+      setVisibleListIds(storedVisibleIds);
+      
+      // Fetch tasks for lists that are marked as visible
+      fetchedLists.forEach(list => {
+        if (storedVisibleIds[list.id]) {
+          fetchAndSetTasksForList(token, list.id);
         }
-      } else {
-        // No lists found, ensure selectedTaskListId is null if it pointed to a non-existent list
-        if (currentStoredListId) {
-            setSelectedTaskListId(null);
-            if (typeof window !== 'undefined') localStorage.removeItem('selectedGoogleTaskListId');
-        }
-      }
+      });
+
     } catch (err: any) {
       console.error('TaskListWidget: Error fetching task lists:', err);
       setError(`Failed to fetch task lists: ${err.result?.error?.message || err.message || 'Unknown error'}. Try signing out and in again.`);
@@ -164,44 +179,22 @@ const TaskListContent: React.FC = () => {
     } finally {
       setIsLoadingLists(false);
     }
-  }, [discoverTasksAPI, handleSignOut]);
+  }, [loadGapiClient, handleSignOut, fetchAndSetTasksForList]);
 
-  const fetchTasks = useCallback(async (token: string, listId: string) => {
-    if (!token || !listId) return;
-    setIsLoadingTasks(true);
-    setError(null);
-    try {
-      await discoverTasksAPI();
-      window.gapi.client.setToken({ access_token: token });
-      const response = await window.gapi.client.tasks.tasks.list({
-        tasklist: listId,
-        showCompleted: false,
-        showHidden: false,
-        maxResults: 100, 
-      });
-      setTasks(response.result.items || []);
-    } catch (err: any) {
-      console.error('TaskListWidget: Error fetching tasks:', err);
-      setError(`Failed to fetch tasks: ${err.result?.error?.message || err.message || 'Unknown error'}.`);
-      if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
-    } finally {
-      setIsLoadingTasks(false);
-    }
-  }, [discoverTasksAPI, handleSignOut]);
 
   useEffect(() => {
-    if (accessToken && isSignedIn) {
+    // Load GAPI client as soon as possible if signed in or attempting to sign in
+    if (isSignedIn || !accessToken) { // Attempt to load if signed in, or to prepare for login
+       loadGapiClient().catch(e => console.error("Failed to load GAPI on mount", e));
+    }
+  }, [isSignedIn, accessToken, loadGapiClient]);
+
+
+  useEffect(() => {
+    if (accessToken && isSignedIn && gapiLoadedRef.current) {
       fetchTaskLists(accessToken);
     }
-  }, [accessToken, isSignedIn, fetchTaskLists]);
-
-  useEffect(() => {
-    if (accessToken && selectedTaskListId && isSignedIn) {
-      fetchTasks(accessToken, selectedTaskListId);
-    } else {
-      setTasks([]);
-    }
-  }, [accessToken, selectedTaskListId, isSignedIn, fetchTasks]);
+  }, [accessToken, isSignedIn, fetchTaskLists]); // Removed gapiLoadedRef from deps here to avoid loop with fetchTaskLists
 
 
   const handleLoginSuccess = (tokenResponse: Omit<TokenResponse, 'error' | 'error_description' | 'error_uri'>) => {
@@ -210,7 +203,9 @@ const TaskListContent: React.FC = () => {
     setIsSignedIn(true);
     if (typeof window !== 'undefined') localStorage.setItem('googleTasksAccessToken', newAccessToken);
     console.log('TaskListWidget: Login successful, token acquired.');
-    fetchTaskLists(newAccessToken);
+    loadGapiClient().then(() => {
+       fetchTaskLists(newAccessToken);
+    }).catch(e => console.error("GAPI load failed post-login", e));
   };
   
   const login = useGoogleLogin({
@@ -221,57 +216,69 @@ const TaskListContent: React.FC = () => {
       handleSignOut();
     },
     scope: GOOGLE_TASKS_SCOPE,
-    flow: 'implicit',
+    flow: 'implicit', 
   });
 
-  const handleAddTask = async () => {
-    if (!newTaskTitle.trim() || !accessToken || !selectedTaskListId) return;
-    setIsAddingTask(true);
-    setError(null);
+  const handleAddTask = async (listId: string) => {
+    const title = newTaskTitles[listId]?.trim();
+    if (!title || !accessToken) return;
+    setIsAddingTaskForList(prev => ({ ...prev, [listId]: true }));
+    setErrorPerList(prev => ({ ...prev, [listId]: null }));
+
     try {
-      await discoverTasksAPI();
+      if (!gapiLoadedRef.current) await loadGapiClient();
       window.gapi.client.setToken({ access_token: accessToken });
       const response = await window.gapi.client.tasks.tasks.insert({
-        tasklist: selectedTaskListId,
-        resource: { title: newTaskTitle.trim() },
+        tasklist: listId,
+        resource: { title },
       });
-      setTasks(prevTasks => [response.result, ...prevTasks]);
-      setNewTaskTitle('');
-      toast({ title: "Task Added", description: `"${response.result.title}" added.` });
+      setTasksByListId(prevTasks => ({
+        ...prevTasks,
+        [listId]: [response.result, ...(prevTasks[listId] || [])]
+      }));
+      setNewTaskTitles(prev => ({ ...prev, [listId]: '' })); // Clear input for this list
+      toast({ title: "Task Added", description: `"${response.result.title}" added to ${taskLists.find(l=>l.id === listId)?.title}.` });
     } catch (err: any) {
       console.error('TaskListWidget: Error adding task:', err);
-      setError(`Failed to add task: ${err.result?.error?.message || err.message || 'Unknown error'}.`);
+      setErrorPerList(prev => ({ ...prev, [listId]: `Failed to add task: ${err.result?.error?.message || err.message || 'Unknown error'}.`}));
       if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
     } finally {
-      setIsAddingTask(false);
+      setIsAddingTaskForList(prev => ({ ...prev, [listId]: false }));
     }
   };
 
-  const handleToggleTaskCompletion = async (task: Task) => {
-    if (!accessToken || !selectedTaskListId) return;
+  const handleToggleTaskCompletion = async (task: Task, listId: string) => {
+    if (!accessToken) return;
 
     const newStatus = task.status === 'completed' ? 'needsAction' : 'completed';
-    const originalTasks = tasks;
-    setTasks(prevTasks => prevTasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+    const originalTasksForList = [...(tasksByListId[listId] || [])];
+    
+    setTasksByListId(prev => ({
+      ...prev,
+      [listId]: (prev[listId] || []).map(t => t.id === task.id ? { ...t, status: newStatus } : t)
+    }));
 
     try {
-      await discoverTasksAPI();
+      if (!gapiLoadedRef.current) await loadGapiClient();
       window.gapi.client.setToken({ access_token: accessToken });
       await window.gapi.client.tasks.tasks.update({
-        tasklist: selectedTaskListId,
+        tasklist: listId,
         task: task.id,
-        resource: { id: task.id, status: newStatus, title: task.title },
+        resource: { id: task.id, status: newStatus, title: task.title }, // title is required by API for update
       });
       toast({ title: "Task Updated", description: `"${task.title}" marked as ${newStatus === 'completed' ? 'complete' : 'incomplete'}.`});
        if (newStatus === 'completed') {
         setTimeout(() => {
-          setTasks(prev => prev.filter(t => t.id !== task.id));
+          setTasksByListId(prev => ({
+            ...prev,
+            [listId]: (prev[listId] || []).filter(t => t.id !== task.id)
+          }));
         }, 1000);
       }
     } catch (err: any) {
       console.error('TaskListWidget: Error updating task:', err);
-      setError(`Failed to update task: ${err.result?.error?.message || err.message || 'Unknown error'}.`);
-      setTasks(originalTasks);
+      setErrorPerList(prev => ({ ...prev, [listId]: `Failed to update task: ${err.result?.error?.message || err.message || 'Unknown error'}.`}));
+      setTasksByListId(prev => ({ ...prev, [listId]: originalTasksForList })); // Revert on error
       if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
     }
   };
@@ -281,18 +288,20 @@ const TaskListContent: React.FC = () => {
     setIsCreatingList(true);
     setError(null);
     try {
-      await discoverTasksAPI();
+      if (!gapiLoadedRef.current) await loadGapiClient();
       window.gapi.client.setToken({ access_token: accessToken });
       const response = await window.gapi.client.tasks.tasklists.insert({
         resource: { title: newTaskListTitle.trim() },
       });
-      toast({ title: "Task List Created", description: `"${response.result.title}" created.` });
+      const newList = response.result;
+      toast({ title: "Task List Created", description: `"${newList.title}" created.` });
       setNewTaskListTitle('');
-      await fetchTaskLists(accessToken); // Refresh lists
-      // Optionally, select the new list
-      setSelectedTaskListId(response.result.id);
-      if (typeof window !== 'undefined') localStorage.setItem('selectedGoogleTaskListId', response.result.id);
-
+      setTaskLists(prev => [...prev, newList]); // Add to local list
+      setVisibleListIds(prev => ({ ...prev, [newList.id]: true })); // Default new list to visible
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(VISIBLE_LISTS_STORAGE_KEY, JSON.stringify({ ...visibleListIds, [newList.id]: true }));
+      }
+      fetchAndSetTasksForList(accessToken, newList.id); // Fetch tasks for new list
     } catch (err: any) {
       console.error('TaskListWidget: Error creating task list:', err);
       setError(`Failed to create task list: ${err.result?.error?.message || err.message || 'Unknown error'}.`);
@@ -302,9 +311,23 @@ const TaskListContent: React.FC = () => {
     }
   };
 
+  const handleVisibilityChange = (listId: string, checked: boolean) => {
+    const newVisibleListIds = { ...visibleListIds, [listId]: checked };
+    setVisibleListIds(newVisibleListIds);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(VISIBLE_LISTS_STORAGE_KEY, JSON.stringify(newVisibleListIds));
+    }
+    if (checked && accessToken && !tasksByListId[listId] && !isLoadingTasksForList[listId]) {
+      // If made visible and tasks not yet fetched (and not already loading)
+      fetchAndSetTasksForList(accessToken, listId);
+    }
+  };
+
+  const visibleListsToDisplay = taskLists.filter(list => visibleListIds[list.id]);
+
   return (
-      <Card className="shadow-lg flex flex-col">
-        <CardHeader className="flex-shrink-0">
+      <div className="flex flex-col"> {/* Removed Card to allow multiple cards for lists */}
+        <div className="p-4 border-b mb-4"> {/* Header-like section */}
           <div className="flex justify-between items-center">
             <SectionTitle icon={ListChecks} title="Google Tasks" className="mb-0" />
             <div className="flex items-center gap-1">
@@ -320,136 +343,152 @@ const TaskListContent: React.FC = () => {
               )}
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="pt-4 flex flex-col overflow-hidden">
+        </div>
+        
+        <div className="px-4 pb-4">
           {!isSignedIn ? (
-             <div className="flex flex-col items-center justify-center py-8">
+             <div className="flex flex-col items-center justify-center py-8 text-center">
                 <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
-                <Button onClick={() => login()} variant="default">
-                   <LogIn className="mr-2 h-4 w-4" /> Sign In with Google
+                <Button onClick={() => login()} variant="default" disabled={!gapiLoadedRef.current}>
+                   {gapiLoadedRef.current ? <LogIn className="mr-2 h-4 w-4" /> : <Loader2 className="mr-2 h-4 w-4 animate-spin" /> }
+                   Sign In with Google
                 </Button>
                 {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
             </div>
           ) : (
-            <div className="flex flex-col">
+            <>
               {error && <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
               
               {showTaskSettings && (
-                <div className="mb-4 p-3 border rounded-lg bg-muted/10 shadow-sm space-y-4">
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Select Task List</p>
-                    {isLoadingLists ? (
-                      <div className="flex items-center justify-center py-2"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
-                    ) : taskLists.length > 0 ? (
-                      <Select
-                        value={selectedTaskListId || undefined}
-                        onValueChange={(value) => {
-                          setSelectedTaskListId(value);
-                          if (typeof window !== 'undefined') localStorage.setItem('selectedGoogleTaskListId', value);
-                        }}
-                        disabled={isLoadingTasks}
-                      >
-                        <SelectTrigger className="w-full flex-shrink-0">
-                          <SelectValue placeholder="Select a task list" />
-                        </SelectTrigger>
-                        <SelectContent>
+                <Card className="mb-6 p-4 shadow-md">
+                  <CardHeader className="p-2 pt-0">
+                    <CardTitle className="text-lg">Task List Settings</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 p-2">
+                    <div>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-2">Visible Task Lists</h4>
+                      {isLoadingLists ? (
+                        <div className="flex items-center justify-center py-2"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
+                      ) : taskLists.length > 0 ? (
+                        <ScrollArea className="max-h-40 pr-2">
+                          <div className="space-y-2">
                           {taskLists.map((list) => (
-                            <SelectItem key={list.id} value={list.id}>
-                              {list.title}
-                            </SelectItem>
+                            <div key={list.id} className="flex items-center justify-between p-2 rounded-md bg-muted/30">
+                              <Label htmlFor={`vis-${list.id}`} className="text-sm text-card-foreground truncate pr-2" title={list.title}>
+                                {list.title}
+                              </Label>
+                              <Switch
+                                id={`vis-${list.id}`}
+                                checked={!!visibleListIds[list.id]}
+                                onCheckedChange={(checked) => handleVisibilityChange(list.id, checked)}
+                                aria-label={`Toggle visibility for ${list.title}`}
+                              />
+                            </div>
                           ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <p className="text-sm text-muted-foreground text-center py-1">No task lists found. Try creating one below.</p>
-                    )}
-                  </div>
-
-                  <Separator />
-
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Create New Task List</p>
-                    <div className="flex">
-                      <Input
-                        type="text"
-                        value={newTaskListTitle}
-                        onChange={(e) => setNewTaskListTitle(e.target.value)}
-                        placeholder="New list title..."
-                        className="mr-2"
-                        onKeyPress={(e) => e.key === 'Enter' && !isCreatingList && handleCreateTaskList()}
-                        disabled={isCreatingList}
-                      />
-                      <Button onClick={handleCreateTaskList} disabled={!newTaskListTitle.trim() || isCreatingList} size="sm">
-                        {isCreatingList ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListPlus className="h-4 w-4" />}
-                      </Button>
+                          </div>
+                        </ScrollArea>
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center py-1">No task lists found. Create one below.</p>
+                      )}
                     </div>
-                  </div>
-                  
-                  {selectedTaskListId && (
-                    <>
-                      <Separator />
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-1">Add New Task to "{taskLists.find(l => l.id === selectedTaskListId)?.title || 'Selected List'}"</p>
-                        <div className="flex">
+
+                    <Separator />
+
+                    <div>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-2">Create New Task List</h4>
+                      <div className="flex gap-2">
+                        <Input
+                          type="text"
+                          value={newTaskListTitle}
+                          onChange={(e) => setNewTaskListTitle(e.target.value)}
+                          placeholder="New list title..."
+                          className="flex-grow"
+                          onKeyPress={(e) => e.key === 'Enter' && !isCreatingList && handleCreateTaskList()}
+                          disabled={isCreatingList}
+                        />
+                        <Button onClick={handleCreateTaskList} disabled={!newTaskListTitle.trim() || isCreatingList} size="sm">
+                          {isCreatingList ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListPlus className="h-4 w-4" />}
+                          Create
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Task Display Area for Visible Lists */}
+              {isLoadingLists && !taskLists.length ? (
+                  <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</div>
+              ) : visibleListsToDisplay.length > 0 ? (
+                <div className="space-y-6">
+                  {visibleListsToDisplay.map(list => (
+                    <Card key={list.id} className="shadow-lg flex flex-col">
+                      <CardHeader>
+                        <CardTitle className="text-md">{list.title}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-2 flex-grow flex flex-col overflow-hidden">
+                        <div className="flex gap-2 mb-3">
                           <Input
                             type="text"
-                            value={newTaskTitle}
-                            onChange={(e) => setNewTaskTitle(e.target.value)}
-                            placeholder="New task title..."
-                            className="mr-2"
-                            onKeyPress={(e) => e.key === 'Enter' && !isAddingTask && handleAddTask()}
-                            disabled={isAddingTask}
+                            value={newTaskTitles[list.id] || ''}
+                            onChange={(e) => setNewTaskTitles(prev => ({...prev, [list.id]: e.target.value}))}
+                            placeholder="Add a task..."
+                            className="flex-grow"
+                            onKeyPress={(e) => e.key === 'Enter' && !isAddingTaskForList[list.id] && handleAddTask(list.id)}
+                            disabled={isAddingTaskForList[list.id]}
                           />
-                          <Button onClick={handleAddTask} disabled={!newTaskTitle.trim() || isAddingTask || !selectedTaskListId} size="sm">
-                            {isAddingTask ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+                          <Button 
+                            onClick={() => handleAddTask(list.id)} 
+                            disabled={!(newTaskTitles[list.id] || '').trim() || isAddingTaskForList[list.id]} 
+                            size="sm"
+                          >
+                            {isAddingTaskForList[list.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
                           </Button>
                         </div>
-                      </div>
-                    </>
-                  )}
+                        {isLoadingTasksForList[list.id] ? (
+                           <div className="flex items-center justify-center py-4"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading tasks for {list.title}...</div>
+                        ) : errorPerList[list.id] ? (
+                           <Alert variant="destructive" className="text-xs my-2"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{errorPerList[list.id]}</AlertDescription></Alert>
+                        ) : (tasksByListId[list.id] || []).length > 0 ? (
+                          <ScrollArea className="pr-1 max-h-60 flex-grow">
+                            <ul className="space-y-2">
+                              {(tasksByListId[list.id] || []).map((task) => (
+                                <li key={task.id} className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted/50 transition-colors">
+                                  <Checkbox
+                                    id={`task-${list.id}-${task.id}`}
+                                    checked={task.status === 'completed'}
+                                    onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
+                                    aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
+                                  />
+                                  <label
+                                    htmlFor={`task-${list.id}-${task.id}`}
+                                    className={`flex-1 text-sm ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-card-foreground'}`}
+                                  >
+                                    {task.title}
+                                  </label>
+                                </li>
+                              ))}
+                            </ul>
+                          </ScrollArea>
+                        ) : (
+                          <p className="text-sm text-muted-foreground text-center py-4">No active tasks in this list.</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
-              )}
-
-              {/* Task Display Area */}
-              {selectedTaskListId ? (
-                isLoadingTasks ? (
-                  <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading tasks...</div>
-                ) : tasks.length > 0 ? (
-                  <ScrollArea className="pr-1 max-h-60">
-                    <ul className="space-y-2">
-                      {tasks.map((task) => (
-                        <li key={task.id} className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted/50 transition-colors">
-                          <Checkbox
-                            id={`task-${task.id}`}
-                            checked={task.status === 'completed'}
-                            onCheckedChange={() => handleToggleTaskCompletion(task)}
-                            aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
-                          />
-                          <label
-                            htmlFor={`task-${task.id}`}
-                            className={`flex-1 text-sm ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-card-foreground'}`}
-                          >
-                            {task.title}
-                          </label>
-                        </li>
-                      ))}
-                    </ul>
-                  </ScrollArea>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">No active tasks in this list. Add one in settings!</p>
-                )
               ) : (
-                !isLoadingLists && taskLists.length > 0 && !showTaskSettings && (
-                  <p className="text-sm text-muted-foreground text-center py-4">Please select a task list from settings to view tasks.</p>
-                )
+                 !isLoadingLists && isSignedIn && taskLists.length > 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">No task lists are currently visible. Go to settings <Settings className="inline h-3 w-3"/> to select lists to display.</p>
+                 )
               )}
-               {!isLoadingLists && taskLists.length === 0 && isSignedIn && !error && !showTaskSettings &&(
-                 <p className="text-sm text-muted-foreground text-center py-4">No Google Task lists found. Click settings <Settings className="inline h-3 w-3"/> to create one or select if already created.</p>
+               {!isLoadingLists && !taskLists.length && isSignedIn && !error && (
+                 <p className="text-sm text-muted-foreground text-center py-4">No Google Task lists found. Click settings <Settings className="inline h-3 w-3"/> to create one.</p>
                )}
-            </div>
+            </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
   );
 };
 
@@ -461,7 +500,6 @@ export function TaskListWidget() {
 
   useEffect(() => {
     setIsClient(true);
-    // Ensure this code only runs on the client
     if (typeof window !== 'undefined') {
       const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
       if (clientId) {
@@ -474,22 +512,19 @@ export function TaskListWidget() {
   }, []);
 
   if (!isClient) {
-    // Return a placeholder or null during SSR/build time
     return (
-       <Card className="shadow-lg">
-        <CardHeader><SectionTitle icon={ListChecks} title="Google Tasks" /></CardHeader>
-        <CardContent><p className="text-sm text-muted-foreground">Loading Google Tasks...</p></CardContent>
-      </Card>
+       <div className="p-4 border rounded-lg shadow-lg"> {/* Replaced Card with div for outer container */}
+        <div className="p-4 border-b"><SectionTitle icon={ListChecks} title="Google Tasks" /></div>
+        <div className="p-6"><p className="text-sm text-muted-foreground">Loading Google Tasks...</p></div>
+      </div>
     );
   }
-
+  
   if (providerError || !googleClientId) {
     return (
-      <Card className="shadow-lg">
-        <CardHeader>
-          <SectionTitle icon={ListChecks} title="Google Tasks" />
-        </CardHeader>
-        <CardContent>
+      <div className="p-4 border rounded-lg shadow-lg">
+        <div className="p-4 border-b"><SectionTitle icon={ListChecks} title="Google Tasks" /></div>
+        <div className="p-6">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Configuration Error</AlertTitle>
@@ -497,8 +532,8 @@ export function TaskListWidget() {
               {providerError || "Google Client ID is not available. Please configure it."}
             </AlertDescription>
           </Alert>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
@@ -508,4 +543,3 @@ export function TaskListWidget() {
     </GoogleOAuthProvider>
   );
 }
-
