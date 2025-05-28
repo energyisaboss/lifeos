@@ -14,13 +14,14 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SectionTitle } from './section-title';
-import { ListChecks, LogIn, LogOut, PlusCircle, Loader2, AlertCircle, Settings, ListPlus, Edit3, Check, XCircle } from 'lucide-react';
+import { ListChecks, LogIn, LogOut, PlusCircle, Loader2, AlertCircle, Settings, ListPlus, Edit3, Check, XCircle, Palette } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from '@/components/ui/separator';
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 // Ensure gapi types are available
 declare global {
@@ -42,8 +43,29 @@ interface Task {
   notes?: string;
 }
 
+interface TaskListSetting {
+  visible: boolean;
+  color: string;
+}
+
 const GOOGLE_TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
-const VISIBLE_LISTS_STORAGE_KEY = 'visibleGoogleTaskListIds_v1';
+const TASK_LIST_SETTINGS_STORAGE_KEY = 'googleTaskListSettings_v1'; // Updated key
+
+const predefinedTaskColors: string[] = [
+  '#F44336', // Red
+  '#2196F3', // Blue
+  '#FF9800', // Orange
+  '#FFEB3B', // Yellow
+  '#4CAF50', // Green
+  '#9C27B0', // Purple
+];
+let lastAssignedColorIndex = -1;
+
+const getNextColor = () => {
+  lastAssignedColorIndex = (lastAssignedColorIndex + 1) % predefinedTaskColors.length;
+  return predefinedTaskColors[lastAssignedColorIndex];
+};
+
 
 const TaskListContent: React.FC = () => {
   const [accessToken, setAccessToken] = useState<string | null>(() => {
@@ -57,7 +79,7 @@ const TaskListContent: React.FC = () => {
 
   const [taskLists, setTaskLists] = useState<TaskList[]>([]);
   const [tasksByListId, setTasksByListId] = useState<Record<string, Task[]>>({});
-  const [visibleListIds, setVisibleListIds] = useState<Record<string, boolean>>({});
+  const [listSettings, setListSettings] = useState<Record<string, TaskListSetting>>({});
   
   const [newTaskTitles, setNewTaskTitles] = useState<Record<string, string>>({});
   const [newTaskListTitle, setNewTaskListTitle] = useState('');
@@ -75,6 +97,26 @@ const TaskListContent: React.FC = () => {
   const [editingListId, setEditingListId] = useState<string | null>(null);
   const [editingListTitle, setEditingListTitle] = useState('');
   const [isUpdatingListTitle, setIsUpdatingListTitle] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedSettings = localStorage.getItem(TASK_LIST_SETTINGS_STORAGE_KEY);
+      if (savedSettings) {
+        try {
+          setListSettings(JSON.parse(savedSettings));
+        } catch (e) {
+          console.error("TaskListWidget: Failed to parse list settings from localStorage", e);
+          localStorage.removeItem(TASK_LIST_SETTINGS_STORAGE_KEY); // Clear corrupted data
+        }
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && Object.keys(listSettings).length > 0) {
+      localStorage.setItem(TASK_LIST_SETTINGS_STORAGE_KEY, JSON.stringify(listSettings));
+    }
+  }, [listSettings]);
 
 
   const loadGapiClient = useCallback(async () => {
@@ -128,7 +170,7 @@ const TaskListContent: React.FC = () => {
     setIsSignedIn(false);
     setTaskLists([]);
     setTasksByListId({});
-    setVisibleListIds({});
+    // setListSettings({}); // Optionally clear settings on sign out, or keep them for next sign-in
     setShowTaskSettings(false);
     setError(null);
     setErrorPerList({});
@@ -137,7 +179,7 @@ const TaskListContent: React.FC = () => {
     setEditingListTitle('');
     if (typeof window !== 'undefined') {
       localStorage.removeItem('googleTasksAccessToken');
-      localStorage.removeItem(VISIBLE_LISTS_STORAGE_KEY);
+      // localStorage.removeItem(TASK_LIST_SETTINGS_STORAGE_KEY); // Decide if settings persist across sign-outs
     }
     if (window.gapi && window.gapi.client) {
         window.gapi.client.setToken(null);
@@ -194,15 +236,39 @@ const TaskListContent: React.FC = () => {
       const response = await window.gapi.client.tasks.tasklists.list();
       console.log('TaskListWidget: Raw response from tasklists.list():', JSON.stringify(response, null, 2));
 
-      const fetchedLists = response?.result?.items || [];
+      const fetchedLists: TaskList[] = response?.result?.items || [];
       console.log(`TaskListWidget: Fetched ${fetchedLists.length} task lists from API.`);
       setTaskLists(fetchedLists);
 
-      const storedVisibleIds = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem(VISIBLE_LISTS_STORAGE_KEY) || '{}') : {};
-      setVisibleListIds(storedVisibleIds);
+      setListSettings(prevSettings => {
+        const newSettings = {...prevSettings};
+        let updated = false;
+        fetchedLists.forEach((list, index) => {
+            if (!newSettings[list.id]) {
+                newSettings[list.id] = {
+                    visible: index === 0, // Make only the first list visible by default, or adjust as needed
+                    color: getNextColor() 
+                };
+                updated = true;
+            }
+            // Ensure existing entries have a color if they somehow miss it
+            if (newSettings[list.id] && !newSettings[list.id].color) {
+                newSettings[list.id].color = getNextColor();
+                updated = true;
+            }
+        });
+        if (updated) {
+            if (typeof window !== 'undefined') {
+                localStorage.setItem(TASK_LIST_SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
+            }
+        }
+        return newSettings;
+      });
       
+      // This part of fetching tasks might need to be re-evaluated if setListSettings is async and listSettings isn't immediately updated
+      // For simplicity, we rely on listSettings being updated by the time this loop runs or on a subsequent effect triggered by listSettings change.
       fetchedLists.forEach(list => {
-        if (storedVisibleIds[list.id]) {
+        if (listSettings[list.id]?.visible) { // Use the potentially updated listSettings
           fetchAndSetTasksForList(token, list.id);
         }
       });
@@ -214,7 +280,7 @@ const TaskListContent: React.FC = () => {
     } finally {
       setIsLoadingLists(false);
     }
-  }, [isGapiClientLoaded, loadGapiClient, handleSignOut, fetchAndSetTasksForList]);
+  }, [isGapiClientLoaded, loadGapiClient, handleSignOut, fetchAndSetTasksForList, listSettings]); // listSettings dependency for immediate task fetch logic
 
   useEffect(() => {
     if (isSignedIn || !accessToken) {
@@ -230,6 +296,17 @@ const TaskListContent: React.FC = () => {
       console.log("TaskListWidget: Conditions NOT met to fetch task lists.", {accessToken: !!accessToken, isSignedIn, isGapiClientLoaded});
     }
   }, [accessToken, isSignedIn, isGapiClientLoaded, fetchTaskLists]);
+
+  useEffect(() => {
+    // This effect ensures tasks are fetched for newly visible lists if accessToken is available
+    if (accessToken && isGapiClientLoaded) {
+        taskLists.forEach(list => {
+            if (listSettings[list.id]?.visible && !tasksByListId[list.id] && !isLoadingTasksForList[list.id]) {
+                fetchAndSetTasksForList(accessToken, list.id);
+            }
+        });
+    }
+  }, [listSettings, accessToken, isGapiClientLoaded, taskLists, tasksByListId, isLoadingTasksForList, fetchAndSetTasksForList]);
 
 
   const handleLoginSuccess = (tokenResponse: Omit<TokenResponse, 'error' | 'error_description' | 'error_uri'>) => {
@@ -341,16 +418,18 @@ const TaskListContent: React.FC = () => {
       toast({ title: "Task List Created", description: `"${newList.title}" created.` });
       setNewTaskListTitle('');
       
-      setTaskLists(prev => {
-          const updatedLists = [...prev, newList];
-          const newVisible = { ...visibleListIds, [newList.id]: true };
-          setVisibleListIds(newVisible);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(VISIBLE_LISTS_STORAGE_KEY, JSON.stringify(newVisible));
-          }
-          fetchAndSetTasksForList(accessToken, newList.id); 
-          return updatedLists;
+      setListSettings(prevSettings => {
+        const newSettings = {
+            ...prevSettings,
+            [newList.id]: { visible: true, color: getNextColor() }
+        };
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(TASK_LIST_SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
+        }
+        return newSettings;
       });
+      setTaskLists(prev => [...prev, newList]); // Add to local list of all lists
+      fetchAndSetTasksForList(accessToken, newList.id); // Fetch tasks for the new list
 
     } catch (err: any) {
       console.error('TaskListWidget: Error creating task list:', err);
@@ -361,15 +440,23 @@ const TaskListContent: React.FC = () => {
     }
   };
 
-  const handleVisibilityChange = (listId: string, checked: boolean) => {
-    const newVisibleListIds = { ...visibleListIds, [listId]: checked };
-    setVisibleListIds(newVisibleListIds);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(VISIBLE_LISTS_STORAGE_KEY, JSON.stringify(newVisibleListIds));
-    }
-    if (checked && accessToken && !tasksByListId[listId] && !isLoadingTasksForList[listId] && isGapiClientLoaded) {
-      fetchAndSetTasksForList(accessToken, listId);
-    }
+  const handleListSettingChange = (listId: string, key: keyof TaskListSetting, value: boolean | string) => {
+    setListSettings(prev => {
+        const newSettings = {
+            ...prev,
+            [listId]: {
+                ...(prev[listId] || { visible: false, color: getNextColor() }), // Ensure a default color if somehow missing
+                [key]: value
+            }
+        };
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(TASK_LIST_SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
+        }
+        if (key === 'visible' && value === true && accessToken && !tasksByListId[listId] && !isLoadingTasksForList[listId] && isGapiClientLoaded) {
+          fetchAndSetTasksForList(accessToken, listId);
+        }
+        return newSettings;
+    });
   };
 
   const handleStartEditListTitle = (list: TaskList) => {
@@ -407,7 +494,7 @@ const TaskListContent: React.FC = () => {
     }
   };
 
-  const visibleListsToDisplay = taskLists.filter(list => visibleListIds[list.id]);
+  const visibleListsToDisplay = taskLists.filter(list => listSettings[list.id]?.visible);
 
   return (
       <div className="flex flex-col">
@@ -445,50 +532,67 @@ const TaskListContent: React.FC = () => {
                   </CardHeader>
                   <CardContent className="space-y-4 p-2">
                     <div>
-                      <h4 className="text-sm font-medium text-muted-foreground mb-2">Visible Task Lists</h4>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-2">Visible Task Lists & Colors</h4>
                       {isLoadingLists ? (
                         <div className="flex items-center justify-center py-2"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
                       ) : taskLists.length > 0 ? (
-                        <ScrollArea className="max-h-40 pr-2">
-                          <div className="space-y-2">
+                        <ScrollArea className="max-h-48 pr-2">
+                          <div className="space-y-3">
                           {taskLists.map((list) => (
-                            <div key={list.id} className="flex items-center justify-between p-2 rounded-md bg-muted/30 hover:bg-muted/50">
-                              {editingListId === list.id ? (
-                                <div className="flex-grow flex items-center gap-1">
-                                  <Input
-                                    type="text"
-                                    value={editingListTitle}
-                                    onChange={(e) => setEditingListTitle(e.target.value)}
-                                    className="h-8 text-sm flex-grow"
-                                    onKeyDown={(e) => e.key === 'Enter' && !isUpdatingListTitle && handleSaveListTitle()}
-                                    disabled={isUpdatingListTitle}
-                                    autoFocus
-                                  />
-                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSaveListTitle} disabled={isUpdatingListTitle || !editingListTitle.trim()} aria-label="Save list title">
-                                    {isUpdatingListTitle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                                  </Button>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCancelEditListTitle} disabled={isUpdatingListTitle} aria-label="Cancel editing list title">
-                                    <XCircle className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <Label htmlFor={`vis-${list.id}`} className="text-sm text-card-foreground truncate pr-1" title={list.title}>
-                                  {list.title}
-                                </Label>
-                              )}
-                              <div className="flex items-center gap-1">
-                                {editingListId !== list.id && (
-                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEditListTitle(list)} aria-label="Edit list title">
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                  </Button>
+                            <div key={list.id} className="p-2.5 rounded-md bg-muted/30 hover:bg-muted/50">
+                              <div className="flex items-center justify-between mb-1.5">
+                                {editingListId === list.id ? (
+                                  <div className="flex-grow flex items-center gap-1">
+                                    <Input
+                                      type="text"
+                                      value={editingListTitle}
+                                      onChange={(e) => setEditingListTitle(e.target.value)}
+                                      className="h-8 text-sm flex-grow"
+                                      onKeyDown={(e) => e.key === 'Enter' && !isUpdatingListTitle && handleSaveListTitle()}
+                                      disabled={isUpdatingListTitle}
+                                      autoFocus
+                                    />
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSaveListTitle} disabled={isUpdatingListTitle || !editingListTitle.trim()} aria-label="Save list title">
+                                      {isUpdatingListTitle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCancelEditListTitle} disabled={isUpdatingListTitle} aria-label="Cancel editing list title">
+                                      <XCircle className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Label htmlFor={`vis-${list.id}`} className="text-sm text-card-foreground truncate pr-1" title={list.title}>
+                                    {list.title}
+                                  </Label>
                                 )}
-                                <Switch
-                                  id={`vis-${list.id}`}
-                                  checked={!!visibleListIds[list.id]}
-                                  onCheckedChange={(checked) => handleVisibilityChange(list.id, checked)}
-                                  aria-label={`Toggle visibility for ${list.title}`}
-                                  disabled={editingListId === list.id}
-                                />
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  {editingListId !== list.id && (
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEditListTitle(list)} aria-label="Edit list title">
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </Button>
+                                  )}
+                                  <Switch
+                                    id={`vis-${list.id}`}
+                                    checked={!!listSettings[list.id]?.visible}
+                                    onCheckedChange={(checked) => handleListSettingChange(list.id, 'visible', checked)}
+                                    aria-label={`Toggle visibility for ${list.title}`}
+                                    disabled={editingListId === list.id}
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                {predefinedTaskColors.map(colorOption => (
+                                  <button
+                                    key={colorOption}
+                                    type="button"
+                                    title={colorOption}
+                                    className={cn(
+                                      "w-5 h-5 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
+                                      listSettings[list.id]?.color === colorOption ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
+                                    )}
+                                    style={{ backgroundColor: colorOption }}
+                                    onClick={() => handleListSettingChange(list.id, 'color', colorOption)}
+                                  />
+                                ))}
                               </div>
                             </div>
                           ))}
@@ -534,7 +638,11 @@ const TaskListContent: React.FC = () => {
               ) : visibleListsToDisplay.length > 0 ? (
                 <div className="space-y-4 mt-4">
                   {visibleListsToDisplay.map(list => (
-                    <Card key={list.id} className="shadow-md flex flex-col">
+                    <Card 
+                      key={list.id} 
+                      className="shadow-md flex flex-col"
+                      style={{ borderTop: `4px solid ${listSettings[list.id]?.color || predefinedTaskColors[0]}` }}
+                    >
                       <CardHeader className="py-3 px-4 border-b">
                         <CardTitle className="text-md">{list.title}</CardTitle>
                       </CardHeader>
@@ -612,6 +720,7 @@ export function TaskListWidget() {
 
   useEffect(() => {
     setIsClient(true); 
+    // For client components, environment variables prefixed with NEXT_PUBLIC_ are available.
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (clientId) {
       setGoogleClientId(clientId);
@@ -622,6 +731,7 @@ export function TaskListWidget() {
   }, []);
 
   if (!isClient) {
+    // Render a skeleton or loading state during SSR or before client-side hydration
     return (
        <div className="p-4 border rounded-lg shadow-lg">
         <div className="p-4 border-b"><SectionTitle icon={ListChecks} title="Tasks" /></div>
@@ -657,4 +767,3 @@ export function TaskListWidget() {
     </GoogleOAuthProvider>
   );
 }
-
