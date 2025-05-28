@@ -3,6 +3,7 @@ import { NewsWidget } from '@/components/dashboard/news-widget';
 import { CalendarWidget } from '@/components/dashboard/calendar-widget';
 import { EnvironmentalWidget } from '@/components/dashboard/environmental-widget';
 import { AssetTrackerWidget } from '@/components/dashboard/asset-tracker-widget';
+import { TaskListWidget } from '@/components/dashboard/task-list-widget';
 import { Separator } from '@/components/ui/separator';
 import { LifeBuoy } from 'lucide-react';
 
@@ -24,6 +25,7 @@ export default function LifeOSPage() {
         <div className="lg:col-span-1 space-y-6">
           <DateTimeWidget />
           <CalendarWidget />
+          
         </div>
 
         {/* Column 2 */}
@@ -35,7 +37,7 @@ export default function LifeOSPage() {
         {/* Column 3 */}
         <div className="lg:col-span-1 space-y-6">
           <AssetTrackerWidget />
-           {/* Placeholder for another widget or keep it cleaner */}
+          <TaskListWidget />
         </div>
       </main>
 
