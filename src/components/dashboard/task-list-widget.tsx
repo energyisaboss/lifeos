@@ -49,7 +49,7 @@ interface TaskListSetting {
 }
 
 const GOOGLE_TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
-const TASK_LIST_SETTINGS_STORAGE_KEY = 'googleTaskListSettings_v1'; // Updated key
+const TASK_LIST_SETTINGS_STORAGE_KEY = 'googleTaskListSettings_v1'; 
 
 const predefinedTaskColors: string[] = [
   '#F44336', // Red
@@ -103,10 +103,16 @@ const TaskListContent: React.FC = () => {
       const savedSettings = localStorage.getItem(TASK_LIST_SETTINGS_STORAGE_KEY);
       if (savedSettings) {
         try {
-          setListSettings(JSON.parse(savedSettings));
+          const parsedSettings = JSON.parse(savedSettings);
+          if (typeof parsedSettings === 'object' && parsedSettings !== null) {
+            setListSettings(parsedSettings);
+          } else {
+            console.warn("TaskListWidget: Parsed list settings from localStorage is not an object, ignoring.");
+            localStorage.removeItem(TASK_LIST_SETTINGS_STORAGE_KEY);
+          }
         } catch (e) {
           console.error("TaskListWidget: Failed to parse list settings from localStorage", e);
-          localStorage.removeItem(TASK_LIST_SETTINGS_STORAGE_KEY); // Clear corrupted data
+          localStorage.removeItem(TASK_LIST_SETTINGS_STORAGE_KEY); 
         }
       }
     }
@@ -145,23 +151,25 @@ const TaskListContent: React.FC = () => {
             console.log('TaskListWidget: Google Tasks API discovered.');
             setIsGapiClientLoaded(true);
             resolve();
-          } catch (initError) {
-            console.error('TaskListWidget: Error initializing GAPI client or Tasks API:', initError);
-            setError('Failed to initialize Google API client or Tasks API.');
+          } catch (initError: any) {
+            const message = `Error initializing GAPI client or Tasks API: ${initError?.message || String(initError)}`;
+            console.error(`TaskListWidget: ${message}`, initError);
+            setError(message); 
             setIsGapiClientLoaded(false);
-            reject(initError);
+            reject(new Error(message)); 
           }
         });
       };
-      script.onerror = (err) => {
-         console.error('TaskListWidget: Error loading GAPI script:', err);
-         setError('Failed to load Google API script.');
+      script.onerror = (event: Event | string) => {
+         const message = `Error loading GAPI script: ${typeof event === 'string' ? event : (event instanceof Event && event.type ? event.type : 'Unknown script load error')}`;
+         console.error(`TaskListWidget: ${message}`, event);
+         setError(message);
          setIsGapiClientLoaded(false);
-         reject(err);
+         reject(new Error(message));
       }
       document.body.appendChild(script);
     });
-  }, [isGapiClientLoaded]);
+  }, [isGapiClientLoaded, setError]);
 
 
   const handleSignOut = useCallback(() => {
@@ -170,16 +178,15 @@ const TaskListContent: React.FC = () => {
     setIsSignedIn(false);
     setTaskLists([]);
     setTasksByListId({});
-    // setListSettings({}); // Optionally clear settings on sign out, or keep them for next sign-in
+    // setListSettings({}); // User might prefer settings persist
     setShowTaskSettings(false);
     setError(null);
     setErrorPerList({});
-    setIsGapiClientLoaded(false);
+    setIsGapiClientLoaded(false); // Force GAPI to reload on next sign-in attempt
     setEditingListId(null);
     setEditingListTitle('');
     if (typeof window !== 'undefined') {
       localStorage.removeItem('googleTasksAccessToken');
-      // localStorage.removeItem(TASK_LIST_SETTINGS_STORAGE_KEY); // Decide if settings persist across sign-outs
     }
     if (window.gapi && window.gapi.client) {
         window.gapi.client.setToken(null);
@@ -199,7 +206,7 @@ const TaskListContent: React.FC = () => {
         await loadGapiClient();
       }
       if (!window.gapi || !window.gapi.client || !window.gapi.client.tasks) {
-        throw new Error("Google Tasks API client is not available.");
+        throw new Error("Google Tasks API client is not available (fetchAndSetTasksForList).");
       }
       window.gapi.client.setToken({ access_token: token });
       const response = await window.gapi.client.tasks.tasks.list({
@@ -212,7 +219,7 @@ const TaskListContent: React.FC = () => {
       setTasksByListId(prev => ({ ...prev, [listId]: response?.result?.items || [] }));
     } catch (err: any) {
       console.error(`TaskListWidget: Error fetching tasks for list ${listId}:`, err);
-      setErrorPerList(prev => ({ ...prev, [listId]: `Failed to fetch tasks: ${err.result?.error?.message || err.message || 'Unknown error'}.`}));
+      setErrorPerList(prev => ({ ...prev, [listId]: `Failed to fetch tasks: ${err.message || err.result?.error?.message || 'Unknown error'}.`}));
       if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
     } finally {
       setIsLoadingTasksForList(prev => ({ ...prev, [listId]: false }));
@@ -240,50 +247,46 @@ const TaskListContent: React.FC = () => {
       console.log(`TaskListWidget: Fetched ${fetchedLists.length} task lists from API.`);
       setTaskLists(fetchedLists);
 
+      // Initialize settings for any new lists
       setListSettings(prevSettings => {
         const newSettings = {...prevSettings};
-        let updated = false;
+        let settingsChanged = false;
         fetchedLists.forEach((list, index) => {
             if (!newSettings[list.id]) {
                 newSettings[list.id] = {
-                    visible: index === 0, // Make only the first list visible by default, or adjust as needed
+                    visible: index === 0, // Default first list to visible
                     color: getNextColor() 
                 };
-                updated = true;
-            }
-            // Ensure existing entries have a color if they somehow miss it
-            if (newSettings[list.id] && !newSettings[list.id].color) {
-                newSettings[list.id].color = getNextColor();
-                updated = true;
+                settingsChanged = true;
+            } else if (!newSettings[list.id].color) { // Ensure existing entries have a color
+                newSettings[list.id].color = newSettings[list.id].color || getNextColor();
+                settingsChanged = true;
             }
         });
-        if (updated) {
-            if (typeof window !== 'undefined') {
-                localStorage.setItem(TASK_LIST_SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
-            }
+        if (settingsChanged && typeof window !== 'undefined') {
+            localStorage.setItem(TASK_LIST_SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
         }
         return newSettings;
       });
       
-      // This part of fetching tasks might need to be re-evaluated if setListSettings is async and listSettings isn't immediately updated
-      // For simplicity, we rely on listSettings being updated by the time this loop runs or on a subsequent effect triggered by listSettings change.
-      fetchedLists.forEach(list => {
-        if (listSettings[list.id]?.visible) { // Use the potentially updated listSettings
-          fetchAndSetTasksForList(token, list.id);
-        }
-      });
-
     } catch (err: any) {
       console.error('TaskListWidget: Error fetching task lists:', err);
-      setError(`Failed to fetch task lists: ${err.result?.error?.message || err.message || 'Unknown error'}. Try signing out and in again.`);
+      // Check if error message is one set by loadGapiClient to avoid overwriting
+      if (error !== "Failed to initialize Google API client or Tasks API." && error !== "Failed to load Google API script.") {
+        setError(`Failed to fetch task lists: ${err.message || err.result?.error?.message || 'Unknown error'}. Try signing out and in again.`);
+      }
       if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
     } finally {
       setIsLoadingLists(false);
     }
-  }, [isGapiClientLoaded, loadGapiClient, handleSignOut, fetchAndSetTasksForList, listSettings]); // listSettings dependency for immediate task fetch logic
+  }, [isGapiClientLoaded, loadGapiClient, handleSignOut, error]); // added `error` to dependencies
 
   useEffect(() => {
-    if (isSignedIn || !accessToken) {
+    if (!isSignedIn && accessToken) { // If signed out but token exists (e.g. from previous session)
+      setAccessToken(null);
+      if (typeof window !== 'undefined') localStorage.removeItem('googleTasksAccessToken');
+    }
+    if (isSignedIn || accessToken) { // Attempt to load GAPI if signed in OR if a token exists (for auto-signin)
        loadGapiClient().catch(e => console.error("TaskListWidget: Failed to load GAPI on mount/auth change", e));
     }
   }, [isSignedIn, accessToken, loadGapiClient]);
@@ -298,8 +301,7 @@ const TaskListContent: React.FC = () => {
   }, [accessToken, isSignedIn, isGapiClientLoaded, fetchTaskLists]);
 
   useEffect(() => {
-    // This effect ensures tasks are fetched for newly visible lists if accessToken is available
-    if (accessToken && isGapiClientLoaded) {
+    if (accessToken && isGapiClientLoaded && taskLists.length > 0) {
         taskLists.forEach(list => {
             if (listSettings[list.id]?.visible && !tasksByListId[list.id] && !isLoadingTasksForList[list.id]) {
                 fetchAndSetTasksForList(accessToken, list.id);
@@ -315,9 +317,7 @@ const TaskListContent: React.FC = () => {
     setIsSignedIn(true);
     if (typeof window !== 'undefined') localStorage.setItem('googleTasksAccessToken', newAccessToken);
     console.log('TaskListWidget: Login successful, token acquired.');
-    loadGapiClient().then(() => {
-        console.log('TaskListWidget: GAPI client loaded post-login. Fetch should be triggered by useEffect.');
-    }).catch(e => console.error("TaskListWidget: GAPI load failed post-login", e));
+    // GAPI client loading and subsequent fetches are handled by useEffect dependencies
   };
   
   const login = useGoogleLogin({
@@ -355,7 +355,7 @@ const TaskListContent: React.FC = () => {
       toast({ title: "Task Added", description: `"${response.result.title}" added to ${taskLists.find(l=>l.id === listId)?.title}.` });
     } catch (err: any) {
       console.error('TaskListWidget: Error adding task:', err);
-      setErrorPerList(prev => ({ ...prev, [listId]: `Failed to add task: ${err.result?.error?.message || err.message || 'Unknown error'}.`}));
+      setErrorPerList(prev => ({ ...prev, [listId]: `Failed to add task: ${err.message || err.result?.error?.message || 'Unknown error'}.`}));
       if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
     } finally {
       setIsAddingTaskForList(prev => ({ ...prev, [listId]: false }));
@@ -395,7 +395,7 @@ const TaskListContent: React.FC = () => {
       }
     } catch (err: any) {
       console.error('TaskListWidget: Error updating task:', err);
-      setErrorPerList(prev => ({ ...prev, [listId]: `Failed to update task: ${err.result?.error?.message || err.message || 'Unknown error'}.`}));
+      setErrorPerList(prev => ({ ...prev, [listId]: `Failed to update task: ${err.message || err.result?.error?.message || 'Unknown error'}.`}));
       setTasksByListId(prev => ({ ...prev, [listId]: originalTasksForList }));
       if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
     }
@@ -428,12 +428,12 @@ const TaskListContent: React.FC = () => {
         }
         return newSettings;
       });
-      setTaskLists(prev => [...prev, newList]); // Add to local list of all lists
-      fetchAndSetTasksForList(accessToken, newList.id); // Fetch tasks for the new list
+      setTaskLists(prev => [...prev, newList]); 
+      if (accessToken) fetchAndSetTasksForList(accessToken, newList.id);
 
     } catch (err: any) {
       console.error('TaskListWidget: Error creating task list:', err);
-      setError(`Failed to create task list: ${err.result?.error?.message || err.message || 'Unknown error'}.`);
+      setError(`Failed to create task list: ${err.message || err.result?.error?.message || 'Unknown error'}.`);
       if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
     } finally {
       setIsCreatingList(false);
@@ -445,13 +445,13 @@ const TaskListContent: React.FC = () => {
         const newSettings = {
             ...prev,
             [listId]: {
-                ...(prev[listId] || { visible: false, color: getNextColor() }), // Ensure a default color if somehow missing
+                ...(prev[listId] || { visible: false, color: getNextColor() }), 
                 [key]: value
             }
         };
-        if (typeof window !== 'undefined') {
-            localStorage.setItem(TASK_LIST_SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
-        }
+        // Persist to localStorage is handled by the useEffect watching listSettings
+        
+        // If making a list visible, and tasks aren't loaded/loading, fetch them
         if (key === 'visible' && value === true && accessToken && !tasksByListId[listId] && !isLoadingTasksForList[listId] && isGapiClientLoaded) {
           fetchAndSetTasksForList(accessToken, listId);
         }
@@ -487,7 +487,7 @@ const TaskListContent: React.FC = () => {
       handleCancelEditListTitle();
     } catch (err: any) {
       console.error('TaskListWidget: Error updating task list title:', err);
-      toast({ title: "Update Failed", description: `Could not update list title: ${err.result?.error?.message || err.message}`, variant: "destructive" });
+      toast({ title: "Update Failed", description: `Could not update list title: ${err.message || err.result?.error?.message || 'Unknown Error'}`, variant: "destructive" });
       if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
     } finally {
       setIsUpdatingListTitle(false);
@@ -613,11 +613,11 @@ const TaskListContent: React.FC = () => {
                           value={newTaskListTitle}
                           onChange={(e) => setNewTaskListTitle(e.target.value)}
                           placeholder="New list title..."
-                          className="flex-grow"
+                          className="flex-grow h-9 text-sm"
                           onKeyPress={(e) => e.key === 'Enter' && !isCreatingList && handleCreateTaskList()}
                           disabled={isCreatingList}
                         />
-                        <Button onClick={handleCreateTaskList} disabled={!newTaskListTitle.trim() || isCreatingList} size="sm">
+                        <Button onClick={handleCreateTaskList} disabled={!newTaskListTitle.trim() || isCreatingList} size="sm" className="h-9">
                           {isCreatingList ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListPlus className="h-4 w-4" />}
                           Create
                         </Button>
@@ -626,7 +626,7 @@ const TaskListContent: React.FC = () => {
                     <Separator />
                      <div className="flex justify-center mt-4">
                         <Button variant="outline" size="sm" onClick={handleSignOut}>
-                            <LogOut className="mr-2 h-4 w-4" /> Sign Out of Google Tasks
+                            <LogOut className="mr-2 h-4 w-4" /> Sign Out
                         </Button>
                     </div>
                   </CardContent>
@@ -661,6 +661,7 @@ const TaskListContent: React.FC = () => {
                             onClick={() => handleAddTask(list.id)} 
                             disabled={!(newTaskTitles[list.id] || '').trim() || isAddingTaskForList[list.id]} 
                             size="sm"
+                            className="h-9"
                           >
                             {isAddingTaskForList[list.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
                           </Button>
@@ -682,7 +683,7 @@ const TaskListContent: React.FC = () => {
                                   />
                                   <label
                                     htmlFor={`task-${list.id}-${task.id}`}
-                                    className={`flex-1 text-sm ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-card-foreground'}`}
+                                    className={`flex-1 text-sm cursor-pointer ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-card-foreground'}`}
                                   >
                                     {task.title}
                                   </label>
@@ -720,7 +721,6 @@ export function TaskListWidget() {
 
   useEffect(() => {
     setIsClient(true); 
-    // For client components, environment variables prefixed with NEXT_PUBLIC_ are available.
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (clientId) {
       setGoogleClientId(clientId);
@@ -731,9 +731,8 @@ export function TaskListWidget() {
   }, []);
 
   if (!isClient) {
-    // Render a skeleton or loading state during SSR or before client-side hydration
     return (
-       <div className="p-4 border rounded-lg shadow-lg">
+       <div className="p-4 rounded-lg shadow-md">
         <div className="p-4 border-b"><SectionTitle icon={ListChecks} title="Tasks" /></div>
         <div className="p-6">
           <Skeleton className="h-10 w-3/4 mb-4" />
@@ -746,7 +745,7 @@ export function TaskListWidget() {
   
   if (providerError || !googleClientId) {
     return (
-      <div className="p-4 border rounded-lg shadow-lg">
+      <div className="p-4 rounded-lg shadow-md">
         <div className="p-4 border-b"><SectionTitle icon={ListChecks} title="Tasks" /></div>
         <div className="p-6">
           <Alert variant="destructive">
@@ -767,3 +766,4 @@ export function TaskListWidget() {
     </GoogleOAuthProvider>
   );
 }
+
