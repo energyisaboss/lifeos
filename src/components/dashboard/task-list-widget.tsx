@@ -85,23 +85,23 @@ const TaskListContent: React.FC = () => {
   const [tasksByListId, setTasksByListId] = useState<Record<string, Task[]>>({});
   
   const [listSettings, setListSettings] = useState<Record<string, TaskListSetting>>(() => {
-    if (typeof window !== 'undefined') {
-      const savedSettings = localStorage.getItem(TASK_LIST_SETTINGS_STORAGE_KEY);
-      if (savedSettings) {
-        try {
-          const parsedSettings = JSON.parse(savedSettings);
-          if (typeof parsedSettings === 'object' && parsedSettings !== null) {
-            // Ensure existing settings have a color, assign if missing
-            Object.keys(parsedSettings).forEach(key => {
-              if (parsedSettings[key] && (!parsedSettings[key].color || !isValidHexColor(parsedSettings[key].color))) {
-                parsedSettings[key].color = getNextColor(); 
-              }
-            });
-            return parsedSettings;
-          }
-        } catch (e) {
-          console.error("TaskListWidget: Failed to parse list settings from localStorage", e);
+    if (typeof window === 'undefined') {
+      return {};
+    }
+    const savedSettings = localStorage.getItem(TASK_LIST_SETTINGS_STORAGE_KEY);
+    if (savedSettings) {
+      try {
+        const parsedSettings = JSON.parse(savedSettings);
+        if (typeof parsedSettings === 'object' && parsedSettings !== null) {
+          Object.keys(parsedSettings).forEach(key => {
+            if (parsedSettings[key] && (!parsedSettings[key].color || !isValidHexColor(parsedSettings[key].color))) {
+              parsedSettings[key].color = getNextColor(); 
+            }
+          });
+          return parsedSettings;
         }
+      } catch (e) {
+        console.error("TaskListWidget: Failed to parse list settings from localStorage", e);
       }
     }
     return {};
@@ -168,11 +168,11 @@ const TaskListContent: React.FC = () => {
         });
       };
       script.onerror = (event: Event | string) => {
-         const message = `Error loading GAPI script: ${typeof event === 'string' ? event : (event instanceof Event && event.type ? event.type : 'Unknown script load error')}`;
-         console.error(`TaskListWidget: ${message}`, event);
-         setError(new Error(message).message);
+         const errorMessage = `Error loading GAPI script: ${typeof event === 'string' ? event : (event instanceof Event && event.type ? event.type : 'Unknown script load error')}`;
+         console.error(`TaskListWidget: ${errorMessage}`, event);
+         setError(new Error(errorMessage).message);
          setIsGapiClientLoaded(false);
-         reject(new Error(message));
+         reject(new Error(errorMessage));
       }
       document.body.appendChild(script);
     });
@@ -258,15 +258,17 @@ const TaskListContent: React.FC = () => {
         let settingsChanged = false;
         let newListsMadeVisible = false;
         
+        const currentlyVisibleCount = Object.keys(newSettings).filter(key => newSettings[key]?.visible).length;
+
         fetchedLists.forEach((list, index) => {
             if (!newSettings[list.id]) {
-                const isFirstList = Object.keys(newSettings).filter(key => newSettings[key]?.visible).length === 0 && index === 0;
+                const makeThisVisible = currentlyVisibleCount === 0 && index === 0; // Make only the very first list visible by default
                 newSettings[list.id] = {
-                    visible: isFirstList, 
+                    visible: makeThisVisible, 
                     color: getNextColor() 
                 };
                 settingsChanged = true;
-                if (isFirstList) newListsMadeVisible = true;
+                if (makeThisVisible) newListsMadeVisible = true;
             } else if (!newSettings[list.id].color || !isValidHexColor(newSettings[list.id].color) ) { 
                 newSettings[list.id].color = getNextColor();
                 settingsChanged = true;
@@ -663,7 +665,15 @@ const TaskListContent: React.FC = () => {
               <div className="space-y-4 mt-4">
                 {visibleListsToDisplay.map(list => {
                   const listColor = listSettings[list.id]?.color;
-                  const finalColor = listColor && isValidHexColor(listColor) ? listColor : predefinedTaskColors[0];
+                  const finalColor = (listColor && isValidHexColor(listColor)) ? listColor : predefinedTaskColors[0];
+                  const checkboxStyle = taskStatus === 'completed' && finalColor && isValidHexColor(finalColor) ? {
+                    '--task-checkbox-checked-bg': finalColor,
+                    '--task-checkbox-checked-border': finalColor,
+                    '--task-checkbox-unchecked-border': finalColor, // Also color unchecked border
+                  } : {
+                    '--task-checkbox-unchecked-border': finalColor, // Color unchecked border
+                  } as React.CSSProperties;
+
                   return (
                   <Card 
                     key={list.id} 
@@ -711,10 +721,16 @@ const TaskListContent: React.FC = () => {
                                   checked={task.status === 'completed'}
                                   onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
                                   aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
-                                  className={cn(
-                                    // Conditionally apply styles for checked state
-                                    task.status === 'completed' && `!bg-[${finalColor}] !border-[${finalColor}] text-primary-foreground`
-                                  )}
+                                  className="task-list-checkbox"
+                                  style={
+                                    finalColor && isValidHexColor(finalColor)
+                                      ? {
+                                          '--task-checkbox-checked-bg': finalColor,
+                                          '--task-checkbox-checked-border': finalColor,
+                                          '--task-checkbox-unchecked-border': finalColor, // Apply to unchecked border as well
+                                        }
+                                      : {}
+                                  }
                                 />
                                 <label
                                   htmlFor={`task-${list.id}-${task.id}`}
@@ -766,14 +782,15 @@ export function TaskListWidget() {
   }, []);
 
   if (!isClient) {
-    // Return a basic skeleton or placeholder during SSR or before client hydration
     return (
        <div className="flex flex-col">
-        <div className="p-4 border-b mb-1"><SectionTitle icon={ListChecks} title="Tasks" /></div>
+        <div className="flex justify-between items-center mb-1 p-4 border-b">
+            <SectionTitle icon={ListChecks} title="Tasks" className="mb-0 text-lg"/>
+        </div>
         <div className="px-4 pb-4">
-          <Skeleton className="h-10 w-3/4 mb-4" />
           <Skeleton className="h-8 w-full mb-2" />
-          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-6 w-3/4 mb-3" />
+          <Skeleton className="h-20 w-full" />
         </div>
       </div>
     );
@@ -782,7 +799,9 @@ export function TaskListWidget() {
   if (providerError || !googleClientId) {
     return (
       <div className="flex flex-col">
-        <div className="p-4 border-b mb-1"><SectionTitle icon={ListChecks} title="Tasks" /></div>
+         <div className="flex justify-between items-center mb-1 p-4 border-b">
+            <SectionTitle icon={ListChecks} title="Tasks" className="mb-0 text-lg"/>
+        </div>
         <div className="px-4 pb-4">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
