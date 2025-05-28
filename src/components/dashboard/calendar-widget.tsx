@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { SectionTitle } from './section-title';
-import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw, LinkIcon, Palette, Check, Edit3, XCircle } from 'lucide-react';
+import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw, LinkIcon, Palette, Check, Edit3, XCircle, Settings2 } from 'lucide-react';
 import type { CalendarEvent as AppCalendarEvent } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -81,7 +81,8 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
   const [isClientLoaded, setIsClientLoaded] = useState(false);
 
   useEffect(() => {
-    if (displayMode === 'widgetOnly' && !isClientLoaded) return;
+    if (displayMode === 'widgetOnly' && !isClientLoaded && typeof window === 'undefined') return;
+    
     if (typeof window !== 'undefined') {
       const savedFeedsString = localStorage.getItem(LOCALSTORAGE_KEY_ICAL_FEEDS);
       let loadedFeeds: IcalFeedItem[] = [];
@@ -146,7 +147,11 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     results.forEach((result, index) => {
       const feed = validFeeds[index];
       if (result.status === 'fulfilled') {
-        fetchedEvents.push(...result.value);
+        fetchedEvents.push(...result.value.map(event => ({
+            ...event,
+            startTime: new Date(event.startTime), // Ensure conversion to Date objects
+            endTime: new Date(event.endTime),
+        })));
       } else {
         console.error(`Error fetching/processing iCal feed ${feed.label} (${feed.url}):`, result.reason);
         setError(prevError => {
@@ -165,7 +170,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
       });
     }
 
-    fetchedEvents.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    fetchedEvents.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
     setAllEvents(fetchedEvents);
     setIsLoading(false);
   }, [icalFeeds, isClientLoaded]); 
@@ -215,18 +220,17 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     toast({ title: "Feed Removed", description: `"${feedLabel}" has been removed.` });
   }, [icalFeeds]);
 
-  const getUpcomingEventsForFeed = useCallback((feedId: string): AppCalendarEvent[] => {
-    const feed = icalFeeds.find(f => f.id === feedId);
+  const getUpcomingEventsForFeed = useCallback((feed: IcalFeedItem): AppCalendarEvent[] => {
     if (!feed) return [];
     return allEvents
       .filter(event => event.calendarSource === feed.label && event.color.toLowerCase() === feed.color.toLowerCase())
-      .filter(event => new Date(event.endTime) >= new Date(new Date().setHours(0,0,0,0)))
+      .filter(event => event.endTime >= new Date(new Date().setHours(0,0,0,0)))
       .slice(0, 15); 
-  }, [icalFeeds, allEvents]);
+  }, [allEvents]);
 
   const formatEventTime = (event: AppCalendarEvent) => {
-    const startTime = new Date(event.startTime);
-    const endTime = new Date(event.endTime);
+    const startTime = event.startTime;
+    const endTime = event.endTime;
     if (event.isAllDay) return "All Day";
     const start = format(startTime, 'p');
     if (!endTime || endTime.getTime() === startTime.getTime() ||
@@ -238,7 +242,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
   };
 
   const formatEventDate = (event: AppCalendarEvent) => {
-    return format(new Date(event.startTime), 'EEE, MMM d');
+    return format(event.startTime, 'EEE, MMM d');
   }
 
   const handleOpenEditDialog = useCallback((feed: IcalFeedItem) => {
@@ -290,11 +294,11 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
 
 
   const renderSettings = () => (
-    <Card className="shadow-md">
-      <CardHeader>
+    <div className="border rounded-lg p-3 bg-muted/10 shadow-sm">
+      <CardHeader className="p-1 pb-3">
         <CardTitle className="text-lg">Calendar Settings</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="p-1 space-y-4">
         <div>
           <Label htmlFor="new-ical-label" className="text-xs">Feed Label (Optional)</Label>
           <Input
@@ -379,7 +383,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                           <p className="text-xs text-destructive mt-1">Invalid hex color code.</p>
                       )}
                     </div>
-                    <div className="mt-2 flex items-center self-end gap-1">
+                    <div className="mt-2 flex items-center gap-1">
                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEditDialog(feed)} aria-label="Edit feed">
                         <Edit3 className="w-3.5 h-3.5" />
                       </Button>
@@ -397,76 +401,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
             <p className="text-xs text-muted-foreground text-center py-2">No feeds added yet. Add one above.</p>
         )}
       </CardContent>
-    </Card>
-  );
-
-  const renderWidgetDisplay = () => (
-    <>
-      {isLoading && isClientLoaded && icalFeeds.filter(f => f.url.trim()).length > 0 && (
-        Array.from({ length: Math.min(2, icalFeeds.filter(f => f.url.trim()).length || 1) }).map((_, i) => (
-          <Card key={`skel-cat-${i}`} className="shadow-md mb-4" style={{borderTop: `4px solid hsl(var(--muted))`}}>
-            <CardHeader className="p-3"> <Skeleton className="h-5 w-1/2" /> </CardHeader>
-            <CardContent className="px-3 py-0 pb-3">
-              <div className="py-2"><Skeleton className="h-4 w-3/4 mb-2" /><Skeleton className="h-3 w-1/2" /></div>
-            </CardContent>
-          </Card>
-        ))
-      )}
-
-      {!isLoading && error && isClientLoaded && <div className="p-4 border rounded-md bg-destructive/10 text-destructive mb-4"><p className="text-sm p-2 py-2">{error}</p></div>}
-      
-      {!isLoading && !error && isClientLoaded && icalFeeds.filter(f => f.url.trim()).length === 0 && (
-          <Card className="shadow-md mb-4"><CardContent className="pt-4"><p className="text-sm text-muted-foreground p-2 py-2 text-center">No upcoming events. Open settings to add an iCal feed.</p></CardContent></Card>
-      )}
-
-      {!isLoading && !error && isClientLoaded && (
-        icalFeeds.map(feed => {
-          if (!feed.url.trim()) return null;
-          const eventsForThisFeed = getUpcomingEventsForFeed(feed.id);
-
-          if (eventsForThisFeed.length === 0 && !isLoading && !icalFeeds.some(f => f.id === feed.id && f.url.trim())) return null; 
-
-          const feedColor = (feed.color && isValidHexColor(feed.color)) ? feed.color : 'hsl(var(--border))';
-
-          return (
-            <Card key={feed.id} className="shadow-md mb-4" style={{borderTop: `4px solid ${feedColor}`}}>
-              <CardHeader className="p-3">
-                <CardTitle className="text-lg flex items-center">
-                  <CalendarDays className="w-5 h-5 mr-2" style={{ color: feedColor }} />
-                  {feed.label}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="py-0 px-3 pb-3">
-                {isLoading && !allEvents.some(e => e.calendarSource === feed.label && e.color === feed.color) ? (
-                     <div className="py-2"><Skeleton className="h-4 w-3/4 mb-2" /><Skeleton className="h-3 w-1/2" /></div>
-                ) : eventsForThisFeed.length > 0 ? (
-                  <ScrollArea className="h-[200px] pr-2 py-2">
-                    <ul className="space-y-3">
-                      {eventsForThisFeed.map((event) => (
-                        <li key={event.id} className="flex items-start space-x-3 pb-2 border-b border-border last:border-b-0">
-                           <div className="flex-shrink-0 w-2 h-2 mt-1.5 rounded-full" style={{ backgroundColor: event.color }} />
-                          <div>
-                            <p className="font-medium text-card-foreground">{event.title}</p>
-                            <p className="text-xs text-muted-foreground">{formatEventDate(event)} - {formatEventTime(event)}</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </ScrollArea>
-                ) : (
-                  <p className="text-sm text-muted-foreground py-4 text-center">
-                    No upcoming events for this feed.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })
-      )}
-       {!isLoading && !error && isClientLoaded && icalFeeds.filter(f=>f.url.trim()).length > 0 && allEvents.length === 0 && (
-        <Card className="shadow-md mb-4"><CardContent className="pt-4"><p className="text-sm text-muted-foreground p-2 py-2 text-center">No upcoming events from any active feeds for the next 30 days, or feeds might need updating/checking.</p></CardContent></Card>
-      )}
-    </>
+    </div>
   );
 
   const editDialog = (
@@ -537,25 +472,90 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     ) : null;
   }
 
+  // Widget Display Mode
   if (!isClientLoaded && displayMode === 'widgetOnly') {
     return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center border-b pb-2">
+      <>
+        <div className="flex justify-between items-center border-b pb-2 mb-2">
             <SectionTitle icon={CalendarDays} title="Upcoming Events" className="mb-0 text-lg"/>
         </div>
         <Card className="shadow-md mb-4"><CardHeader className="p-3"><Skeleton className="h-5 w-1/2" /></CardHeader><CardContent className="px-3 py-0 pb-3"><div className="py-2"><Skeleton className="h-4 w-3/4 mb-2" /><Skeleton className="h-3 w-1/2" /></div></CardContent></Card>
-      </div>
+      </>
     );
   }
   
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center border-b pb-2">
+    <>
+      <div className="flex justify-between items-center border-b pb-2 mb-3">
         <SectionTitle icon={CalendarDays} title="Upcoming Events" className="mb-0 text-lg"/>
       </div>
-      {renderWidgetDisplay()}
+      
+      {isLoading && isClientLoaded && icalFeeds.filter(f => f.url.trim()).length > 0 && (
+        Array.from({ length: Math.min(2, icalFeeds.filter(f => f.url.trim()).length || 1) }).map((_, i) => (
+          <Card key={`skel-cat-${i}`} className="shadow-md mb-4" style={{borderTop: `4px solid hsl(var(--muted))`}}>
+            <CardHeader className="p-3"> <Skeleton className="h-5 w-1/2" /> </CardHeader>
+            <CardContent className="px-3 py-0 pb-3">
+              <div className="py-2"><Skeleton className="h-4 w-3/4 mb-2" /><Skeleton className="h-3 w-1/2" /></div>
+            </CardContent>
+          </Card>
+        ))
+      )}
+
+      {!isLoading && error && isClientLoaded && <div className="p-4 border rounded-md bg-destructive/10 text-destructive mb-4"><p className="text-sm p-2 py-2">{error}</p></div>}
+      
+      {!isLoading && !error && isClientLoaded && icalFeeds.filter(f => f.url.trim()).length === 0 && (
+          <p className="text-sm text-muted-foreground p-2 py-2 text-center">No upcoming events. Add an iCal feed via global settings.</p>
+      )}
+
+      {!isLoading && !error && isClientLoaded && (
+        icalFeeds.map(feed => {
+          if (!feed.url.trim()) return null;
+          const eventsForThisFeed = getUpcomingEventsForFeed(feed);
+
+          // Only render the card if the feed is valid and either loading or has events (or no error)
+          if (!isLoading && !error && eventsForThisFeed.length === 0 && !icalFeeds.some(f => f.id === feed.id && f.url.trim())) return null;
+
+          const feedColor = (feed.color && isValidHexColor(feed.color)) ? feed.color : 'hsl(var(--border))';
+
+          return (
+            <Card key={feed.id} className="shadow-md mb-4" style={{borderTop: `4px solid ${feedColor}`}}>
+              <CardHeader className="p-3">
+                <CardTitle className="text-lg flex items-center">
+                  <CalendarDays className="w-5 h-5 mr-2" style={{ color: feedColor }} />
+                  {feed.label}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="py-0 px-3 pb-3">
+                {isLoading && !allEvents.some(e => e.calendarSource === feed.label && e.color === feed.color) ? (
+                     <div className="py-2"><Skeleton className="h-4 w-3/4 mb-2" /><Skeleton className="h-3 w-1/2" /></div>
+                ) : eventsForThisFeed.length > 0 ? (
+                  <ScrollArea className="h-[200px] pr-2 py-2">
+                    <ul className="space-y-3">
+                      {eventsForThisFeed.map((event) => (
+                        <li key={event.id} className="flex items-start space-x-3 pb-2 border-b border-border last:border-b-0">
+                           <div className="flex-shrink-0 w-2 h-2 mt-1.5 rounded-full" style={{ backgroundColor: event.color }} />
+                          <div>
+                            <p className="font-medium text-card-foreground">{event.title}</p>
+                            <p className="text-xs text-muted-foreground">{formatEventDate(event)} - {formatEventTime(event)}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
+                ) : (
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    No upcoming events for this feed.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })
+      )}
+       {!isLoading && !error && isClientLoaded && icalFeeds.filter(f=>f.url.trim()).length > 0 && allEvents.length === 0 && (
+        <p className="text-sm text-muted-foreground p-2 py-2 text-center">No upcoming events from any active feeds for the next 30 days, or feeds might need updating/checking.</p>
+      )}
       {editDialog} 
-    </div>
+    </>
   );
 }
-
