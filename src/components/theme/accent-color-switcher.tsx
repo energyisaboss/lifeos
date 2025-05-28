@@ -16,7 +16,7 @@ interface AccentPalette {
 const ACCENT_COLOR_STORAGE_KEY = 'lifeos-accent-color-hex_v1';
 
 const predefinedPalettes: AccentPalette[] = [
-  { name: 'Default Purple', hex: '#9575CD' }, // Original default for consistency
+  { name: 'Default Purple', hex: '#9575CD' },
   { name: 'Red', hex: '#F44336' },
   { name: 'Blue', hex: '#2196F3' },
   { name: 'Orange', hex: '#FF9800' },
@@ -25,11 +25,51 @@ const predefinedPalettes: AccentPalette[] = [
   { name: 'Purple', hex: '#9C27B0' },
 ];
 
-const defaultAccentHex = predefinedPalettes[0].hex; // Default Purple
+const defaultAccentHex = predefinedPalettes[0].hex;
 
 const isValidHexColor = (color: string): boolean => {
   return /^#([0-9A-Fa-f]{3}){1,2}$/.test(color);
 };
+
+// Function to convert HEX to HSL color components string (e.g., "H S% L%")
+function hexToHslValues(hex: string): string | null {
+  if (!isValidHexColor(hex)) return null;
+  let r = 0, g = 0, b = 0;
+  if (hex.length === 4) { // #RGB
+    r = parseInt(hex[1] + hex[1], 16);
+    g = parseInt(hex[2] + hex[2], 16);
+    b = parseInt(hex[3] + hex[3], 16);
+  } else if (hex.length === 7) { // #RRGGBB
+    r = parseInt(hex.substring(1, 3), 16);
+    g = parseInt(hex.substring(3, 5), 16);
+    b = parseInt(hex.substring(5, 7), 16);
+  } else {
+    return null; // Invalid hex length
+  }
+
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+
+  const hue = Math.round(h * 360);
+  const saturation = Math.round(s * 100);
+  const lightness = Math.round(l * 100);
+  
+  return `${hue} ${saturation}% ${lightness}%`;
+}
+
 
 export function AccentColorSwitcher() {
   const [mounted, setMounted] = useState(false);
@@ -38,19 +78,25 @@ export function AccentColorSwitcher() {
 
   const applyTheme = (hexColor: string) => {
     if (!isValidHexColor(hexColor)) {
-      // Optionally, provide feedback that the hex is invalid
-      // For now, just don't apply if invalid
+      console.warn("Invalid hex color for theme application:", hexColor);
       return;
     }
     
-    document.documentElement.style.setProperty('--accent', hexColor);
-    document.documentElement.style.setProperty('--primary', hexColor);
-    document.documentElement.style.setProperty('--ring', hexColor);
-    document.documentElement.style.setProperty('--chart-1', hexColor);
+    const hslValues = hexToHslValues(hexColor);
+    if (!hslValues) {
+        console.warn("Could not convert hex to HSL:", hexColor);
+        return;
+    }
 
-    // For dark theme, a white foreground usually works well with most accents
-    document.documentElement.style.setProperty('--accent-foreground', 'hsl(0 0% 100%)');
-    document.documentElement.style.setProperty('--primary-foreground', 'hsl(0 0% 100%)');
+    document.documentElement.style.setProperty('--accent', hslValues);
+    document.documentElement.style.setProperty('--primary', hslValues);
+    document.documentElement.style.setProperty('--ring', hslValues);
+    document.documentElement.style.setProperty('--chart-1', hslValues);
+
+    // For dark theme, a white foreground usually works well with most accents.
+    // These are already HSL components in globals.css, so we set them as such.
+    document.documentElement.style.setProperty('--accent-foreground', '0 0% 100%');
+    document.documentElement.style.setProperty('--primary-foreground', '0 0% 100%');
     
     setActiveColorHex(hexColor);
     setCustomHexInput(hexColor); // Sync input field with applied color
@@ -62,7 +108,7 @@ export function AccentColorSwitcher() {
     if (savedAccentHex && isValidHexColor(savedAccentHex)) {
       applyTheme(savedAccentHex);
     } else {
-      applyTheme(defaultAccentHex); // Apply default if nothing valid saved
+      applyTheme(defaultAccentHex); // Apply default
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -78,8 +124,8 @@ export function AccentColorSwitcher() {
       applyTheme(customHexInput);
       localStorage.setItem(ACCENT_COLOR_STORAGE_KEY, customHexInput);
     } else {
-      // Provide feedback for invalid hex, e.g., using toast
-      console.warn("Invalid hex color entered:", customHexInput);
+      console.warn("Invalid custom hex color entered:", customHexInput);
+      // Optionally, you could add a toast notification here for invalid input
     }
   };
   
@@ -93,8 +139,8 @@ export function AccentColorSwitcher() {
       <div className="p-1 space-y-2">
         <div className="h-5 w-24 bg-muted animate-pulse rounded"></div>
         <div className="flex flex-wrap gap-2">
-          {Array(6).fill(0).map((_, i) => (
-            <div key={i} className="h-8 w-8 rounded-full bg-muted animate-pulse"></div>
+          {Array(predefinedPalettes.length).fill(0).map((_, i) => (
+            <div key={i} className="h-7 w-7 rounded-full bg-muted animate-pulse"></div>
           ))}
         </div>
          <div className="h-8 w-full bg-muted animate-pulse rounded mt-1"></div>
