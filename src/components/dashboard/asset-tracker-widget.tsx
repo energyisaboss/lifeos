@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, RefreshCw, AlertCircle, Loader2, Settings } from 'lucide-react';
+import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, RefreshCw, AlertCircle, Loader2, Settings, ListTree } from 'lucide-react';
 import type { Asset, AssetPortfolio, AssetHolding } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -38,7 +38,6 @@ const initialAssetFormState: Omit<Asset, 'id'> = {
   type: 'stock',
 };
 
-// Helper function to calculate portfolio metrics
 function calculateAssetPortfolio(
   assets: Asset[],
   fetchedPrices: Record<string, number | null>
@@ -134,12 +133,12 @@ export function AssetTrackerWidget() {
     let specificErrorMessage = "Could not fetch prices for some assets. Ensure symbols are correct and Finnhub API key is set in .env.local.";
 
     for (const asset of currentAssets) {
-      if ((asset.type === 'stock' || asset.type === 'fund') && asset.symbol) { // Broaden to include funds
+      if ((asset.type === 'stock' || asset.type === 'fund') && asset.symbol) {
         try {
           const priceData = await getAssetPrice({ symbol: asset.symbol });
           prices[asset.id] = priceData.currentPrice;
           if (priceData.currentPrice === null) {
-            console.warn(`Price not found or unavailable for symbol ${asset.symbol} (Type: ${asset.type})`);
+            console.warn(`Finnhub: Price not found or unavailable for symbol ${asset.symbol} (Type: ${asset.type}). API Response for ${asset.symbol} was ${priceData.currentPrice}`);
           }
         } catch (err) {
           console.error(`Error fetching price for ${asset.symbol}:`, err);
@@ -156,7 +155,7 @@ export function AssetTrackerWidget() {
           }
         }
       } else {
-        prices[asset.id] = null; // No fetching for crypto or if symbol is missing
+        prices[asset.id] = null; 
       }
     }
     setFetchedPrices(prices);
@@ -325,10 +324,64 @@ export function AssetTrackerWidget() {
       </div>
 
       {showAssetManagement && (
-        <div className="mb-4 p-3 border rounded-lg bg-muted/10 shadow-sm">
-            <Button size="sm" onClick={openAddForm} className="w-full">
-                <PlusCircle className="mr-2 h-4 w-4" /> Add New Asset
-            </Button>
+        <div className="mb-6 p-4 border rounded-lg bg-muted/10 shadow-sm">
+          <Button size="sm" onClick={openAddForm} className="w-full mb-4">
+            <PlusCircle className="mr-2 h-4 w-4" /> Add New Asset
+          </Button>
+          {assets.length > 0 ? (
+            <ScrollArea className="h-[200px] pr-1">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Asset</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {assets.map((asset) => (
+                    <TableRow key={asset.id}>
+                      <TableCell>
+                        <div className="font-medium text-card-foreground">{asset.name}</div>
+                        <div className="text-xs text-muted-foreground">{asset.symbol.toUpperCase()}</div>
+                      </TableCell>
+                      <TableCell className="capitalize">{asset.type}</TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex justify-center items-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditAsset(asset)} aria-label="Edit asset">
+                            <Edit3 className="w-4 h-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive h-7 w-7" aria-label="Delete asset">
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action cannot be undone. This will permanently delete the asset "{asset.name}".
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleRemoveAsset(asset.id)} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-2">No assets added yet.</p>
+          )}
         </div>
       )}
 
@@ -364,7 +417,6 @@ export function AssetTrackerWidget() {
                       <TableHead className="text-right">Total Value</TableHead>
                       <TableHead className="text-right">P/L</TableHead>
                       <TableHead className="text-right">P/L %</TableHead>
-                      {showAssetManagement && <TableHead className="text-center">Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -388,7 +440,7 @@ export function AssetTrackerWidget() {
                                 <AlertCircle className="w-3 h-3 inline-block ml-1 text-destructive cursor-help"/>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-xs text-xs">
-                                <p>Price data unavailable. This might be due to an invalid symbol, or limitations of the current API plan for this asset type. Check server logs for details.</p>
+                                <p>Price data unavailable. This might be due to an invalid symbol, or limitations of the current API plan for this asset type (e.g. some mutual funds). Check server logs for details.</p>
                               </TooltipContent>
                             </Tooltip>
                           )}
@@ -406,36 +458,6 @@ export function AssetTrackerWidget() {
                         )}>
                           {formatPercentage(asset.profitLossPercentage)}
                         </TableCell>
-                        {showAssetManagement && (
-                          <TableCell className="text-center">
-                            <div className="flex justify-center items-center gap-1">
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditAsset(asset)} aria-label="Edit asset">
-                                <Edit3 className="w-4 h-4" />
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive h-7 w-7" aria-label="Delete asset">
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      This action cannot be undone. This will permanently delete the asset "{asset.name}".
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleRemoveAsset(asset.id)} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </TableCell>
-                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -551,4 +573,3 @@ export function AssetTrackerWidget() {
     </TooltipProvider>
   );
 }
-
