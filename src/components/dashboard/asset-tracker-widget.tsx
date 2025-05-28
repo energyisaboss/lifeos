@@ -27,6 +27,8 @@ import { cn } from '@/lib/utils';
 import { getAssetPrice } from '@/ai/flows/asset-price-flow';
 import { getAssetProfile } from '@/ai/flows/asset-profile-flow';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
 
 const initialAssetFormState: Omit<Asset, 'id'> = {
   name: '',
@@ -132,12 +134,12 @@ export function AssetTrackerWidget() {
     let specificErrorMessage = "Could not fetch prices for some assets. Ensure symbols are correct and Finnhub API key is set in .env.local.";
 
     for (const asset of currentAssets) {
-      if (asset.type === 'stock' && asset.symbol) {
+      if ((asset.type === 'stock' || asset.type === 'fund') && asset.symbol) { // Broaden to include funds
         try {
           const priceData = await getAssetPrice({ symbol: asset.symbol });
           prices[asset.id] = priceData.currentPrice;
           if (priceData.currentPrice === null) {
-            console.warn(`Price not found or unavailable for stock symbol ${asset.symbol}`);
+            console.warn(`Price not found or unavailable for symbol ${asset.symbol} (Type: ${asset.type})`);
           }
         } catch (err) {
           console.error(`Error fetching price for ${asset.symbol}:`, err);
@@ -147,14 +149,14 @@ export function AssetTrackerWidget() {
             if (err.message.includes('FINNHUB_API_KEY_NOT_CONFIGURED')) {
               specificErrorMessage = "Finnhub API Key is not configured. Please set FINNHUB_API_KEY in your .env.local file and restart the server.";
             } else if (err.message.startsWith('FINNHUB_API_ERROR')) {
-              specificErrorMessage = `Finnhub API error for ${asset.symbol}: ${err.message.replace('FINNHUB_API_ERROR: ', '')}. Check symbol or API limits.`;
+              specificErrorMessage = `Finnhub API error for ${asset.symbol}: ${err.message.replace('FINNHUB_API_ERROR: ', '')}. Check symbol, API limits, or plan.`;
             } else if (err.message.startsWith('FETCH_ERROR')) {
                specificErrorMessage = `Network error fetching price for ${asset.symbol}. Check connection or Finnhub status.`;
             }
           }
         }
       } else {
-        prices[asset.id] = null;
+        prices[asset.id] = null; // No fetching for crypto or if symbol is missing
       }
     }
     setFetchedPrices(prices);
@@ -194,7 +196,7 @@ export function AssetTrackerWidget() {
 
   const handleSymbolBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
     const symbol = e.target.value.trim();
-    if (symbol && assetFormData.type === 'stock') { 
+    if (symbol && (assetFormData.type === 'stock' || assetFormData.type === 'fund')) { 
       setIsFetchingName(true);
       try {
         const profile = await getAssetProfile({ symbol });
@@ -219,8 +221,8 @@ export function AssetTrackerWidget() {
   };
 
   const validateForm = () => {
-    if (!assetFormData.name.trim() && assetFormData.type === 'stock' && !isFetchingName) {
-      toast({ title: "Validation Error", description: "Asset name is required for stocks.", variant: "destructive" });
+    if (!assetFormData.name.trim() && (assetFormData.type === 'stock' || assetFormData.type === 'fund') && !isFetchingName) {
+      toast({ title: "Validation Error", description: "Asset name is required for stocks/funds.", variant: "destructive" });
       return false;
     }
      if (!assetFormData.symbol.trim()) {
@@ -304,7 +306,7 @@ export function AssetTrackerWidget() {
   };
 
   return (
-    <React.Fragment>
+    <TooltipProvider>
       <div className="flex justify-between items-center mb-4">
         <SectionTitle icon={TrendingUp} title="Asset Tracker" className="mb-0" />
         <div className="flex items-center gap-2">
@@ -380,8 +382,15 @@ export function AssetTrackerWidget() {
                           ) : (
                             formatCurrency(asset.currentPricePerUnit, 'N/A')
                           )}
-                          {asset.currentPricePerUnit === null && asset.type === 'stock' && !isFetchingPrices && (
-                            <AlertCircle className="w-3 h-3 inline-block ml-1 text-destructive" title="Price data unavailable for this stock."/>
+                          {asset.currentPricePerUnit === null && (asset.type === 'stock' || asset.type === 'fund') && !isFetchingPrices && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <AlertCircle className="w-3 h-3 inline-block ml-1 text-destructive cursor-help"/>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs text-xs">
+                                <p>Price data unavailable. This might be due to an invalid symbol, or limitations of the current API plan for this asset type. Check server logs for details.</p>
+                              </TooltipContent>
+                            </Tooltip>
                           )}
                         </TableCell>
                         <TableCell className="text-right">{formatCurrency(asset.totalValue)}</TableCell>
@@ -465,7 +474,7 @@ export function AssetTrackerWidget() {
           <DialogHeader>
             <DialogTitle>{editingAsset ? 'Edit Asset' : 'Add New Asset'}</DialogTitle>
             <DialogDescription>
-              {editingAsset ? 'Update the details of your asset.' : 'Enter the details of the asset. Name for stocks will be fetched automatically from symbol.'}
+              {editingAsset ? 'Update the details of your asset.' : 'Enter the details of the asset. Name for stocks/funds will be fetched automatically from symbol.'}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -478,7 +487,7 @@ export function AssetTrackerWidget() {
                 onChange={handleInputChange} 
                 onBlur={handleSymbolBlur}
                 className="col-span-3" 
-                placeholder="e.g., AAPL" 
+                placeholder="e.g., AAPL, FXAIX" 
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -491,7 +500,7 @@ export function AssetTrackerWidget() {
                   onChange={handleInputChange} 
                   className="flex-1" 
                   placeholder="e.g., Apple Inc." 
-                  readOnly={isFetchingName && assetFormData.type === 'stock'}
+                  readOnly={isFetchingName && (assetFormData.type === 'stock' || assetFormData.type === 'fund')}
                 />
                 {isFetchingName && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
               </div>
@@ -517,9 +526,14 @@ export function AssetTrackerWidget() {
                 </SelectContent>
               </Select>
             </div>
-            {assetFormData.type !== 'stock' && (
+            {assetFormData.type === 'crypto' && (
                 <p className="col-span-4 text-xs text-muted-foreground text-center px-2 py-1 bg-muted/50 rounded-md">
-                    Automatic price fetching is currently optimized for stocks. Prices for funds and crypto may not be available or accurate.
+                    Automatic price fetching is not available for cryptocurrencies.
+                </p>
+            )}
+             {(assetFormData.type === 'stock' || assetFormData.type === 'fund') && (
+                <p className="col-span-4 text-xs text-muted-foreground text-center px-2 py-1 bg-muted/50 rounded-md">
+                    Price fetching for stocks/funds uses Finnhub. Data availability may vary based on symbol and API plan.
                 </p>
             )}
           </div>
@@ -534,6 +548,7 @@ export function AssetTrackerWidget() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </React.Fragment>
+    </TooltipProvider>
   );
 }
+
