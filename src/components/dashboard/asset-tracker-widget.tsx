@@ -53,12 +53,10 @@ function calculateAssetPortfolio(
     const initialCost = asset.quantity * asset.purchasePrice;
 
     let currentValue = 0;
-    // For stocks and funds, if price is fetched, use it. Otherwise, its current value is 0 for portfolio calc.
-    // For crypto, current value is considered 0 unless manually updated (which is not implemented here, so effectively 0 for auto-calc).
     if ((asset.type === 'stock' || asset.type === 'fund') && typeof currentPricePerUnit === 'number') {
       currentValue = asset.quantity * currentPricePerUnit;
     } else {
-      currentValue = 0; // Crypto or stock/fund with no price data contributes 0 to current value
+      currentValue = 0; 
     }
 
     const profitLoss = currentValue - initialCost;
@@ -110,7 +108,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         }
       } catch (e) {
         console.error("AssetTracker: Error parsing assets from localStorage on init:", e);
-        // Toast for error will be handled by useEffect
+        // Error toast will be handled by initialLoadError state in useEffect
       }
     }
     return [];
@@ -127,7 +125,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   const [isFetchingName, setIsFetchingName] = useState(false);
   const [showNewAssetForm, setShowNewAssetForm] = useState(false);
   const [initialLoadError, setInitialLoadError] = useState<string | null>(null);
-
+  
   const isFetchingPricesRef = useRef(isFetchingPrices);
   useEffect(() => {
     isFetchingPricesRef.current = isFetchingPrices;
@@ -137,15 +135,12 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
     if (typeof window === 'undefined') return;
     console.log("AssetTracker: Attempting to load assets from localStorage with key:", LOCALSTORAGE_KEY);
     const savedAssetsString = localStorage.getItem(LOCALSTORAGE_KEY);
-    console.log("AssetTracker: Raw data from localStorage:", savedAssetsString);
-
+    
     if (savedAssetsString) {
       try {
         const parsedAssetsArray = JSON.parse(savedAssetsString);
-        console.log("AssetTracker: Parsed data from localStorage:", parsedAssetsArray);
-
         if (!Array.isArray(parsedAssetsArray)) {
-           setInitialLoadError("Asset data in storage was corrupted and has been cleared.");
+          setInitialLoadError("Asset data in storage was corrupted and has been cleared.");
           localStorage.removeItem(LOCALSTORAGE_KEY);
           setAssets([]);
         } else {
@@ -158,9 +153,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
             typeof asset.purchasePrice === 'number' && asset.purchasePrice >= 0 &&
             ['stock', 'fund', 'crypto'].includes(asset.type)
           );
-          console.log("AssetTracker: Valid assets after filtering:", validAssets);
           setAssets(validAssets);
-
           if (validAssets.length < parsedAssetsArray.length) {
             setInitialLoadError("Some saved assets had invalid data and were not loaded.");
           }
@@ -172,11 +165,9 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         setAssets([]);
       }
     } else {
-        console.log("AssetTracker: No assets found in localStorage.");
         setAssets([]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Ran once on mount
+  }, []);
 
   useEffect(() => {
     if(initialLoadError){
@@ -186,18 +177,17 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         variant: initialLoadError.includes("corrupted") || initialLoadError.includes("data error") ? "destructive" : "default",
         duration: 7000,
       });
-      setInitialLoadError(null); // Clear after toasting
+      setInitialLoadError(null);
     }
   }, [initialLoadError]);
 
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      console.log("AssetTracker: Saving assets to localStorage:", JSON.stringify(assets));
       try {
         localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(assets));
       } catch (error) {
-        console.error("AssetTracker: Saving useEffect - Error saving assets to localStorage:", error);
+        console.error("AssetTracker: Error saving assets to localStorage:", error);
         toast({
           title: "Storage Error",
           description: "Could not save asset changes. Your browser storage might be full or unavailable.",
@@ -214,17 +204,13 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       setPriceFetchError(null);
       return;
     }
-    if (isFetchingPricesRef.current) {
-       console.log("AssetTracker: Price fetch already in progress, skipping.");
-      return;
-    }
+    if (isFetchingPricesRef.current) return;
+    
     setIsFetchingPrices(true);
     setPriceFetchError(null);
     const prices: Record<string, number | null> = {};
     let anErrorOccurred = false;
     let specificErrorMessage = "Could not fetch prices for some assets. Ensure symbols are correct and Tiingo API key is set in .env.local.";
-
-    console.log("AssetTracker: Fetching prices for assets:", currentAssets.map(a => a.symbol));
 
     for (const asset of currentAssets) {
       if ((asset.type === 'stock' || asset.type === 'fund') && asset.symbol) {
@@ -232,28 +218,23 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
           const priceData = await getAssetPrice({ symbol: asset.symbol });
           prices[asset.id] = priceData.currentPrice;
            if (priceData.currentPrice === null) {
-             console.warn(`Tiingo: Price not found or unavailable for symbol ${asset.symbol} (Type: ${asset.type}). API Response for ${asset.symbol} was ${JSON.stringify(priceData)}`);
-          } else {
-             console.log(`Tiingo: Successfully fetched price for ${asset.symbol}: ${priceData.currentPrice}`);
+             console.warn(`Tiingo: Price not found for symbol ${asset.symbol} (Type: ${asset.type}). Response: ${JSON.stringify(priceData)}`);
           }
         } catch (err) {
-          console.error(`Error fetching price for ${asset.symbol} from Tiingo:`, err);
           prices[asset.id] = null;
           anErrorOccurred = true;
           if (err instanceof Error) {
             if (err.message.includes('TIINGO_API_KEY_NOT_CONFIGURED')) {
-              specificErrorMessage = "Tiingo API Key is not configured. Please set TIINGO_API_KEY in your .env.local file and restart the server.";
+              specificErrorMessage = "Tiingo API Key is not configured. Please set TIINGO_API_KEY in .env.local and restart server.";
             } else if (err.message.startsWith('TIINGO_API_ERROR')) {
                const statusMatch = err.message.match(/TIINGO_API_ERROR: (\d+)/);
-               const status = statusMatch ? statusMatch[1] : 'Unknown Status';
-               specificErrorMessage = `Tiingo API error for ${asset.symbol} (Status: ${status}). Check symbol, API limits, or plan.`;
+               specificErrorMessage = `Tiingo API error for ${asset.symbol} (Status: ${statusMatch ? statusMatch[1] : 'Unknown'}). Check symbol, API limits, or plan.`;
             } else if (err.message.startsWith('FETCH_ERROR')) {
                specificErrorMessage = `Network error fetching price for ${asset.symbol}. Check connection or Tiingo status.`;
             }
           }
         }
       } else {
-        // For crypto or other types, we currently don't fetch prices automatically.
         prices[asset.id] = null;
       }
     }
@@ -261,12 +242,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
     setIsFetchingPrices(false);
     if (anErrorOccurred) {
       setPriceFetchError(specificErrorMessage);
-       toast({
-          title: "Price Fetching Issue",
-          description: specificErrorMessage,
-          variant: "destructive",
-          duration: 7000,
-        });
+       toast({ title: "Price Fetching Issue", description: specificErrorMessage, variant: "destructive", duration: 7000 });
     }
   }, []);
 
@@ -277,25 +253,16 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       setFetchedPrices({});
       setPortfolio(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assets, displayMode, settingsOpen, fetchAllAssetPrices]);
 
   useEffect(() => {
-    if (assets.length === 0 || displayMode !== 'widgetOnly') {
-      return;
-    }
+    if (assets.length === 0 || displayMode !== 'widgetOnly') return;
     const intervalId = setInterval(() => {
       if (!isFetchingPricesRef.current) {
-        console.log("AssetTracker: Auto-refreshing prices via interval.");
         fetchAllAssetPrices(assets);
       }
     }, REFRESH_INTERVAL_MS);
-
-    return () => {
-      console.log("AssetTracker: Clearing auto-refresh interval.");
-      clearInterval(intervalId);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => clearInterval(intervalId);
   }, [assets, displayMode, fetchAllAssetPrices]);
 
   useEffect(() => {
@@ -317,21 +284,17 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         setAssetFormData(prev => ({ ...prev, name: prev.type === 'crypto' ? '' : '', symbol: '' }));
         return;
     }
-
     setAssetFormData(prev => ({ ...prev, symbol }));
 
     if (assetFormData.type === 'stock' || assetFormData.type === 'fund') {
       setIsFetchingName(true);
       try {
         const profile = await getAssetProfile({ symbol });
-        if (profile.assetName) {
-          setAssetFormData(prev => ({ ...prev, name: profile.assetName! }));
-        } else {
-          setAssetFormData(prev => ({ ...prev, name: symbol }));
+        setAssetFormData(prev => ({ ...prev, name: profile.assetName || symbol }));
+        if (!profile.assetName) {
           toast({ title: "Name Fetch", description: `Could not fetch name for ${symbol} from Tiingo. Using symbol as name.`, variant: "default", duration: 3000});
         }
       } catch (error) {
-        console.error("Error fetching asset profile for symbol from Tiingo:", symbol, error);
         setAssetFormData(prev => ({ ...prev, name: symbol }));
         toast({ title: "Name Fetch Error", description: `Error fetching name for ${symbol} from Tiingo. Using symbol as name.`, variant: "destructive"});
       } finally {
@@ -349,7 +312,6 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         type: value,
         name: (value === 'crypto' && currentSymbol) ? currentSymbol : (prev.name || '')
     }));
-
     if ((value === 'stock' || value === 'fund') && currentSymbol) {
         handleSymbolBlur({ target: { value: currentSymbol } } as React.FocusEvent<HTMLInputElement>);
     }
@@ -367,10 +329,6 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
     if (assetFormData.purchasePrice < 0) {
       toast({ title: "Validation Error", description: "Purchase price cannot be negative.", variant: "destructive" });
       return false;
-    }
-    if (!assetFormData.name || !assetFormData.name.trim()) {
-        const nameToUse = assetFormData.symbol.toUpperCase();
-        setAssetFormData(prev => ({ ...prev, name: nameToUse }));
     }
     return true;
   };
@@ -413,7 +371,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       purchasePrice: assetToEdit.purchasePrice,
       type: assetToEdit.type,
     });
-    setShowNewAssetForm(false);
+    setShowNewAssetForm(false); // Hide new asset form if editing
   };
 
   const handleCancelEditAsset = () => {
@@ -423,7 +381,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   }
 
   const handleOpenNewAssetForm = () => {
-    setEditingAsset(null);
+    setEditingAsset(null); // Ensure not in edit mode
     setAssetFormData(initialAssetFormState);
     setShowNewAssetForm(true);
   };
@@ -518,18 +476,15 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       )}
        {(assetFormData.type === 'stock' || assetFormData.type === 'fund') && (
           <p className="text-xs text-muted-foreground text-center px-2 py-1 bg-muted/50 rounded-md">
-              Stock/Fund name is auto-fetched. Price fetching uses Tiingo (EOD prices). Data availability may vary.
+              Stock/Fund name is auto-fetched from Tiingo. Price fetching uses Tiingo (EOD prices). Data availability may vary.
           </p>
       )}
     </div>
   );
 
   const renderSettingsContent = () => (
-     <Card className="shadow-md">
-        <CardHeader>
-            <CardTitle className="text-lg">Asset Tracker Settings</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+     <div className="p-3 border rounded-lg bg-background/30 shadow-sm">
+        <CardContent className="p-1 space-y-4">
             {!showNewAssetForm && !editingAsset && (
             <Button size="sm" onClick={handleOpenNewAssetForm} className="w-full mb-3">
                 <PlusCircle className="mr-2 h-4 w-4" /> Add New Asset
@@ -557,7 +512,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
             {assets.length > 0 ? (
             <div className="mt-2">
                 <h4 className="text-xs font-medium text-muted-foreground mb-1">Manage Existing Assets</h4>
-                <ScrollArea className="pr-1 max-h-[320px]">
+                <ScrollArea className="pr-1 max-h-[320px] overflow-y-auto">
                 <Table>
                     <TableHeader>
                     <TableRow>
@@ -634,7 +589,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
             !showNewAssetForm && !editingAsset && <p className="text-xs text-muted-foreground text-center py-1">No assets added yet. Click "Add New Asset" to start.</p>
             )}
         </CardContent>
-     </Card>
+     </div>
   );
 
   const renderWidgetDisplay = () => (
@@ -733,9 +688,13 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         </CardContent>
       </Card>
   );
-
+  
   if (displayMode === 'settingsOnly') {
-    return settingsOpen ? renderSettingsContent() : null;
+    return settingsOpen ? (
+      <TooltipProvider> 
+        {renderSettingsContent()}
+      </TooltipProvider>
+    ) : null;
   }
 
   return (
@@ -744,3 +703,4 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
     </TooltipProvider>
   );
 }
+
