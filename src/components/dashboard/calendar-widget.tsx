@@ -80,7 +80,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
   const [justAddedFeedId, setJustAddedFeedId] = useState<string | null>(null);
 
   const fetchAndProcessEvents = useCallback(async () => {
-    console.log("CalendarWidget: fetchAndProcessEvents called. isClientLoaded:", isClientLoaded, 'Number of feeds:', icalFeEDS.length);
+    console.log("CalendarWidget: fetchAndProcessEvents called. isClientLoaded:", isClientLoaded, 'Number of feeds:', icalFeeds.length);
     if (!isClientLoaded || icalFeeds.length === 0) {
       setAllEvents([]);
       setIsLoading(false);
@@ -149,9 +149,11 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
 
 
   useEffect(() => {
-    if (isClientLoaded) {
-        console.log("CalendarWidget: Event fetching useEffect triggered. Refresh trigger:", refreshTrigger, "icalFeeds length:", icalFeeds.length);
+    console.log("CalendarWidget: Event fetching useEffect triggered. Refresh trigger:", refreshTrigger, "icalFeeds length:", icalFeeds.length, "isClientLoaded:", isClientLoaded);
+    if (isClientLoaded && icalFeeds.length > 0) {
         fetchAndProcessEvents();
+    } else if (isClientLoaded && icalFeeds.length === 0) {
+      setAllEvents([]); // Clear events if all feeds are removed
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isClientLoaded, icalFeeds, fetchAndProcessEvents, refreshTrigger]);
@@ -224,29 +226,27 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     setNewIcalUrl('');
     setNewIcalLabel('');
     toast({ title: "Feed Added", description: `"${newFeedItem.label}" added.` });
-    // setRefreshTrigger(prev => prev + 1); // Already handled by icalFeeds dependency
-  }, [icalFeeds, newIcalUrl, newIcalLabel, setIcalFeeds, setJustAddedFeedId, setNewIcalUrl, setNewIcalLabel]);
+  }, [icalFeeds, newIcalUrl, newIcalLabel]);
 
   const handleRemoveIcalFeed = useCallback((idToRemove: string) => {
     const feedLabel = icalFeeds.find(f => f.id === idToRemove)?.label || "Feed";
     setIcalFeeds(prev => prev.filter(feed => feed.id !== idToRemove));
     toast({ title: "Feed Removed", description: `"${feedLabel}" has been removed.` });
-    // setRefreshTrigger(prev => prev + 1); // Already handled by icalFeeds dependency
-  }, [icalFeeds, setIcalFeeds]);
+  }, [icalFeeds]);
 
   const handleStartEditFeed = useCallback((feedToEdit: IcalFeedItem) => {
     setEditingFeedId(feedToEdit.id);
     setCurrentEditFeedLabel(feedToEdit.label);
     setCurrentEditFeedUrl(feedToEdit.url);
     setCurrentEditFeedColor(feedToEdit.color);
-  }, [setEditingFeedId, setCurrentEditFeedLabel, setCurrentEditFeedUrl, setCurrentEditFeedColor]);
+  }, []);
   
   const handleCancelEditFeed = useCallback(() => {
     setEditingFeedId(null);
     setCurrentEditFeedLabel('');
     setCurrentEditFeedUrl('');
     setCurrentEditFeedColor('');
-  }, [setEditingFeedId, setCurrentEditFeedLabel, setCurrentEditFeedUrl, setCurrentEditFeedColor]);
+  }, []);
 
   const handleSaveChangesToFeed = useCallback(() => {
     if (!editingFeedId) return;
@@ -275,8 +275,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     );
     toast({ title: "Feed Updated", description: `Feed "${labelToSave}" settings saved.` });
     handleCancelEditFeed();
-    // setRefreshTrigger(prev => prev + 1); // Already handled by icalFeeds dependency
-  }, [editingFeedId, icalFeeds, currentEditFeedUrl, currentEditFeedLabel, currentEditFeedColor, handleCancelEditFeed, setIcalFeeds]);
+  }, [editingFeedId, icalFeeds, currentEditFeedUrl, currentEditFeedLabel, currentEditFeedColor, handleCancelEditFeed]);
 
   const handleFeedColorChange = useCallback((feedId: string, newColor: string) => {
      if (newColor !== '' && !isValidHexColor(newColor)) {
@@ -287,16 +286,16 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     setIcalFeeds(prevFeeds =>
       prevFeeds.map(f => {
         if (f.id === feedId) {
-          if (editingFeedId === feedId) { // if currently in inline edit mode for this feed
-            setCurrentEditFeedColor(newColor); // update the temporary edit state as well
+          if (editingFeedId === feedId) { 
+            setCurrentEditFeedColor(newColor);
           }
           return { ...f, color: newColor };
         }
         return f;
       })
     );
-    setRefreshTrigger(prev => prev + 1); // Explicitly trigger refresh for color changes
-  }, [editingFeedId, setIcalFeeds, setCurrentEditFeedColor, setRefreshTrigger]);
+    setRefreshTrigger(prev => prev + 1);
+  }, [editingFeedId]);
 
 
   const getUpcomingEventsForFeed = useCallback((feed: IcalFeedItem): AppCalendarEvent[] => {
@@ -305,7 +304,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
       .filter(event => {
         const urlMatch = event.id.startsWith(feed.url);
         const labelMatch = event.calendarSource === feed.label;
-        const colorMatch = event.color === feed.color;
+        const colorMatch = event.color === feed.color; // Ensure color also matches
         return urlMatch && labelMatch && colorMatch;
       })
       .filter(event => new Date(event.endTime) >= new Date(new Date().setHours(0,0,0,0)));
@@ -364,7 +363,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
             {isClientLoaded && icalFeeds.length > 0 && (
             <div className="mt-3">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">Active Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS})</h4>
-                <ScrollArea className="h-[240px] pr-1 custom-styled-scroll-area overflow-y-auto" ref={feedListManagementRef}>
+                <ScrollArea className="h-[240px] pr-1 calendar-feed-scroll-area overflow-y-auto" ref={feedListManagementRef}>
                   <div className="space-y-3">
                     {icalFeeds.map((feed) => (
                     <Card key={feed.id} data-feed-id={feed.id} className="p-2.5 shadow-sm border bg-background">
@@ -425,12 +424,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                         ) : (
                         // Default Compact Display - Label, Edit and Delete buttons only
                         <div className="flex flex-col">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center min-w-0">
-                                    <span className="w-3 h-3 rounded-full mr-2 flex-shrink-0" style={{ backgroundColor: feed.color }}></span>
-                                    <p className="text-sm font-medium text-card-foreground truncate" title={feed.label}>{feed.label}</p>
-                                </div>
-                            </div>
+                            <p className="text-sm font-medium text-card-foreground truncate" title={feed.label}>{feed.label}</p>
                             <div className="mt-2 flex items-center justify-start gap-1">
                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEditFeed(feed)} aria-label="Edit feed">
                                     <Edit3 className="w-3.5 h-3.5" />
@@ -470,11 +464,10 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
             if (!feed.url.trim()) return null;
             const eventsForThisFeed = getUpcomingEventsForFeed(feed);
             const finalFeedColor = (feed.color && isValidHexColor(feed.color)) ? feed.color : 'hsl(var(--border))';
-            const isFirstFeedCard = index === 0;
             
             if (isLoading && !eventsForThisFeed.length && !error) {
               return (
-                <Card key={feed.id} className={cn("shadow-md flex flex-col", isFirstFeedCard && displayMode === 'widgetOnly' && "border-t-0")} style={{borderTop: `4px solid ${finalFeedColor}`}}>
+                <Card key={feed.id} className={cn("shadow-md flex flex-col", displayMode === 'widgetOnly' && "border-t-0")} style={{borderTop: `4px solid ${finalFeedColor}`}}>
                    <CardHeader className="p-3 flex flex-row items-center space-x-2">
                      <CalendarDays className="w-5 h-5" style={{ color: finalFeedColor }} />
                      <CardTitle className="text-lg">{feed.label}</CardTitle>
@@ -490,7 +483,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
             }
 
             return (
-            <Card key={feed.id} className={cn("shadow-md flex flex-col", isFirstFeedCard && displayMode === 'widgetOnly' && "border-t-0")} style={{borderTop: `4px solid ${finalFeedColor}`}}>
+            <Card key={feed.id} className={cn("shadow-md flex flex-col", displayMode === 'widgetOnly' && "border-t-0")} style={{borderTop: `4px solid ${finalFeedColor}`}}>
                 <CardHeader className="p-3 flex flex-row items-center space-x-2">
                     <CalendarDays className="w-5 h-5" style={{ color: finalFeedColor }} />
                     <CardTitle className="text-lg">{feed.label}</CardTitle>
@@ -501,7 +494,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                         <ul className="space-y-3">
                             {eventsForThisFeed.map((event) => (
                             <li key={event.id} className="flex items-start space-x-3 pb-2 border-b border-border last:border-b-0">
-                                <div className="flex-shrink-0 w-2 h-2 mt-1.5 rounded-full" style={{ backgroundColor: event.color }} />
+                                <CalendarDays className="flex-shrink-0 w-4 h-4 mt-1" style={{ color: event.color }} />
                                 <div>
                                 <p className="font-medium text-card-foreground">{event.title}</p>
                                 <p className="text-xs text-muted-foreground">{formatEventDate(event)} - {formatEventTime(event)}</p>
@@ -524,8 +517,13 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     </React.Fragment>
   );
   
+
   if (displayMode === 'settingsOnly') {
-    return settingsOpen ? renderSettingsContent() : null;
+    return settingsOpen ? (
+      <>
+        {renderSettingsContent()}
+      </>
+    ) : null;
   }
 
   if (!isClientLoaded && displayMode === 'widgetOnly') {
@@ -545,6 +543,17 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
          </div>
     );
   }
-  return renderWidgetDisplayContent();
+  
+  return (
+    <div className={cn(displayMode === 'widgetOnly' && "space-y-4")}>
+      {isClientLoaded && icalFeeds.filter(f => f.url.trim()).length === 0 && !isLoading && (
+        <div className="p-4 text-center text-muted-foreground">
+          No active iCalendar feeds.
+          {displayMode === 'widgetOnly' && <p className="text-xs">Click the global settings <Settings className="inline h-3 w-3" /> icon to add feeds.</p>}
+        </div>
+      )}
+      {renderWidgetDisplayContent()}
+    </div>
+  );
 }
 
