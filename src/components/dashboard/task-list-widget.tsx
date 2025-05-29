@@ -22,7 +22,6 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
 declare global {
@@ -44,7 +43,7 @@ interface Task {
   notes?: string;
 }
 
-interface TaskListSettingItem { // Renamed to avoid conflict with global TaskListSetting if it existed
+interface TaskListSettingItem {
   visible: boolean;
   color: string;
 }
@@ -53,12 +52,12 @@ const GOOGLE_TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
 const TASK_LIST_SETTINGS_STORAGE_KEY = 'googleTaskListSettings_v2';
 
 const predefinedTaskColors: string[] = [
-  '#F44336',
-  '#2196F3',
-  '#FF9800',
-  '#FFEB3B',
-  '#4CAF50',
-  '#9C27B0',
+  '#F44336', // Red
+  '#2196F3', // Blue
+  '#FF9800', // Orange
+  '#FFEB3B', // Yellow
+  '#4CAF50', // Green
+  '#9C27B0', // Purple
 ];
 let lastAssignedColorIndex = -1;
 
@@ -73,7 +72,7 @@ const isValidHexColor = (color: string) => {
 
 interface TaskListContentProps {
   settingsOpen: boolean;
-  displayMode: 'widgetOnly' | 'settingsOnly'; // Ensure displayMode is part of props
+  displayMode: 'widgetOnly' | 'settingsOnly';
 }
 
 const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, displayMode }) => {
@@ -126,10 +125,10 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
   const [isGapiClientLoaded, setIsGapiClientLoaded] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && Object.keys(listSettings).length > 0) {
+    if (typeof window !== 'undefined' && Object.keys(listSettings).length > 0 && isGapiClientLoaded) {
       localStorage.setItem(TASK_LIST_SETTINGS_STORAGE_KEY, JSON.stringify(listSettings));
     }
-  }, [listSettings]);
+  }, [listSettings, isGapiClientLoaded]);
 
   const loadGapiClient = useCallback(async () => {
     if (isGapiClientLoaded && window.gapi && window.gapi.client && window.gapi.client.tasks) {
@@ -217,7 +216,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
         showHidden: false,
         maxResults: 100,
       });
-      console.log(`TaskListWidget: Raw response from tasks.list() for list ${listId}:`, JSON.stringify(response, null, 2));
+      console.log(`TaskListWidget: Raw response from tasks.list() for list ${listId}:`, response);
       setTasksByListId(prev => ({ ...prev, [listId]: response?.result?.items || [] }));
     } catch (err: any) {
       console.error(`TaskListWidget: Error fetching tasks for list ${listId}:`, err);
@@ -243,7 +242,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
       }
       window.gapi.client.setToken({ access_token: token });
       const response = await window.gapi.client.tasks.tasklists.list();
-      console.log('TaskListWidget: Raw response from tasklists.list():', JSON.stringify(response, null, 2));
+      console.log('TaskListWidget: Raw response from tasklists.list():', response);
 
       const fetchedLists: TaskList[] = response?.result?.items || [];
       console.log(`TaskListWidget: Fetched ${fetchedLists.length} task lists from API.`);
@@ -453,12 +452,14 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
         const newSettings = {
             ...prev,
             [listId]: {
-                ...(prev[listId] || { visible: false, color: getNextColor() }),
+                ...(prev[listId] || { visible: false, color: getNextColor() }), // Ensure existing color is kept if only visibility changes
                 [key]: value
             }
         };
          if (key === 'color' && typeof value === 'string' && value !== '' && !isValidHexColor(value)) {
             toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive", duration:3000 });
+             // Revert to old color or a default if invalid hex is attempted
+            newSettings[listId].color = prev[listId]?.color || getNextColor();
         }
 
         if (key === 'visible' && value === true && accessToken && !tasksByListId[listId] && !isLoadingTasksForList[listId] && isGapiClientLoaded) {
@@ -507,10 +508,10 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
 
   const renderSettingsContent = () => (
      <Card className="shadow-md">
-        <CardHeader className="p-2 pt-2 pb-2"> {/* Adjusted padding */}
+        <CardHeader className="p-2 pt-2 pb-2">
           <CardTitle className="text-lg">Task List Settings</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 p-3"> {/* Adjusted padding and spacing */}
+        <CardContent className="space-y-3 p-3">
           <div>
             <h4 className="text-sm font-medium text-muted-foreground mb-2">Visible Task Lists & Colors</h4>
             {isLoadingLists ? (
@@ -591,7 +592,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                 </div>
               </ScrollArea>
             ) : (
-              <p className="text-sm text-muted-foreground text-center py-1">No task lists found. Create one below.</p>
+              <p className="text-sm text-muted-foreground text-center py-1">No task lists found. Create one below or check Google Tasks.</p>
             )}
           </div>
 
@@ -626,51 +627,59 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
   );
 
   const renderWidgetDisplay = () => (
-    <>
+    <React.Fragment>
+      {displayMode === 'widgetOnly' && (
         <div className="flex justify-between items-center mb-1 p-4 border-b">
-            <SectionTitle icon={ListChecks} title="Tasks" className="mb-0 text-lg" />
+            {/* Title hidden in widgetOnly mode */}
         </div>
-        <div className="px-4 pb-4">
-            {!isSignedIn ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
-                  <Button onClick={() => login()} variant="default">
-                    <LogIn className="mr-2 h-4 w-4" />
-                    Sign In with Google
-                  </Button>
-                  {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
-              </div>
-            ) : error ? (
-              <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
-            ) : isLoadingLists && !taskLists.length ? (
-                <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</div>
-            ) : visibleListsToDisplay.length > 0 ? (
-            <div className="space-y-4 mt-4">
-                {visibleListsToDisplay.map(list => {
-                const listColor = listSettings[list.id]?.color;
-                const finalColor = (listColor && isValidHexColor(listColor)) ? listColor : predefinedTaskColors[0];
+      )}
+        
+      {settingsOpen && displayMode === 'widgetOnly' && (
+        <div className="mb-4 p-3 border-b bg-muted/20">
+          {renderSettingsContent()}
+        </div>
+      )}
 
-                return (
-                <Card
-                    key={list.id}
-                    className="shadow-md flex flex-col"
-                    style={{ borderTop: `4px solid ${finalColor}` }}
-                >
-                    <CardHeader className="py-3 px-4 border-b">
-                    <CardTitle className="text-md">{list.title}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-3 px-4 pb-3 flex-grow flex flex-col overflow-hidden">
-                    <div className="flex gap-2 mb-3">
-                        <Input
-                        type="text"
-                        value={newTaskTitles[list.id] || ''}
-                        onChange={(e) => setNewTaskTitles(prev => ({...prev, [list.id]: e.target.value}))}
-                        placeholder="Add a task..."
-                        className="flex-grow h-9 text-sm"
-                        onKeyPress={(e) => e.key === 'Enter' && !isAddingTaskForList[list.id] && handleAddTask(list.id)}
-                        disabled={isAddingTaskForList[list.id]}
-                        />
-                        <Button
+      <div className="space-y-4">
+          {!isSignedIn ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+                <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
+                <Button onClick={() => login()} variant="default">
+                  <LogIn className="mr-2 h-4 w-4" />
+                  Sign In with Google
+                </Button>
+                {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
+            </div>
+          ) : error ? (
+            <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
+          ) : isLoadingLists && !taskLists.length ? (
+              <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</div>
+          ) : visibleListsToDisplay.length > 0 ? (
+          <>
+              {visibleListsToDisplay.map(list => {
+              const finalColor = (listSettings[list.id]?.color && isValidHexColor(listSettings[list.id].color)) ? listSettings[list.id].color : predefinedTaskColors[0];
+
+              return (
+              <Card
+                  key={list.id}
+                  className="shadow-md flex flex-col"
+                  style={{ borderTop: `4px solid ${finalColor}` }}
+              >
+                  <CardHeader className="py-3 px-4 border-b">
+                  <CardTitle className="text-md">{list.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-3 px-4 pb-3 flex-grow flex flex-col overflow-hidden">
+                  <div className="flex gap-2 mb-3">
+                      <Input
+                      type="text"
+                      value={newTaskTitles[list.id] || ''}
+                      onChange={(e) => setNewTaskTitles(prev => ({...prev, [list.id]: e.target.value}))}
+                      placeholder="Add a task..."
+                      className="flex-grow h-9 text-sm"
+                      onKeyPress={(e) => e.key === 'Enter' && !isAddingTaskForList[list.id] && handleAddTask(list.id)}
+                      disabled={isAddingTaskForList[list.id]}
+                      />
+                      <Button
                         onClick={() => handleAddTask(list.id)}
                         disabled={!(newTaskTitles[list.id] || '').trim() || isAddingTaskForList[list.id]}
                         size="sm"
@@ -679,62 +688,62 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                             backgroundColor: finalColor,
                             color: 'hsl(var(--primary-foreground))'
                         }}
-                        >
-                        {isAddingTaskForList[list.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
-                        </Button>
-                    </div>
-                    {isLoadingTasksForList[list.id] ? (
-                        <div className="flex items-center justify-center py-4"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading tasks...</div>
-                    ) : errorPerList[list.id] ? (
-                        <Alert variant="destructive" className="text-xs my-2"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{errorPerList[list.id]}</AlertDescription></Alert>
-                    ) : (tasksByListId[list.id] || []).length > 0 ? (
-                        <ScrollArea className="pr-1 flex-grow max-h-60">
-                        <ul className="space-y-1.5">
-                            {(tasksByListId[list.id] || []).map((task) => (
-                            <li key={task.id} className="flex items-center space-x-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors">
-                                <Checkbox
-                                id={`task-${list.id}-${task.id}`}
-                                checked={task.status === 'completed'}
-                                onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
-                                aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
-                                className="task-list-checkbox"
-                                style={
-                                    finalColor && isValidHexColor(finalColor)
-                                    ? {
-                                        '--task-checkbox-checked-bg': finalColor,
-                                        '--task-checkbox-checked-border': finalColor,
-                                        '--task-checkbox-unchecked-border': finalColor,
-                                        } as React.CSSProperties
-                                    : {}
-                                }
-                                />
-                                <label
-                                htmlFor={`task-${list.id}-${task.id}`}
-                                className={`flex-1 text-sm cursor-pointer ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-card-foreground'}`}
-                                >
-                                {task.title}
-                                </label>
-                            </li>
-                            ))}
-                        </ul>
-                        </ScrollArea>
-                    ) : (
-                        <p className="text-xs text-muted-foreground text-center py-3">No active tasks in this list.</p>
-                    )}
-                    </CardContent>
-                </Card>
-                )})}
-            </div>
-            ) : (
-                !isLoadingLists && isSignedIn && taskLists.length > 0 && (
-                <p className="text-sm text-muted-foreground text-center py-6">No task lists are currently visible. Open settings to select lists to display.</p>
-                )
-            )}
-            {!isLoadingLists && !taskLists.length && isSignedIn && !error && (
-                <p className="text-sm text-muted-foreground text-center py-6">No Google Task lists found. Open settings to create one, or ensure you have at least one list in your Google Tasks account.</p>
-            )}
-        </div>
-    </>
+                      >
+                      {isAddingTaskForList[list.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+                      </Button>
+                  </div>
+                  {isLoadingTasksForList[list.id] ? (
+                      <div className="flex items-center justify-center py-4"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading tasks...</div>
+                  ) : errorPerList[list.id] ? (
+                      <Alert variant="destructive" className="text-xs my-2"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{errorPerList[list.id]}</AlertDescription></Alert>
+                  ) : (tasksByListId[list.id] || []).length > 0 ? (
+                      <ScrollArea className="pr-1 flex-grow max-h-60">
+                      <ul className="space-y-1.5">
+                          {(tasksByListId[list.id] || []).map((task) => (
+                          <li key={task.id} className="flex items-center space-x-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors">
+                              <Checkbox
+                              id={`task-${list.id}-${task.id}`}
+                              checked={task.status === 'completed'}
+                              onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
+                              aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
+                              className="task-list-checkbox"
+                              style={
+                                  finalColor && isValidHexColor(finalColor)
+                                  ? {
+                                      '--task-checkbox-checked-bg': finalColor,
+                                      '--task-checkbox-checked-border': finalColor,
+                                      '--task-checkbox-unchecked-border': finalColor,
+                                      } as React.CSSProperties
+                                  : {}
+                              }
+                              />
+                              <label
+                              htmlFor={`task-${list.id}-${task.id}`}
+                              className={`flex-1 text-sm cursor-pointer ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-card-foreground'}`}
+                              >
+                              {task.title}
+                              </label>
+                          </li>
+                          ))}
+                      </ul>
+                      </ScrollArea>
+                  ) : (
+                      <p className="text-xs text-muted-foreground text-center py-3">No active tasks in this list.</p>
+                  )}
+                  </CardContent>
+              </Card>
+              )})}
+          </>
+          ) : (
+              !isLoadingLists && isSignedIn && taskLists.length > 0 && (
+              <p className="text-sm text-muted-foreground text-center py-6">No task lists are currently visible. Open settings to select lists to display.</p>
+              )
+          )}
+          {!isLoadingLists && !taskLists.length && isSignedIn && !error && (
+              <p className="text-sm text-muted-foreground text-center py-6">No Google Task lists found. Open settings to create one, or ensure you have at least one list in your Google Tasks account.</p>
+          )}
+      </div>
+    </React.Fragment>
   );
 
   if (displayMode === 'settingsOnly') {
@@ -767,19 +776,23 @@ export function TaskListWidget({
   }, []);
 
   if (!isClient && displayMode === 'widgetOnly') {
+    // Simplified skeleton for initial server render or when client not yet loaded
     return (
        <>
-        <div className="flex justify-between items-center mb-1 p-4 border-b">
-            <SectionTitle icon={ListChecks} title="Tasks" className="mb-0 text-lg"/>
-        </div>
-        <div className="px-4 pb-4">
-          <Skeleton className="h-20 w-full" /> {/* Simplified skeleton */}
-        </div>
+        {displayMode === 'widgetOnly' && (
+          <div className="flex justify-between items-center mb-1 p-4 border-b">
+              {/* Title hidden in widgetOnly mode */}
+          </div>
+        )}
+        <Card className="max-h-60">
+            <CardHeader><Skeleton className="h-5 w-1/3" /></CardHeader>
+            <CardContent><Skeleton className="h-20 w-full" /></CardContent>
+        </Card>
       </>
     );
   }
 
-  if ((providerError || !googleClientId)) {
+  if ((providerError || !googleClientId) && displayMode === 'widgetOnly') {
      const content = (
       <Alert variant="destructive" className="mt-4 mx-4">
         <AlertCircle className="h-4 w-4" />
@@ -794,13 +807,35 @@ export function TaskListWidget({
     }
     return (
          <>
-            <div className="flex justify-between items-center mb-1 p-4 border-b">
-                <SectionTitle icon={ListChecks} title="Tasks" className="mb-0 text-lg"/>
-            </div>
+            {displayMode === 'widgetOnly' && (
+              <div className="flex justify-between items-center mb-1 p-4 border-b">
+                  {/* Title hidden in widgetOnly mode */}
+              </div>
+            )}
             {content}
         </>
     );
   }
+  
+  if ((providerError || !googleClientId) && displayMode === 'settingsOnly') {
+    return settingsOpen ? (
+        <Card className="shadow-md">
+            <CardHeader className="p-2 pt-2 pb-2">
+              <CardTitle className="text-lg">Task List Settings</CardTitle>
+            </CardHeader>
+            <CardContent className="p-3">
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Configuration Error</AlertTitle>
+                    <AlertDescription>
+                    {providerError || "Google Client ID is not available. Please configure it."}
+                    </AlertDescription>
+                </Alert>
+            </CardContent>
+        </Card>
+    ) : null;
+  }
+
 
   return (
     <GoogleOAuthProvider clientId={googleClientId!}>
@@ -808,3 +843,4 @@ export function TaskListWidget({
     </GoogleOAuthProvider>
   );
 }
+

@@ -17,7 +17,6 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
-import { Separator } from '../ui/separator';
 
 const MAX_CATEGORIES = 7;
 const MAX_FEEDS_PER_CATEGORY = 5;
@@ -62,7 +61,7 @@ const isValidHexColor = (color: string) => {
 }
 
 interface NewsWidgetProps {
-  settingsOpen: boolean; // From global settings toggle
+  settingsOpen: boolean; 
   displayMode?: 'widgetOnly' | 'settingsOnly';
 }
 
@@ -97,17 +96,24 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
   const [triggerFeedRefresh, setTriggerFeedRefresh] = useState(0);
 
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [editingCategoryState, setEditingCategoryState] = useState<{ [key: string]: string }>({});
+  const [editingCategoryState, setEditingCategoryState] = useState<{ [key: string]: { name: string; color: string } }>({});
   
   const [editingFeed, setEditingFeed] = useState<{ categoryId: string; feedId?: string; url: string; userLabel: string } | null>(null);
+  const [isClientLoaded, setIsClientLoaded] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    setIsClientLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (isClientLoaded) {
       localStorage.setItem(LOCALSTORAGE_KEY_CATEGORIES, JSON.stringify(categories.map(c => ({...c, isEditingName: undefined}))));
     }
-  }, [categories]);
+  }, [categories, isClientLoaded]);
 
   const fetchAndProcessAllFeeds = useCallback(async () => {
+    if (!isClientLoaded) return;
+
     const allFeedsWithCategory: Array<{ categoryId: string; feed: RssFeedSource }> = [];
     categories.forEach(cat => {
       cat.feeds.forEach(feed => {
@@ -191,13 +197,13 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
       setError(null); 
     }
     setIsLoading(false);
-  }, [categories]); 
+  }, [categories, isClientLoaded]); 
 
   useEffect(() => {
-    if (displayMode === 'widgetOnly' || settingsOpen) { // Fetch if widget is visible or settings are open (for settings-only mode)
+    if (isClientLoaded && (displayMode === 'widgetOnly' || settingsOpen)) { 
       fetchAndProcessAllFeeds();
     }
-  }, [categories, triggerFeedRefresh, fetchAndProcessAllFeeds, displayMode, settingsOpen]);
+  }, [categories, triggerFeedRefresh, fetchAndProcessAllFeeds, displayMode, settingsOpen, isClientLoaded]);
 
   const handleAddCategory = () => {
     if (!newCategoryName.trim()) {
@@ -211,7 +217,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
     setCategories(prev => [
       ...prev,
       { 
-        id: `cat-${Date.now()}`, 
+        id: `cat-${Date.now()}-${Math.random().toString(36).substring(2,9)}`, 
         name: newCategoryName.trim(), 
         feeds: [], 
         isEditingName: false,
@@ -228,19 +234,19 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
     ));
     const categoryToEdit = categories.find(cat => cat.id === categoryId);
     if (categoryToEdit) {
-      setEditingCategoryState(prev => ({ ...prev, [categoryId]: categoryToEdit.name }));
+      setEditingCategoryState(prev => ({ ...prev, [categoryId]: { name: categoryToEdit.name, color: categoryToEdit.color } }));
     }
   };
   
   const handleSaveCategoryName = (categoryId: string) => {
-    const newName = editingCategoryState[categoryId];
+    const newName = editingCategoryState[categoryId]?.name;
     if (!newName || !newName.trim()) {
       toast({ title: "Category Name Required", variant: "destructive" });
       setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, isEditingName: false } : cat)); 
       return;
     }
     setCategories(prev => prev.map(cat =>
-      cat.id === categoryId ? { ...cat, name: newName.trim(), isEditingName: false } : cat
+      cat.id === categoryId ? { ...cat, name: newName.trim(), isEditingName: false, color: editingCategoryState[categoryId].color } : cat
     ));
     toast({ title: "Category Name Updated" });
   };
@@ -278,10 +284,10 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
       if (cat.id === editingFeed.categoryId) {
         let newFeeds;
         if (editingFeed.feedId) { 
-          newFeeds = cat.feeds.map(f => f.id === editingFeed.feedId ? { ...f, url: editingFeed.url, userLabel: editingFeed.userLabel || `Feed ${cat.feeds.length}` } : f);
+          newFeeds = cat.feeds.map(f => f.id === editingFeed.feedId ? { ...f, url: editingFeed.url.trim(), userLabel: editingFeed.userLabel.trim() || `Feed ${cat.feeds.length}` } : f);
         } else { 
           const newFeedId = `feed-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
-          newFeeds = [...cat.feeds, { id: newFeedId, url: editingFeed.url, userLabel: editingFeed.userLabel || `Feed ${cat.feeds.length + 1}` }];
+          newFeeds = [...cat.feeds, { id: newFeedId, url: editingFeed.url.trim(), userLabel: editingFeed.userLabel.trim() || `Feed ${cat.feeds.length + 1}` }];
         }
         return { ...cat, feeds: newFeeds };
       }
@@ -301,7 +307,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
   };
   
   const handleCategoryColorChange = (categoryId: string, newColor: string) => {
-    setCategories(prev => prev.map(cat => {
+    setCategories(prevCategories => prevCategories.map(cat => {
       if (cat.id === categoryId) {
         if (newColor !== '' && !isValidHexColor(newColor)) {
           toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive", duration:3000 });
@@ -317,12 +323,12 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
   }
 
   const renderSettingsUI = () => (
-    <div className="p-3 border rounded-lg bg-muted/10 shadow-sm">
+    <div className="p-3 border rounded-lg bg-muted/20 shadow-sm">
         <CardHeader className="p-1 pb-3">
             <CardTitle className="text-lg">News Feed Settings</CardTitle>
         </CardHeader>
         <CardContent className="p-1 space-y-4">
-            <div className="p-3 bg-muted/20 rounded-md">
+            <div className="p-3 bg-muted/30 rounded-md">
                 <Label htmlFor="new-category-name" className="text-xs font-medium">New Category Name</Label>
                 <div className="flex gap-2 mt-1">
                 <Input
@@ -334,7 +340,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
                     className="h-9 text-sm"
                 />
                 <Button size="sm" onClick={handleAddCategory} disabled={categories.length >= MAX_CATEGORIES}>
-                    <FolderPlus className="mr-1.5" /> Add ({categories.length}/{MAX_CATEGORIES})
+                    <FolderPlus size={16} className="mr-1.5" /> Add ({categories.length}/{MAX_CATEGORIES})
                 </Button>
                 </div>
             </div>
@@ -371,7 +377,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
                 </div>
                 <div className="mt-3 flex justify-end gap-2">
                     <Button variant="outline" size="sm" onClick={() => setEditingFeed(null)}>Cancel</Button>
-                    <Button size="sm" onClick={handleSaveFeed}><CheckCircle className="mr-1.5" /> Save Feed</Button>
+                    <Button size="sm" onClick={handleSaveFeed}><CheckCircle size={16} className="mr-1.5" /> Save Feed</Button>
                 </div>
                 </Card>
             )}
@@ -385,8 +391,8 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
                         <div className="flex-grow flex items-center gap-2">
                             <Input 
                             type="text" 
-                            value={editingCategoryState[category.id] || ''}
-                            onChange={(e) => setEditingCategoryState(prev => ({...prev, [category.id]: e.target.value}))}
+                            value={editingCategoryState[category.id]?.name || ''}
+                            onChange={(e) => setEditingCategoryState(prev => ({...prev, [category.id]: {...(prev[category.id] || {name:'', color: category.color}), name: e.target.value}}))}
                             className="h-8 text-sm flex-grow"
                             onKeyDown={(e) => e.key === 'Enter' && handleSaveCategoryName(category.id)}
                             onBlur={() => handleSaveCategoryName(category.id)} 
@@ -461,7 +467,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
                         onClick={() => handleStartAddOrEditFeed(category.id)}
                         disabled={editingFeed !== null || category.feeds.length >= MAX_FEEDS_PER_CATEGORY}
                     >
-                        <FilePlus className="mr-1.5" /> Add Feed to "{category.name.substring(0,15)}{category.name.length > 15 ? '...' : ''}" ({category.feeds.length}/{MAX_FEEDS_PER_CATEGORY})
+                        <FilePlus size={16} className="mr-1.5" /> Add Feed to "{category.name.substring(0,15)}{category.name.length > 15 ? '...' : ''}" ({category.feeds.length}/{MAX_FEEDS_PER_CATEGORY})
                     </Button>
                     </Card>
                 ))}
@@ -473,15 +479,23 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
   );
 
   const renderWidgetDisplay = () => (
-    <>
-      <div className="flex justify-between items-center mb-4 p-4 border-b">
-        <SectionTitle icon={Newspaper} title="Categorized News" className="mb-0 text-lg" />
-      </div>
+    <React.Fragment>
+      {displayMode === 'widgetOnly' && (
+        <div className="flex justify-between items-center mb-1 p-4 border-b">
+            {/* Title hidden in widgetOnly mode for main page */}
+        </div>
+      )}
+      
+      {settingsOpen && displayMode === 'widgetOnly' && (
+        <div className="mb-4 p-3 border-b bg-muted/20">
+          {renderSettingsUI()}
+        </div>
+      )}
 
       {isLoading && displayMode === 'widgetOnly' && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
           <div className="space-y-4 px-4">
             {Array.from({length: Math.min(2, categories.filter(c => c.feeds.some(f=>f.url.trim())).length || 1)}).map((_, i) => (
-              <Card key={`skel-cat-${i}`} className="mb-4 shadow-md">
+              <Card key={`skel-cat-${i}`} className="mb-6 shadow-md">
                 <CardHeader><Skeleton className="h-6 w-1/3 mb-1" /></CardHeader>
                 <CardContent className="px-4 py-0">
                   <div className="py-2 border-b border-border last:border-b-0">
@@ -505,7 +519,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
       )}
 
       {!isLoading && !error && displayMode === 'widgetOnly' && (
-        <div className="px-4 space-y-6 pb-4">
+        <div className="space-y-6">
         {categories.map(category => {
           const categoryArticles = articlesByCategoryId(category.id);
             if (categoryArticles.length === 0 && !isLoading && !category.feeds.some(f=>f.url.trim())) return null;
@@ -513,7 +527,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
           return (
             <Card 
                 key={category.id} 
-                className="shadow-md" 
+                className="shadow-md mb-6" 
                 style={{ borderTop: `4px solid ${isValidHexColor(category.color) ? category.color : predefinedNewsCategoryColors[0]}` }}
             >
               <CardHeader>
@@ -581,7 +595,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
         })}
         </div>
       )}
-    </>
+    </React.Fragment>
   );
 
   if (displayMode === 'settingsOnly') {
