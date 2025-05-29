@@ -76,38 +76,13 @@ interface TaskListContentProps {
 }
 
 const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, displayMode }) => {
-  const [accessToken, setAccessToken] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('googleTasksAccessToken');
-    return null;
-  });
-  const [isSignedIn, setIsSignedIn] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') return !!localStorage.getItem('googleTasksAccessToken');
-    return false;
-  });
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isSignedIn, setIsSignedIn] = useState<boolean>(false);
 
   const [taskLists, setTaskLists] = useState<TaskList[]>([]);
   const [tasksByListId, setTasksByListId] = useState<Record<string, Task[]>>({});
 
-  const [listSettings, setListSettings] = useState<Record<string, TaskListSettingItem>>(() => {
-    if (typeof window === 'undefined') return {};
-    const savedSettings = localStorage.getItem(TASK_LIST_SETTINGS_STORAGE_KEY);
-    if (savedSettings) {
-      try {
-        const parsedSettings = JSON.parse(savedSettings);
-        if (typeof parsedSettings === 'object' && parsedSettings !== null) {
-          Object.keys(parsedSettings).forEach(key => {
-            if (parsedSettings[key] && (!parsedSettings[key].color || !isValidHexColor(parsedSettings[key].color))) {
-              parsedSettings[key].color = getNextColor();
-            }
-          });
-          return parsedSettings;
-        }
-      } catch (e) {
-        console.error("TaskListWidget: Failed to parse list settings from localStorage", e);
-      }
-    }
-    return {};
-  });
+  const [listSettings, setListSettings] = useState<Record<string, TaskListSettingItem>>({});
 
   const [newTaskTitles, setNewTaskTitles] = useState<Record<string, string>>({});
   const [newTaskListTitle, setNewTaskListTitle] = useState('');
@@ -123,6 +98,33 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
   const [errorPerList, setErrorPerList] = useState<Record<string, string | null>>({});
 
   const [isGapiClientLoaded, setIsGapiClientLoaded] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedToken = localStorage.getItem('googleTasksAccessToken');
+      if (savedToken) {
+        setAccessToken(savedToken);
+        setIsSignedIn(true);
+      }
+      const savedSettings = localStorage.getItem(TASK_LIST_SETTINGS_STORAGE_KEY);
+      if (savedSettings) {
+        try {
+          const parsedSettings = JSON.parse(savedSettings);
+          if (typeof parsedSettings === 'object' && parsedSettings !== null) {
+            Object.keys(parsedSettings).forEach(key => {
+              if (parsedSettings[key] && (!parsedSettings[key].color || !isValidHexColor(parsedSettings[key].color))) {
+                parsedSettings[key].color = getNextColor();
+              }
+            });
+            setListSettings(parsedSettings);
+          }
+        } catch (e) {
+          console.error("TaskListWidget: Failed to parse list settings from localStorage", e);
+        }
+      }
+    }
+  }, []);
+
 
   useEffect(() => {
     if (typeof window !== 'undefined' && Object.keys(listSettings).length > 0 && isGapiClientLoaded) {
@@ -251,15 +253,17 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
       setListSettings(prevSettings => {
         const newSettings = {...prevSettings};
         let settingsChanged = false;
+        // Determine if any list is already visible by default
         let defaultVisibleSet = Object.values(newSettings).some(s => s.visible);
 
-        fetchedLists.forEach((list) => {
+        fetchedLists.forEach((list, index) => {
             if (!newSettings[list.id]) {
+                // Make the first fetched list visible by default if no other list is visible yet
                 newSettings[list.id] = {
-                    visible: !defaultVisibleSet, // Make the first list visible by default
+                    visible: !defaultVisibleSet && index === 0, 
                     color: getNextColor()
                 };
-                if (!defaultVisibleSet) defaultVisibleSet = true;
+                if (!defaultVisibleSet && index === 0) defaultVisibleSet = true;
                 settingsChanged = true;
             } else if (!newSettings[list.id].color || !isValidHexColor(newSettings[list.id].color) ) {
                 newSettings[list.id].color = getNextColor();
@@ -338,6 +342,13 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
     scope: GOOGLE_TASKS_SCOPE,
     flow: 'implicit',
   });
+
+  useEffect(() => {
+    // This effect ensures GAPI client is loaded early if user is already signed in.
+    if (isSignedIn && accessToken && !isGapiClientLoaded) {
+      loadGapiClient();
+    }
+  }, [isSignedIn, accessToken, isGapiClientLoaded, loadGapiClient]);
 
   const handleAddTask = async (listId: string) => {
     const title = newTaskTitles[listId]?.trim();
@@ -628,8 +639,6 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
 
   const renderWidgetDisplay = () => (
     <React.Fragment>
-      {/* Header for "Tasks" and settings button are now handled by global settings panel logic in page.tsx */}
-        
       <div className="space-y-4">
           {!isSignedIn ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -652,7 +661,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
               return (
               <Card
                   key={list.id}
-                  className="shadow-md flex flex-col mb-4" // Added mb-4 for spacing between list cards
+                  className="shadow-md flex flex-col mb-4" 
                   style={{ borderTop: `4px solid ${finalColor}` }}
               >
                   <CardHeader className="py-3 px-4 border-b">
@@ -725,11 +734,11 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
               )})}
           </>
           ) : (
-              !isLoadingLists && isSignedIn && taskLists.length > 0 && (
+              !isLoadingLists && isSignedIn && taskLists.length > 0 && displayMode === 'widgetOnly' && (
               <p className="text-sm text-muted-foreground text-center py-6">No task lists are currently visible. Open settings to select lists to display.</p>
               )
           )}
-          {!isLoadingLists && !taskLists.length && isSignedIn && !error && (
+          {!isLoadingLists && !taskLists.length && isSignedIn && !error && displayMode === 'widgetOnly' && (
               <p className="text-sm text-muted-foreground text-center py-6">No Google Task lists found. Open settings to create one, or ensure you have at least one list in your Google Tasks account.</p>
           )}
       </div>
@@ -767,17 +776,19 @@ export function TaskListWidget({
 
   if (!isClient && displayMode === 'widgetOnly') {
     return (
-       <>
-        {/* Header div and title removed for widgetOnly mode */}
-        <Card className="max-h-60">
-            <CardHeader><Skeleton className="h-5 w-1/3" /></CardHeader>
-            <CardContent><Skeleton className="h-20 w-full" /></CardContent>
-        </Card>
-      </>
+      <Card className="flex flex-col">
+        <CardHeader>
+          {/* No title for widgetOnly mode */}
+          <Skeleton className="h-5 w-1/3" />
+        </CardHeader>
+        <CardContent className="flex-1">
+          <Skeleton className="h-20 w-full" />
+        </CardContent>
+      </Card>
     );
   }
 
-  if ((providerError || !googleClientId) && displayMode === 'widgetOnly') {
+  if ((providerError || !googleClientId)) {
      const content = (
       <Alert variant="destructive" className="mt-4 mx-4">
         <AlertCircle className="h-4 w-4" />
@@ -791,36 +802,19 @@ export function TaskListWidget({
         return settingsOpen ? <Card><CardContent className='p-4'>{content}</CardContent></Card> : null;
     }
     return (
-         <>
-           {/* Header div and title removed for widgetOnly mode */}
-            {content}
-        </>
+      <div className="flex flex-col">
+        {/* No title for widgetOnly mode */}
+        {content}
+      </div>
     );
   }
   
-  if ((providerError || !googleClientId) && displayMode === 'settingsOnly') {
-    return settingsOpen ? (
-        <Card className="shadow-md">
-            <CardHeader className="p-2 pt-2 pb-2">
-              <CardTitle className="text-lg">Task List Settings</CardTitle>
-            </CardHeader>
-            <CardContent className="p-3">
-                <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Configuration Error</AlertTitle>
-                    <AlertDescription>
-                    {providerError || "Google Client ID is not available. Please configure it."}
-                    </AlertDescription>
-                </Alert>
-            </CardContent>
-        </Card>
-    ) : null;
-  }
-
-
   return (
     <GoogleOAuthProvider clientId={googleClientId!}>
       <TaskListContent settingsOpen={settingsOpen} displayMode={displayMode} />
     </GoogleOAuthProvider>
   );
 }
+
+
+    
