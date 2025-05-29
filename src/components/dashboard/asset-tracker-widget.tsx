@@ -30,15 +30,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
-const initialAssetFormState: Omit<Asset, 'id' | 'name'> & { name?: string } = {
+const initialAssetFormState: Omit<Asset, 'id'> & { name?: string } = {
   symbol: '',
   quantity: 0,
   purchasePrice: 0,
   type: 'stock',
+  name: '', // Explicitly initialize name
 };
 
-const REFRESH_INTERVAL_MS = 15 * 60 * 1000;
-const LOCALSTORAGE_KEY = 'userAssetsLifeOS_Tiingo_v1';
+const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const LOCALSTORAGE_KEY = 'userAssetsLifeOS_Tiingo_v1'; // Updated key for Tiingo
 
 function calculateAssetPortfolio(
   assets: Asset[],
@@ -54,9 +55,16 @@ function calculateAssetPortfolio(
     let currentValue = 0;
     if (typeof currentPricePerUnit === 'number') {
       currentValue = asset.quantity * currentPricePerUnit;
+    } else if (asset.type === 'crypto') {
+      // For crypto, if no price fetched, we can't calculate current value from API
+      // Potentially allow manual input for crypto current price if needed in future
+      currentValue = 0; // Or keep as initial cost? For now, 0 if no API price.
     }
 
-    const profitLoss = typeof currentPricePerUnit === 'number' ? currentValue - initialCost : 0 - initialCost;
+
+    const profitLoss = (typeof currentPricePerUnit === 'number' || asset.type === 'crypto' && currentPricePerUnit !== undefined)
+      ? currentValue - initialCost
+      : 0 - initialCost; // If price is null/undefined for stock/fund, PL is full loss of initial cost
 
     totalPortfolioValue += currentValue;
     totalInitialCost += initialCost;
@@ -93,31 +101,19 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       try {
         const parsedAssetsArray = JSON.parse(savedAssetsString);
         if (Array.isArray(parsedAssetsArray)) {
-          const validAssets = parsedAssetsArray.filter((asset: any) => {
-            const isValid =
-              asset &&
-              typeof asset.id === 'string' &&
-              typeof asset.name === 'string' && asset.name.trim() !== '' &&
-              typeof asset.symbol === 'string' && asset.symbol.trim() !== '' &&
-              typeof asset.quantity === 'number' && asset.quantity > 0 &&
-              typeof asset.purchasePrice === 'number' && asset.purchasePrice >= 0 &&
-              ['stock', 'fund', 'crypto'].includes(asset.type);
-            return isValid;
-          });
-          // This toast was causing issues in useState initializer, moved to useEffect
-          // if (validAssets.length < parsedAssetsArray.length) { ... }
-          return validAssets;
-        } else {
-          // This toast was causing issues in useState initializer, moved to useEffect
-          // toast({ title: "Storage Error", ... });
-          localStorage.removeItem(LOCALSTORAGE_KEY);
-          return [];
+          return parsedAssetsArray.filter((asset: any) =>
+            asset &&
+            typeof asset.id === 'string' &&
+            typeof asset.name === 'string' && asset.name.trim() !== '' && // Ensure name is present
+            typeof asset.symbol === 'string' && asset.symbol.trim() !== '' &&
+            typeof asset.quantity === 'number' && asset.quantity > 0 &&
+            typeof asset.purchasePrice === 'number' && asset.purchasePrice >= 0 &&
+            ['stock', 'fund', 'crypto'].includes(asset.type)
+          );
         }
       } catch (e) {
-        // This toast was causing issues in useState initializer, moved to useEffect
-        // toast({ title: "Storage Error", ... });
-        localStorage.removeItem(LOCALSTORAGE_KEY);
-        return [];
+        // Error parsing, will fall through to return []
+        console.error("AssetTracker: Error parsing assets from localStorage on init:", e);
       }
     }
     return [];
@@ -128,13 +124,14 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
-  const [assetFormData, setAssetFormData] = useState<Omit<Asset, 'id' | 'name'> & { name?: string }>(initialAssetFormState);
+  const [assetFormData, setAssetFormData] = useState<Omit<Asset, 'id'>>(initialAssetFormState);
 
   const [isFetchingPrices, setIsFetchingPrices] = useState(false);
   const [priceFetchError, setPriceFetchError] = useState<string | null>(null);
   const [isFetchingName, setIsFetchingName] = useState(false);
   const [showNewAssetForm, setShowNewAssetForm] = useState(false);
-  const [showAssetManagement, setShowAssetManagement] = useState(false); // For global settings panel
+  // const [showAssetManagement, setShowAssetManagement] = useState(false); // Controlled by settingsOpen prop now
+
 
   const isFetchingPricesRef = useRef(isFetchingPrices);
   useEffect(() => {
@@ -147,8 +144,16 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       if (savedAssetsString) {
         try {
           const parsedAssetsArray = JSON.parse(savedAssetsString);
-          if (Array.isArray(parsedAssetsArray)) {
-            const validAssetCount = parsedAssetsArray.filter((asset: any) =>
+          if (!Array.isArray(parsedAssetsArray)) {
+            toast({
+              title: "Storage Error",
+              description: "Asset data in storage was corrupted and has been cleared.",
+              variant: "destructive",
+              duration: 7000,
+            });
+            localStorage.removeItem(LOCALSTORAGE_KEY);
+          } else {
+             const validAssetCount = parsedAssetsArray.filter((asset: any) =>
               asset && typeof asset.id === 'string' && typeof asset.name === 'string' && asset.name.trim() !== '' &&
               typeof asset.symbol === 'string' && asset.symbol.trim() !== '' && typeof asset.quantity === 'number' && asset.quantity > 0 &&
               typeof asset.purchasePrice === 'number' && asset.purchasePrice >= 0 && ['stock', 'fund', 'crypto'].includes(asset.type)
@@ -161,16 +166,9 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
                 duration: 5000,
               });
             }
-          } else {
-            toast({
-              title: "Storage Error",
-              description: "Asset data in storage was corrupted and has been cleared.",
-              variant: "destructive",
-              duration: 7000,
-            });
-            localStorage.removeItem(LOCALSTORAGE_KEY);
           }
         } catch (e) {
+          console.error("AssetTracker: Error parsing or validating assets from localStorage in useEffect:", e);
           toast({
             title: "Storage Error",
             description: "Could not load saved assets due to a data error. Previous data has been cleared.",
@@ -186,6 +184,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      console.log("AssetTracker: Saving assets to localStorage:", JSON.stringify(assets));
       try {
         localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(assets));
       } catch (error) {
@@ -215,13 +214,17 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
     let anErrorOccurred = false;
     let specificErrorMessage = "Could not fetch prices for some assets. Ensure symbols are correct and Tiingo API key is set in .env.local.";
 
+    console.log("AssetTracker: Fetching prices for assets:", currentAssets.map(a => a.symbol));
+
     for (const asset of currentAssets) {
-      if ((asset.type === 'stock' || asset.type === 'fund') && asset.symbol) {
+      if ((asset.type === 'stock' || asset.type === 'fund') && asset.symbol) { // Only fetch for stock/fund
         try {
           const priceData = await getAssetPrice({ symbol: asset.symbol });
           prices[asset.id] = priceData.currentPrice;
-          if (priceData.currentPrice === null) {
+           if (priceData.currentPrice === null) {
              console.warn(`Tiingo: Price not found or unavailable for symbol ${asset.symbol} (Type: ${asset.type}). API Response for ${asset.symbol} was ${JSON.stringify(priceData)}`);
+          } else {
+             console.log(`Tiingo: Successfully fetched price for ${asset.symbol}: ${priceData.currentPrice}`);
           }
         } catch (err) {
           console.error(`Error fetching price for ${asset.symbol} from Tiingo:`, err);
@@ -240,7 +243,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
           }
         }
       } else {
-        prices[asset.id] = null;
+        prices[asset.id] = null; // Crypto or other types, don't fetch from Tiingo EOD
       }
     }
     setFetchedPrices(prices);
@@ -254,33 +257,39 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
           duration: 7000,
         });
     }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Removed dependencies that might cause excessive calls
 
   useEffect(() => {
+    // Fetch prices on initial load if assets exist and widget is visible
     if (assets.length > 0 && (displayMode === 'widgetOnly' || (settingsOpen && displayMode === 'settingsOnly'))) {
       fetchAllAssetPrices(assets);
     } else {
+      // If no assets or widget not in focus, clear prices/portfolio
       setFetchedPrices({});
       setPortfolio(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assets, displayMode, settingsOpen]); // Re-fetch if assets change or mode/settings visibility changes
+  }, [assets, displayMode, settingsOpen]); // Re-fetch if these change
 
   useEffect(() => {
+    // Auto-refresh logic
     if (assets.length === 0 || displayMode !== 'widgetOnly') {
       return; // Only auto-refresh for widget display with assets
     }
     const intervalId = setInterval(() => {
       if (!isFetchingPricesRef.current) {
+        console.log("AssetTracker: Auto-refreshing prices via interval.");
         fetchAllAssetPrices(assets);
       }
     }, REFRESH_INTERVAL_MS);
 
     return () => {
+      console.log("AssetTracker: Clearing auto-refresh interval.");
       clearInterval(intervalId);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assets, displayMode]);
+  }, [assets, displayMode]); // Removed fetchAllAssetPrices from deps to avoid re-creating interval
 
 
   useEffect(() => {
@@ -299,7 +308,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   const handleSymbolBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
     const symbol = e.target.value.trim().toUpperCase();
     if (!symbol) {
-        setAssetFormData(prev => ({ ...prev, name: prev.type === 'crypto' ? '' : undefined, symbol: '' }));
+        setAssetFormData(prev => ({ ...prev, name: prev.type === 'crypto' ? '' : '', symbol: '' }));
         return;
     }
 
@@ -323,7 +332,6 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         setIsFetchingName(false);
       }
     } else if (assetFormData.type === 'crypto') {
-      // For crypto, name is usually the symbol or requires manual input if different
       setAssetFormData(prev => ({ ...prev, name: symbol }));
     }
   };
@@ -333,13 +341,9 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
     setAssetFormData(prev => ({
         ...prev,
         type: value,
-        // If switching to crypto and symbol is present, set name to symbol.
-        // Otherwise, keep existing name (or it will be fetched/set on symbol blur for stock/fund).
         name: (value === 'crypto' && currentSymbol) ? currentSymbol : (prev.name || '')
     }));
-    // If type changes to stock/fund and a symbol is present, re-trigger name fetch
     if ((value === 'stock' || value === 'fund') && currentSymbol) {
-        // Simulate blur event to trigger name fetch
         handleSymbolBlur({ target: { value: currentSymbol } } as React.FocusEvent<HTMLInputElement>);
     }
   };
@@ -357,20 +361,22 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       toast({ title: "Validation Error", description: "Purchase price cannot be negative.", variant: "destructive" });
       return false;
     }
+    if (!assetFormData.name || !assetFormData.name.trim()) {
+        if (assetFormData.type === 'stock' || assetFormData.type === 'fund') {
+            toast({ title: "Validation Error", description: "Asset name is required. It should auto-fetch from symbol.", variant: "destructive" });
+        } else { // crypto
+            toast({ title: "Validation Error", description: "Asset name (usually symbol for crypto) is required.", variant: "destructive" });
+        }
+        return false;
+    }
     return true;
   };
 
   const handleSubmitAsset = () => {
     if (!validateForm()) return;
 
-    const finalName = (assetFormData.name || assetFormData.symbol).trim(); // Ensure name exists, fallback to symbol
+    const finalName = assetFormData.name.trim();
     const finalSymbol = assetFormData.symbol.toUpperCase();
-
-    if (!finalName || !finalSymbol) { // Should not happen if validation and name fetching work
-        toast({ title: "Validation Error", description: "Asset name and symbol are required.", variant: "destructive" });
-        return;
-    }
-
 
     if (editingAsset) {
       setAssets(assets.map(asset =>
@@ -390,14 +396,15 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       };
       setAssets(prevAssets => [...prevAssets, newAsset]);
       toast({ title: "Asset Added", description: `"${newAsset.name}" has been added.` });
-      setShowNewAssetForm(false); // Hide the inline form after adding
+      setShowNewAssetForm(false);
     }
-    setAssetFormData(initialAssetFormState); // Reset form for next use
+    setAssetFormData(initialAssetFormState);
+    setIsFetchingName(false);
   };
 
   const handleOpenEditDialog = (assetToEdit: Asset) => {
     setEditingAsset(assetToEdit);
-    setAssetFormData({ // Pre-fill form with asset data
+    setAssetFormData({
       name: assetToEdit.name,
       symbol: assetToEdit.symbol,
       quantity: assetToEdit.quantity,
@@ -405,20 +412,20 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       type: assetToEdit.type,
     });
     setIsEditDialogOpen(true);
-    setShowNewAssetForm(false); // Ensure inline add form is hidden
+    setShowNewAssetForm(false);
   };
 
   const handleOpenNewAssetForm = () => {
-    setEditingAsset(null); // Ensure not in edit mode
-    setAssetFormData(initialAssetFormState); // Reset form
+    setEditingAsset(null);
+    setAssetFormData(initialAssetFormState);
     setShowNewAssetForm(true);
-    setIsEditDialogOpen(false); // Ensure edit dialog is not open
+    setIsEditDialogOpen(false);
   };
 
   const handleCancelNewAsset = () => {
     setShowNewAssetForm(false);
     setAssetFormData(initialAssetFormState);
-    setIsFetchingName(false); // Reset name fetching state
+    setIsFetchingName(false);
   };
 
   const handleRemoveAsset = (assetId: string) => {
@@ -500,7 +507,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       </div>
       {assetFormData.type === 'crypto' && (
           <p className="text-xs text-muted-foreground text-center px-2 py-1 bg-muted/50 rounded-md">
-              Automatic price fetching is not available for cryptocurrencies. Name defaults to symbol.
+              Price fetching is not available for most cryptocurrencies. Name defaults to symbol.
           </p>
       )}
        {(assetFormData.type === 'stock' || assetFormData.type === 'fund') && (
@@ -603,12 +610,10 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   );
 
   const renderWidgetDisplay = () => (
-    <TooltipProvider>
       <Card className="shadow-lg">
         <CardHeader>
           <div className="flex justify-between items-center">
             <SectionTitle icon={TrendingUp} title="Asset Tracker" className="mb-0 text-lg" />
-            {/* Settings toggle button managed by global settings panel now */}
           </div>
         </CardHeader>
         <CardContent className="pt-4 px-3 pb-3">
@@ -693,7 +698,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
               ) : (
                 <>
                   <p className="text-sm">No assets tracked yet.</p>
-                  <p className="text-xs">Open global settings <SettingsIcon className="inline h-3 w-3 align-middle" /> to add assets.</p>
+                   <p className="text-xs">Open global settings <SettingsIcon className="inline h-3 w-3 align-middle" /> to add assets.</p>
                 </>
               )}
               {priceFetchError && !isFetchingPrices && <p className="text-xs text-destructive mt-3">{priceFetchError}</p>}
@@ -701,39 +706,60 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
           )}
         </CardContent>
       </Card>
+  );
 
-      <Dialog open={isEditDialogOpen} onOpenChange={(isOpen) => {
-        setIsEditDialogOpen(isOpen);
-        if (!isOpen) {
-          setEditingAsset(null);
-          setAssetFormData(initialAssetFormState);
-          setIsFetchingName(false);
-        }
-      }}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Edit Asset</DialogTitle>
-            <DialogDescription>
-              Update the details of your asset. {editingAsset && `Current Name: ${editingAsset.name}`}
-            </DialogDescription>
-          </DialogHeader>
-          {editingAsset && renderAssetFormFields(true)}
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button type="button" onClick={handleSubmitAsset} disabled={isFetchingName}>
-              {isFetchingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" /> }
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </TooltipProvider>
+  // Edit Dialog component
+  const editAssetDialog = (
+    <Dialog open={isEditDialogOpen} onOpenChange={(isOpen) => {
+      setIsEditDialogOpen(isOpen);
+      if (!isOpen) {
+        setEditingAsset(null);
+        setAssetFormData(initialAssetFormState);
+        setIsFetchingName(false);
+      }
+    }}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Edit Asset</DialogTitle>
+          <DialogDescription>
+            Update the details of your asset. {editingAsset && `Current Name: ${editingAsset.name}`}
+          </DialogDescription>
+        </DialogHeader>
+        {editingAsset && renderAssetFormFields(true)}
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="outline">Cancel</Button>
+          </DialogClose>
+          <Button type="button" onClick={handleSubmitAsset} disabled={isFetchingName}>
+            {isFetchingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" /> }
+            Save Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 
   if (displayMode === 'settingsOnly') {
-    return settingsOpen ? renderSettingsContent() : null;
+    return settingsOpen ? (
+      <>
+        {renderSettingsContent()}
+        {editAssetDialog} {/* Render the dialog when settings are open */}
+      </>
+    ) : null;
   }
-  return renderWidgetDisplay();
+
+  // For 'widgetOnly' mode
+  return (
+    <TooltipProvider>
+      {renderWidgetDisplay()}
+      {/* The edit dialog is now rendered separately if needed for settingsOnly mode,
+          but keeping it here for widgetOnly mode if any direct edit path from widget
+          display was ever intended. For now, it's primarily triggered from settings.
+          If it's *only* from settings, this can be removed from widgetOnly.
+          However, to be safe and ensure state `isEditDialogOpen` can open it from anywhere
+          within the component, it's better to have it rendered at the component's top level return.
+          Let's adjust the main return structure for clarity and correctness.
+      */}
+    </TooltipProvider>
+  );
 }
