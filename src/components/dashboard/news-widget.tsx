@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -234,7 +233,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
       cat.id === categoryId ? { ...cat, isEditingName: !cat.isEditingName } : {...cat, isEditingName: false}
     ));
     const categoryToEdit = categories.find(cat => cat.id === categoryId);
-    if (categoryToEdit && !categoryToEdit.isEditingName) { // Only set if going into edit mode
+    if (categoryToEdit && !categoryToEdit.isEditingName) { 
       setEditingCategoryState(prev => ({ ...prev, [categoryId]: { name: categoryToEdit.name, color: categoryToEdit.color } }));
     }
   }, [categories]);
@@ -245,7 +244,6 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
 
     if (!newName || !newName.trim()) {
       toast({ title: "Category Name Required", variant: "destructive" });
-      // Revert to old name if edit state was prematurely cleared or new name is empty
       const oldCategory = categories.find(c => c.id === categoryId);
       setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, name: oldCategory?.name || 'Untitled', isEditingName: false } : cat)); 
       return;
@@ -319,7 +317,6 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
   const handleCategoryColorChange = useCallback((categoryId: string, newColor: string) => {
     if (newColor !== '' && !isValidHexColor(newColor)) {
       toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive", duration:3000 });
-      // Do not update state if color is invalid and not empty
       if (categories.find(c => c.id === categoryId)?.color !== newColor && newColor !== '') return;
     }
 
@@ -337,8 +334,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
   }
 
   const renderSettingsUI = () => (
-    <div className="p-3 border rounded-lg bg-background/30 shadow-sm">
-        {/* CardHeader and CardTitle for settings already in page.tsx now */}
+    <div className="p-3 border rounded-lg bg-muted/30 shadow-sm">
         <CardContent className="p-1 space-y-4">
             <Card className="p-3 bg-muted/30 rounded-md">
                 <Label htmlFor="new-category-name" className="text-xs font-medium">New Category Name</Label>
@@ -394,7 +390,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
                 </Card>
             )}
             
-            <ScrollArea className="max-h-[400px] pr-1 calendar-feed-scroll-area">
+            <ScrollArea className="max-h-[400px] pr-1 calendar-feed-scroll-area overflow-y-auto">
                 <div className="space-y-3">
                 {categories.map((category) => (
                     <Card key={category.id} className="p-3 bg-muted/30">
@@ -568,12 +564,12 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
                 style={{ borderTop: `4px solid ${categoryColor}` }}
             >
               <CardHeader>
-                <CardTitle className="text-xl flex items-center">
+                 <CardTitle className="text-xl flex items-center">
                    <Newspaper className="mr-2 h-5 w-5" style={{ color: isValidHexColor(category.color) ? category.color : 'hsl(var(--muted-foreground))' }}/>
-                   <span>{category.name}</span>
-                </CardTitle>
+                   <span style={{ color: undefined }}>{category.name}</span>
+                 </CardTitle>
               </CardHeader>
-              <CardContent className="px-4 py-0 flex-1 flex flex-col"> {/* Ensure CardContent can grow */}
+              <CardContent className="px-4 py-0 flex-1 flex flex-col">
                 {isLoading && categoryArticles.length === 0 && category.feeds.some(f => f.url.trim()) && ( 
                     <div className="py-2">
                       <Skeleton className="h-5 w-3/4 mb-1.5" />
@@ -588,7 +584,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
                     </p>
                 )}
                 {categoryArticles.length > 0 && (
-                  <ScrollArea className="h-[300px] pr-3 py-2 overflow-y-auto"> {/* Fixed height */}
+                  <ScrollArea className="h-[300px] pr-3 py-2 overflow-y-auto">
                     <ul className="space-y-4">
                       {categoryArticles.map((article) => (
                         <li key={article.id} className="pb-3 border-b border-border last:border-b-0">
@@ -635,10 +631,10 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
     </React.Fragment>
   );
 
+
   if (!isClientLoaded && displayMode === 'widgetOnly') {
     return (
       <div className="space-y-6">
-        {/* Header for the "Categorized News" (title & settings button) will be rendered by page.tsx */}
         {Array.from({length: 1 }).map((_, i) => (
           <Card key={`skel-cat-outer-${i}`} className="mb-6 shadow-md">
             <CardHeader><Skeleton className="h-6 w-1/3 mb-1" /></CardHeader>
@@ -655,25 +651,26 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
       </div>
     );
   }
-
+  
   if (displayMode === 'settingsOnly') {
     return settingsOpen ? renderSettingsUI() : null;
   }
 
-  // This is the main content for widgetOnly mode (on the dashboard)
-  // It now consists of a header div and then the category cards
   if (displayMode === 'widgetOnly') {
     return (
         <React.Fragment>
-        {/* The settings management UI - only shown if global `settingsOpen` is true */}
-        {/* This is handled by page.tsx now where it renders this widget with displayMode="settingsOnly" */}
-
-        {/* The list of category cards */}
-        {renderWidgetDisplay()}
+          {displayMode === 'widgetOnly' && (
+            <div className="border-b pb-2 mb-4">
+              {/* This is where the main "Categorized News" title and global settings button used to be in the widgetOnly mode */}
+              {/* Now, it's empty as requested, or you can place a general header for the news section if needed */}
+            </div>
+          )}
+          {renderWidgetDisplay()}
         </React.Fragment>
     );
   }
-  return null; // Should not happen if displayMode is correctly widgetOnly or settingsOnly
+  return null;
 }
 
     
+
