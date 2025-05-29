@@ -30,7 +30,7 @@ import { getAssetProfile } from '@/ai/flows/asset-profile-flow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-const initialAssetFormState: Omit<Asset, 'id'> & { name?: string } = {
+const initialAssetFormState: Omit<Asset, 'id' | 'name'> & { name?: string } = {
   symbol: '',
   quantity: 0,
   purchasePrice: 0,
@@ -117,7 +117,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   const [portfolio, setPortfolio] = useState<AssetPortfolio | null>(null);
 
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
-  const [assetFormData, setAssetFormData] = useState<Omit<Asset, 'id'> & { name?: string }>(initialAssetFormState);
+  const [assetFormData, setAssetFormData] = useState<Omit<Asset, 'id' | 'name'> & { name?: string }>(initialAssetFormState);
 
   const [isFetchingPrices, setIsFetchingPrices] = useState(false);
   const [priceFetchError, setPriceFetchError] = useState<string | null>(null);
@@ -155,7 +155,6 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
           setAssets(validAssets);
           if (validAssets.length < parsedAssetsArray.length) {
             // Not setting an error here anymore, as some users might not have a 'name' field for old data, and it's auto-fetched now.
-            // setInitialLoadError("Some saved assets had invalid data and were not loaded.");
           }
         }
       } catch (e) {
@@ -284,7 +283,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   const handleSymbolBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
     const symbol = e.target.value.trim().toUpperCase();
     if (!symbol) {
-        setAssetFormData(prev => ({ ...prev, name: prev.type === 'crypto' ? '' : '', symbol: '' }));
+        setAssetFormData(prev => ({ ...prev, name: (prev.type === 'crypto' || !prev.type) ? '' : prev.name, symbol: '' }));
         return;
     }
     setAssetFormData(prev => ({ ...prev, symbol }));
@@ -316,7 +315,6 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         name: (value === 'crypto' && currentSymbol) ? currentSymbol : (prev.name || '')
     }));
     if ((value === 'stock' || value === 'fund') && currentSymbol) {
-        // Trigger name fetch if type changes to stock/fund and symbol is present
         handleSymbolBlur({ target: { value: currentSymbol } } as React.FocusEvent<HTMLInputElement>);
     }
   };
@@ -376,7 +374,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       purchasePrice: assetToEdit.purchasePrice,
       type: assetToEdit.type,
     });
-    setShowNewAssetForm(false); // Hide new asset form if editing
+    setShowNewAssetForm(false); 
   };
 
   const handleCancelEditAsset = () => {
@@ -386,7 +384,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   }
 
   const handleOpenNewAssetForm = () => {
-    setEditingAsset(null); // Ensure not in edit mode
+    setEditingAsset(null); 
     setAssetFormData(initialAssetFormState);
     setShowNewAssetForm(true);
   };
@@ -520,7 +518,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
             {assets.length > 0 ? (
             <div className="mt-2">
                 <h4 className="text-xs font-medium text-muted-foreground mb-1">Manage Existing Assets</h4>
-                <ScrollArea className="pr-1 max-h-[400px] overflow-y-auto">
+                <ScrollArea className="pr-1 max-h-[420px] overflow-y-auto">
                 <Table>
                     <TableHeader>
                     <TableRow>
