@@ -187,16 +187,17 @@ export default function LifeOSPage() {
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={widgetOrder} strategy={rectSortingStrategy}>
-          <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
             {orderedWidgets.map(({ id, Component, props = {}, columnSpan = 'lg:col-span-1' }) => {
               let dynamicProps = { ...props };
-              if (['calendar', 'news', 'assets', 'tasks'].includes(id)) {
-                dynamicProps = { ...dynamicProps, settingsOpen: showGlobalWidgetSettings, displayMode: "widgetOnly" };
-              }
+              // Pass settingsOpen only if it's relevant to the widget's displayMode for main content
+              // if (['calendar', 'news', 'assets', 'tasks'].includes(id)) {
+              //   dynamicProps = { ...dynamicProps, settingsOpen: showGlobalWidgetSettings };
+              // }
               return (
                 <SortableWidgetItem key={id} id={id} isDragging={activeId === id}>
                   <div className={columnSpan}> {/* This div might be redundant if SortableWidgetItem handles span */}
-                    <Component {...dynamicProps} />
+                    <Component {...dynamicProps} displayMode="widgetOnly" settingsOpen={false} />
                   </div>
                 </SortableWidgetItem>
               );
@@ -211,10 +212,10 @@ export default function LifeOSPage() {
                 if (activeWidget) {
                   const { Component, props = {} } = activeWidget;
                   let dynamicProps = { ...props };
-                  if (['calendar', 'news', 'assets', 'tasks'].includes(activeId)) {
-                     dynamicProps = { ...dynamicProps, settingsOpen: showGlobalWidgetSettings, displayMode: "widgetOnly" };
-                  }
-                  return <Component {...dynamicProps} />;
+                  // if (['calendar', 'news', 'assets', 'tasks'].includes(activeId)) {
+                  //    dynamicProps = { ...dynamicProps, settingsOpen: showGlobalWidgetSettings };
+                  // }
+                  return <Component {...dynamicProps} displayMode="widgetOnly" settingsOpen={false} />;
                 }
                 return null;
               })()}
