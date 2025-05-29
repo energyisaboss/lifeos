@@ -106,11 +106,11 @@ body {
 
 /* Custom scrollbar styles */
 @layer utilities {
-  .custom-styled-scroll-area > [data-orientation="vertical"] {
-    @apply !w-[5px]; /* Thinner scrollbar track (5px) */
+  .custom-styled-scroll-area > [data-orientation="vertical"] { /* This is the Scrollbar itself (track area) */
+    @apply !w-[5px] !bg-muted; /* Thinner scrollbar track (5px) and dark track */
   }
-  .custom-styled-scroll-area > [data-orientation="vertical"] > [data-radix-scroll-area-thumb] {
-    @apply !bg-[hsl(var(--sidebar-background))]; /* Darker scrollbar thumb using theme's sidebar-background color */
+  .custom-styled-scroll-area > [data-orientation="vertical"] > [data-radix-scroll-area-thumb] { /* This is the Thumb */
+    @apply !bg-[hsl(var(--sidebar-background))]; /* Even darker scrollbar thumb using theme's sidebar-background color */
   }
 
   /* UV Progress Bar Colors */
