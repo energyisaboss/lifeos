@@ -1,7 +1,7 @@
 
-"use client"; 
+"use client";
 
-import { useState } from 'react'; 
+import { useState } from 'react';
 import { DateTimeWidget } from '@/components/dashboard/datetime-widget';
 import { NewsWidget } from '@/components/dashboard/news-widget';
 import { CalendarWidget } from '@/components/dashboard/calendar-widget';
@@ -9,11 +9,11 @@ import { EnvironmentalWidget } from '@/components/dashboard/environmental-widget
 import { AssetTrackerWidget } from '@/components/dashboard/asset-tracker-widget';
 import { TaskListWidget } from '@/components/dashboard/task-list-widget';
 import { Separator } from '@/components/ui/separator';
-import { LifeBuoy, Palette as PaletteIcon, Settings as SettingsIcon, X } from 'lucide-react'; 
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { LifeBuoy, Settings as SettingsIcon, X } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { AccentColorSwitcher } from '@/components/theme/accent-color-switcher';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 
 
 export default function LifeOSPage() {
@@ -38,25 +38,22 @@ export default function LifeOSPage() {
           >
             {showGlobalWidgetSettings ? <X className="h-5 w-5" /> : <SettingsIcon className="h-5 w-5" />}
           </Button>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Change accent color">
-                <PaletteIcon className="h-5 w-5" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-2">
-              <AccentColorSwitcher />
-            </PopoverContent>
-          </Popover>
         </div>
       </header>
-      
+
       {showGlobalWidgetSettings && (
         <Card className="mb-6 shadow-lg">
           <CardHeader>
             <CardTitle className="text-xl">Global Widget Settings</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            <div>
+              <Label className="text-lg font-semibold mb-3 block">Theme Accent Color</Label>
+              <div className="p-4 border rounded-lg bg-muted/30">
+                <AccentColorSwitcher />
+              </div>
+            </div>
+            <Separator />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <CalendarWidget settingsOpen={true} displayMode="settingsOnly" />
@@ -74,26 +71,26 @@ export default function LifeOSPage() {
           </CardContent>
         </Card>
       )}
-      
+
       <Separator className="my-6" />
 
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Column 1 */}
         <div className="lg:col-span-1 space-y-6">
           <DateTimeWidget />
-          <CalendarWidget displayMode="widgetOnly" settingsOpen={false} />
+          <CalendarWidget settingsOpen={false} displayMode="widgetOnly" />
         </div>
 
         {/* Column 2 */}
         <div className="lg:col-span-1 space-y-6">
-          <NewsWidget displayMode="widgetOnly" settingsOpen={false}/>
+          <NewsWidget settingsOpen={false} displayMode="widgetOnly"/>
           <EnvironmentalWidget />
         </div>
-        
+
         {/* Column 3 */}
         <div className="lg:col-span-1 space-y-6">
-          <AssetTrackerWidget displayMode="widgetOnly" settingsOpen={false} />
-          <TaskListWidget displayMode="widgetOnly" settingsOpen={false} />
+          <AssetTrackerWidget settingsOpen={false} displayMode="widgetOnly" />
+          <TaskListWidget settingsOpen={false} displayMode="widgetOnly" />
         </div>
       </main>
 
