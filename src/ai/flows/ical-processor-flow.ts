@@ -71,12 +71,13 @@ const icalProcessorFlow = ai.defineFlow(
       const vevents = calendarComponent.getAllSubcomponents('vevent');
       
       const processedEvents: AppCalendarEvent[] = [];
-      const finalFeedColor = feedColorInput || assignColor();
+      const finalFeedColor = (feedColorInput && /^#([0-9A-F]{3}){1,2}$/i.test(feedColorInput)) ? feedColorInput : assignColor();
+
 
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Start of today
       const expansionEndDate = new Date(today);
-      expansionEndDate.setDate(today.getDate() + 30); // Expand for the next 30 days
+      expansionEndDate.setDate(today.getDate() + 90); // Expand for the next 90 days
 
       for (const veventComponent of vevents) {
         const event = new ICAL.Event(veventComponent);
