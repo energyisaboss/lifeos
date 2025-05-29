@@ -23,6 +23,8 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
+// Define the required scope for Google Tasks API
+const GOOGLE_TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
 
 declare global {
   interface Window {
@@ -97,7 +99,6 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
   const [errorPerList, setErrorPerList] = useState<Record<string, string | null>>({});
 
   const [isGapiClientLoaded, setIsGapiClientLoaded] = useState(false);
-  const [showTaskSettings, setShowTaskSettings] = useState(false);
 
 
   useEffect(() => {
@@ -270,6 +271,17 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                 settingsChanged = true;
             }
         });
+        
+        // Ensure all lists from API have at least a default setting
+        const currentSettingIds = Object.keys(newSettings);
+        fetchedLists.forEach(list => {
+            if (!currentSettingIds.includes(list.id)) {
+                newSettings[list.id] = { visible: false, color: getNextColor() };
+                settingsChanged = true;
+            }
+        });
+
+
         if (settingsChanged && typeof window !== 'undefined') {
             localStorage.setItem(TASK_LIST_SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
         }
@@ -515,7 +527,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
             {isLoadingLists ? (
               <div className="flex items-center justify-center py-2"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
             ) : taskLists.length > 0 ? (
-              <ScrollArea className="max-h-[300px] pr-2 custom-styled-scroll-area overflow-y-auto">
+              <ScrollArea className="max-h-[300px] pr-2 custom-styled-scroll-area no-visual-scroll overflow-y-auto">
                 <div className="space-y-3">
                 {taskLists.map((list) => (
                   <div key={list.id} className="p-2.5 rounded-md bg-muted/30 hover:bg-muted/50">
@@ -686,7 +698,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                 ) : errorPerList[list.id] ? (
                     <Alert variant="destructive" className="text-xs my-2"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{errorPerList[list.id]}</AlertDescription></Alert>
                 ) : (tasksByListId[list.id] || []).length > 0 ? (
-                    <ScrollArea className="flex-grow max-h-60 pr-1 overflow-y-auto no-visual-scroll">
+                    <ScrollArea className="flex-grow max-h-60 pr-1 overflow-y-auto no-visual-scroll custom-styled-scroll-area">
                     <ul className="space-y-1.5">
                         {(tasksByListId[list.id] || []).map((task) => (
                         <li key={task.id} className="flex items-center space-x-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors">
@@ -695,19 +707,13 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                               checked={task.status === 'completed'}
                               onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
                               aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
-                              className={cn(
-                                "task-list-checkbox"
-                              )}
-                                style={
-                                  task.status === 'completed' && finalColor && isValidHexColor(finalColor)
-                                  ? {
-                                      '--task-checkbox-checked-bg': finalColor,
-                                      '--task-checkbox-checked-border': finalColor,
-                                      '--task-checkbox-unchecked-border': finalColor,
-                                      } as React.CSSProperties
-                                  : {
-                                      '--task-checkbox-unchecked-border': finalColor,
-                                  } as React.CSSProperties
+                              className="task-list-checkbox"
+                              style={
+                                {
+                                  '--task-checkbox-checked-bg': finalColor,
+                                  '--task-checkbox-checked-border': finalColor,
+                                  '--task-checkbox-unchecked-border': finalColor,
+                                } as React.CSSProperties
                               }
                             />
                             <label
@@ -773,38 +779,44 @@ export function TaskListWidget({
   }, []);
 
   if (!isClient && (displayMode === 'settingsOnly' || displayMode === 'widgetOnly')) {
-     const headerHeight = displayMode === 'widgetOnly' ? 'h-10' : 'h-auto';
-     const contentHeight = displayMode === 'widgetOnly' ? 'h-40' : 'h-80'; // Taller for settings
+     const headerHeight = displayMode === 'widgetOnly' ? 'h-auto' : 'h-auto'; // No fixed header height
+     const contentHeight = displayMode === 'widgetOnly' ? 'h-auto' : 'h-auto'; // No fixed content height
      return (
-         <Card className="shadow-md">
-            {displayMode === 'settingsOnly' && (
-                 <CardHeader className="p-3">
-                    <Skeleton className="h-6 w-1/2" />
-                 </CardHeader>
-            )}
-            <CardContent className={cn("p-4", displayMode === 'settingsOnly' && "pt-0")}>
-                <Skeleton className={cn(headerHeight, "w-full mb-3")} />
-                <Skeleton className={cn(contentHeight, "w-full")} />
-            </CardContent>
-         </Card>
+        <div className={cn(displayMode === 'widgetOnly' && "space-y-4")}>
+          {Array.from({ length: 1 }).map((_, i) => (
+            <Card key={`skel-task-outer-${i}`} className="shadow-md">
+              <CardHeader className={cn("p-3", displayMode === 'settingsOnly' && "pt-0")}>
+                <Skeleton className={cn("h-6 w-3/4", headerHeight)} />
+              </CardHeader>
+              <CardContent className={cn("p-3", displayMode === 'settingsOnly' && "pt-0")}>
+                  <Skeleton className={cn("h-8 w-full mb-3", contentHeight)} />
+                  <Skeleton className={cn("h-20 w-full", contentHeight)} />
+              </CardContent>
+            </Card>
+           ))}
+        </div>
      );
   }
   
-  if (displayMode === 'settingsOnly' && (providerError || !googleClientId)) {
-     return (
-       <Card>
-         <CardHeader><SectionTitle icon={ListChecks} title="Tasks" /></CardHeader>
-         <CardContent className='p-4'>
-           <Alert variant="destructive" className="mt-4">
-             <AlertCircle className="h-4 w-4" />
-             <AlertTitle>Configuration Error</AlertTitle>
-             <AlertDescription>
-               {providerError || "Google Client ID is not available. Please configure it."}
-             </AlertDescription>
-           </Alert>
-         </CardContent>
-       </Card>
-     );
+  if (displayMode === 'settingsOnly') {
+     if (providerError || !googleClientId) {
+        return (
+            <Card className="p-2">
+                <CardHeader className="px-1 py-2">
+                    <SectionTitle icon={ListChecks} title="Tasks" className="text-lg" />
+                </CardHeader>
+                <CardContent className='p-1'>
+                    <Alert variant="destructive" className="mt-2">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Configuration Error</AlertTitle>
+                        <AlertDescription className="text-xs">
+                        {providerError || "Google Client ID is not available. Please configure it."}
+                        </AlertDescription>
+                    </Alert>
+                </CardContent>
+            </Card>
+        );
+     }
   }
   if (displayMode === 'widgetOnly' && (providerError || !googleClientId)) {
     return (
@@ -814,13 +826,32 @@ export function TaskListWidget({
                 <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Configuration Error</AlertTitle>
-                    <AlertDescription>
+                    <AlertDescription className="text-xs">
                     {providerError || "Google Client ID is not available. Please configure it."}
                     </AlertDescription>
                 </Alert>
             </CardContent>
          </Card>
       </div>
+    );
+  }
+  
+  if (!googleClientId) {
+    // Still waiting for client ID to load, render skeleton or minimal loading state
+    return (
+        <div className={cn(displayMode === 'widgetOnly' && "space-y-4")}>
+         {Array.from({ length: 1 }).map((_, i) => (
+           <Card key={`skel-task-outer-loading-${i}`} className="shadow-md">
+             <CardHeader className={cn("p-3", displayMode === 'settingsOnly' && "pt-0")}>
+               <Skeleton className="h-6 w-3/4" />
+             </CardHeader>
+             <CardContent className={cn("p-3", displayMode === 'settingsOnly' && "pt-0")}>
+                 <Skeleton className="h-8 w-full mb-3" />
+                 <Skeleton className="h-20 w-full" />
+             </CardContent>
+           </Card>
+          ))}
+       </div>
     );
   }
   
