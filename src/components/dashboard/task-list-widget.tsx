@@ -61,7 +61,7 @@ const predefinedTaskColors: string[] = [
 ];
 let lastAssignedColorIndex = -1;
 
-const getNextColor = () => {
+const getNextColor = (): string => {
   lastAssignedColorIndex = (lastAssignedColorIndex + 1) % predefinedTaskColors.length;
   return predefinedTaskColors[lastAssignedColorIndex];
 };
@@ -518,7 +518,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
             {isLoadingLists ? (
               <div className="flex items-center justify-center py-2"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
             ) : taskLists.length > 0 ? (
-              <ScrollArea className="max-h-[300px] pr-2 overflow-y-auto custom-styled-scroll-area">
+              <ScrollArea className="max-h-[300px] pr-2 overflow-y-auto no-visual-scroll">
                 <div className="space-y-3">
                 {taskLists.map((list) => (
                   <div key={list.id} className="p-2.5 rounded-md bg-muted/30 hover:bg-muted/50">
@@ -636,26 +636,18 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
   const renderWidgetDisplay = () => (
     <React.Fragment>
       {!isSignedIn ? (
-         <Card className="shadow-md">
-            <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-                <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
-                <Button onClick={() => login()} variant="default">
-                  <LogIn className="mr-2 h-4 w-4" />
-                  Sign In with Google
-                </Button>
-                {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
-            </CardContent>
-          </Card>
+          <div className="p-4 flex flex-col items-center justify-center text-center">
+              <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
+              <Button onClick={() => login()} variant="default">
+                <LogIn className="mr-2 h-4 w-4" />
+                Sign In with Google
+              </Button>
+              {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
+          </div>
       ) : error ? (
-           <Card className="shadow-md">
-              <CardContent>
-                  <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
-              </CardContent>
-           </Card>
+          <Alert variant="destructive" className="mb-4 text-xs m-2"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
       ) : isLoadingLists && !taskLists.length ? (
-            <Card className="shadow-md">
-              <CardContent className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</CardContent>
-            </Card>
+          <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</div>
       ) : taskLists.filter(list => listSettings[list.id]?.visible).length > 0 ? (
         <div className="space-y-4">
           {taskLists.filter(list => listSettings[list.id]?.visible).map(list => {
@@ -698,7 +690,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                 ) : errorPerList[list.id] ? (
                     <Alert variant="destructive" className="text-xs my-2"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{errorPerList[list.id]}</AlertDescription></Alert>
                 ) : (tasksByListId[list.id] || []).length > 0 ? (
-                    <ScrollArea className="pr-1 flex-grow max-h-60 overflow-y-auto custom-styled-scroll-area">
+                    <ScrollArea className="flex-grow max-h-60 pr-1 overflow-y-auto no-visual-scroll">
                     <ul className="space-y-1.5">
                         {(tasksByListId[list.id] || []).map((task) => (
                         <li key={task.id} className="flex items-center space-x-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors">
@@ -708,8 +700,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                               onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
                               aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
                               className={cn(
-                                "task-list-checkbox",
-                                task.status === 'completed' && `!bg-[${finalColor}] !border-[${finalColor}] text-primary-foreground`
+                                "task-list-checkbox"
                               )}
                                 style={
                                   task.status === 'completed' && finalColor && isValidHexColor(finalColor)
@@ -741,16 +732,14 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
           )})}
         </div>
       ) : (
-           <Card className="shadow-md">
-             <CardContent>
-                  <p className="text-sm text-muted-foreground text-center py-6">
-                  { !isSignedIn ? "Sign in to see your tasks." : 
-                    taskLists.length > 0 ? "No task lists are currently visible. Open settings to select lists to display." :
-                    "No Google Task lists found. Open settings to create one, or check your Google Tasks account."
-                  }
-                  </p>
-             </CardContent>
-           </Card>
+          <div className="p-4">
+              <p className="text-sm text-muted-foreground text-center py-6">
+              { !isSignedIn ? "Sign in to see your tasks." : 
+                taskLists.length > 0 ? "No task lists are currently visible. Open settings to select lists to display or create a new one." :
+                "No Google Task lists found. Open settings to create one, or check your Google Tasks account."
+              }
+              </p>
+          </div>
       )}
     </React.Fragment>
   );
@@ -775,24 +764,28 @@ export function TaskListWidget({
 
   useEffect(() => {
     setIsClient(true);
-    const clientIdFromEnv = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (clientIdFromEnv) {
-      setGoogleClientId(clientIdFromEnv);
-    } else {
-      console.error("TaskListWidget: NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set in .env.local or not exposed to client.");
-      setProviderError("Google Client ID not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env.local file, ensure it's exposed to the client (prefixed with NEXT_PUBLIC_), and restart the server.");
+    // Ensure this runs only on the client
+    if (typeof window !== 'undefined') {
+        const clientIdFromEnv = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+        if (clientIdFromEnv) {
+        setGoogleClientId(clientIdFromEnv);
+        } else {
+        console.error("TaskListWidget: NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set in .env.local or not exposed to client.");
+        setProviderError("Google Client ID not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env.local file, ensure it's exposed to the client (prefixed with NEXT_PUBLIC_), and restart the server.");
+        }
     }
   }, []);
 
+  if (!isClient && displayMode === 'settingsOnly') {
+     return <Card><CardContent className="p-4"><Skeleton className="h-40 w-full" /></CardContent></Card>;
+  }
+  
   if (displayMode === 'settingsOnly') {
-     if (!isClient) {
-        return <Card><CardContent className="p-4"><Skeleton className="h-40 w-full" /></CardContent></Card>;
-     }
      if (providerError || !googleClientId) {
         return (
           <Card>
             <CardContent className='p-4'>
-              <Alert variant="destructive" className="mt-4 mx-4">
+              <Alert variant="destructive" className="mt-4">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Configuration Error</AlertTitle>
                 <AlertDescription>
@@ -812,12 +805,11 @@ export function TaskListWidget({
 
   // Widget Display Mode (widgetOnly)
   if (!isClient) {
-    // Minimal skeleton for widgetOnly mode before client is loaded
     return (
-      <div className="w-full"> {/* Ensure wrapper for skeleton */}
+      <div className="w-full">
          <Card className="shadow-md">
             <CardHeader className="py-3 px-4 border-b">
-              <Skeleton className="h-5 w-1/3" />
+              <Skeleton className="h-5 w-1/2" />
             </CardHeader>
             <CardContent className="pt-3 px-4 pb-3">
               <Skeleton className="h-8 w-full mb-3" />
@@ -830,10 +822,9 @@ export function TaskListWidget({
   }
 
   if (providerError || !googleClientId) {
-    // Show error directly if in widgetOnly mode and config is missing
     return (
       <Card className="shadow-md">
-         <CardContent>
+         <CardContent className="p-4">
             <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Configuration Error</AlertTitle>
@@ -852,4 +843,3 @@ export function TaskListWidget({
     </GoogleOAuthProvider>
   );
 }
-
