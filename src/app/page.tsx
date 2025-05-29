@@ -18,20 +18,20 @@ import { Label } from '@/components/ui/label';
 import { SortableWidgetItem } from '@/components/dashboard/sortable-widget-item';
 import { Switch } from '@/components/ui/switch';
 
-const WIDGET_ORDER_STORAGE_KEY = 'widgetOrder_v1'; // Updated key for potentially new structure
-const WIDGET_VISIBILITY_STORAGE_KEY = 'widgetVisibility_v1';
+const WIDGET_ORDER_STORAGE_KEY = 'widgetOrder_v1';
+const WIDGET_VISIBILITY_STORAGE_KEY = 'widgetVisibility_v1'; // New key for visibility
 
 interface WidgetConfig {
   id: string;
-  Component: ComponentType<any>; 
-  name: string; // Added name property for display
+  Component: ComponentType<any>;
+  name: string;
   props?: any;
   columnSpan?: string;
 }
 
 const initialWidgetConfigs: WidgetConfig[] = [
   { id: 'datetime', name: 'Date and Time', Component: DateTimeWidget, props: {}, columnSpan: 'lg:col-span-1' },
-  { id: 'news', name: 'News', Component: NewsWidget, props: {}, columnSpan: 'lg:col-span-1' }, // Changed from lg:col-span-2
+  { id: 'news', name: 'News', Component: NewsWidget, props: {}, columnSpan: 'lg:col-span-1' },
   { id: 'calendar', name: 'Calendar', Component: CalendarWidget, props: {}, columnSpan: 'lg:col-span-1' },
   { id: 'environmental', name: 'Environmental', Component: EnvironmentalWidget, props: {}, columnSpan: 'lg:col-span-1' },
   { id: 'asset-tracker', name: 'Asset Tracker', Component: AssetTrackerWidget, props: {}, columnSpan: 'lg:col-span-1' },
@@ -54,48 +54,46 @@ export default function LifeOSPage() {
 
 
   useEffect(() => {
-    setIsClient(true);
+    setIsClient(true); // Moved setIsClient to the beginning of the first effect
+
+    // Load widget order
     const savedOrder = localStorage.getItem(WIDGET_ORDER_STORAGE_KEY);
     if (savedOrder) {
       try {
         const parsedOrder = JSON.parse(savedOrder) as string[];
         const currentWidgetIds = new Set(initialWidgetConfigs.map(w => w.id));
-        // Filter out any IDs in savedOrder that are no longer in initialWidgetConfigs
         const filteredOrder = parsedOrder.filter(id => currentWidgetIds.has(id));
-        // Find any new widget IDs that are not in the filteredOrder
         const newIds = Array.from(currentWidgetIds).filter(id => !filteredOrder.includes(id));
-        // Combine them, keeping the user's order for existing widgets and appending new ones
         setWidgetOrder([...filteredOrder, ...newIds]);
       } catch (e) {
         console.error("Failed to parse widget order from localStorage", e);
-        setWidgetOrder(initialWidgetConfigs.map(w => w.id));
-      }
-
-      const savedVisibility = localStorage.getItem(WIDGET_VISIBILITY_STORAGE_KEY);
-      if (savedVisibility) {
-        try {
-          const parsedVisibility = JSON.parse(savedVisibility) as Record<string, boolean>;
-          const currentWidgetIds = new Set(initialWidgetConfigs.map(w => w.id));
-          const updatedVisibility: Record<string, boolean> = {};
-          // Include saved visibility for existing widgets
-          Object.keys(parsedVisibility).forEach(id => {
-            if (currentWidgetIds.has(id)) {
-              updatedVisibility[id] = parsedVisibility[id];
-            }
-          });
-          // Add new widgets as visible by default
-          initialWidgetConfigs.forEach(widget => {
-            if (updatedVisibility[widget.id] === undefined) {
-              updatedVisibility[widget.id] = true;
-            }
-          });
-          setWidgetVisibility(updatedVisibility);
-        } catch (e) {
-          console.error("Failed to parse widget visibility from localStorage", e);
-        }
+        setWidgetOrder(initialWidgetConfigs.map(w => w.id)); // Fallback to default order
       }
     } else {
-      setWidgetOrder(initialWidgetConfigs.map(w => w.id));
+      setWidgetOrder(initialWidgetConfigs.map(w => w.id)); // Default order if nothing saved
+    }
+
+    // Load widget visibility
+    const savedVisibility = localStorage.getItem(WIDGET_VISIBILITY_STORAGE_KEY);
+    if (savedVisibility) {
+      try {
+        const parsedVisibility = JSON.parse(savedVisibility) as Record<string, boolean>;
+        const currentWidgetIds = new Set(initialWidgetConfigs.map(w => w.id));
+        const updatedVisibility: Record<string, boolean> = {};
+        
+        initialWidgetConfigs.forEach(widget => {
+          // Use saved visibility if present, otherwise default to true
+          updatedVisibility[widget.id] = parsedVisibility[widget.id] !== undefined ? parsedVisibility[widget.id] : true;
+        });
+        setWidgetVisibility(updatedVisibility);
+      } catch (e) {
+        console.error("Failed to parse widget visibility from localStorage", e);
+        // Fallback: all widgets visible by default
+        setWidgetVisibility(initialWidgetConfigs.reduce((acc, widget) => ({ ...acc, [widget.id]: true }), {}));
+      }
+    } else {
+      // Default: all widgets visible if nothing saved
+      setWidgetVisibility(initialWidgetConfigs.reduce((acc, widget) => ({ ...acc, [widget.id]: true }), {}));
     }
   }, []); // Empty dependency array to run only on mount
 
@@ -106,7 +104,7 @@ export default function LifeOSPage() {
   }, [widgetOrder, isClient]);
 
   useEffect(() => {
-    if (isClient && Object.keys(widgetVisibility).length > 0) {
+    if (isClient && Object.keys(widgetVisibility).length > 0) { // Only save if visibility is initialized
       localStorage.setItem(WIDGET_VISIBILITY_STORAGE_KEY, JSON.stringify(widgetVisibility));
     }
   }, [widgetVisibility, isClient]);
@@ -139,8 +137,11 @@ export default function LifeOSPage() {
     setWidgetVisibility(prev => ({ ...prev, [id]: isVisible }));
   };
 
-  // Filter widgets based on visibility before ordering
-  const orderedWidgets = widgetOrder.map(id => getWidgetById(id)).filter(Boolean).filter(widget => widgetVisibility[widget!.id]) as WidgetConfig[];
+  // Filter widgets based on visibility before ordering for display on the dashboard
+  const dashboardVisibleWidgets = widgetOrder
+    .map(id => getWidgetById(id))
+    .filter(Boolean)
+    .filter(widget => widgetVisibility[widget!.id]) as WidgetConfig[];
 
   if (!isClient) {
     return (
@@ -170,10 +171,10 @@ export default function LifeOSPage() {
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <Button
+           <Button
             variant="ghost"
             size="icon"
-            aria-label="Toggle Widget Settings"
+            aria-label="Toggle Global Widget Settings"
             onClick={() => setShowGlobalWidgetSettings(!showGlobalWidgetSettings)}
           >
             {showGlobalWidgetSettings ? <X className="h-5 w-5" /> : <SettingsIcon className="h-5 w-5" />}
@@ -196,12 +197,14 @@ export default function LifeOSPage() {
             <Separator/>
             <div>
               <Label className="text-lg font-semibold mb-3 block">Widget Visibility</Label>
-              <div className="p-4 border rounded-lg bg-muted/30 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-4 border rounded-lg bg-muted/30 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {initialWidgetConfigs.map(widget => (
-                  <div key={widget.id} className="flex items-center justify-between space-x-2">
-                    <Label htmlFor={`switch-${widget.id}`}>{widget.name}</Label>
+                  <div key={`vis-${widget.id}`} className="flex items-center justify-between space-x-2 p-2 rounded-md hover:bg-muted/50">
+                    <Label htmlFor={`switch-vis-${widget.id}`} className="text-sm">
+                      {widget.name}
+                    </Label>
                     <Switch
-                      id={`switch-${widget.id}`}
+                      id={`switch-vis-${widget.id}`}
                       checked={!!widgetVisibility[widget.id]}
                       onCheckedChange={(checked) => handleWidgetVisibilityChange(widget.id, checked)}
                     />
@@ -209,6 +212,7 @@ export default function LifeOSPage() {
                 ))}
               </div>
             </div>
+            <Separator/>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <CalendarWidget settingsOpen={true} displayMode="settingsOnly" />
@@ -235,36 +239,24 @@ export default function LifeOSPage() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext items={orderedWidgets.map(w => w.id)} strategy={rectSortingStrategy}>
+        <SortableContext items={dashboardVisibleWidgets.map(w => w.id)} strategy={rectSortingStrategy}>
           <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start auto-rows-min">
-            {orderedWidgets.map(({ id, Component, props = {}, columnSpan = 'lg:col-span-1' }) => {
-              let dynamicProps = { ...props };
-              // For the main display, settingsOpen is false, and displayMode is widgetOnly
-              if (id === 'calendar' || id === 'news' || id === 'asset-tracker' || id === 'task-list') {
-                dynamicProps.settingsOpen = false; 
-                dynamicProps.displayMode = "widgetOnly";
-              }
-              return (
+            {dashboardVisibleWidgets.map(({ id, Component, props = {}, columnSpan = 'lg:col-span-1' }) => (
                 <SortableWidgetItem key={id} id={id} isDragging={activeId === id} className={columnSpan}>
-                  <Component {...dynamicProps} />
+                  <Component {...props} settingsOpen={false} displayMode="widgetOnly" />
                 </SortableWidgetItem>
-              );
-            })}
+              )
+            )}
           </main>
         </SortableContext>
         <DragOverlay>
-          {activeId ? (
+          {activeId && getWidgetById(activeId) ? (
             <div className="opacity-75 shadow-2xl">
               {(() => {
-                const activeWidget = getWidgetById(activeId);
-                if (activeWidget) {
-                  const { Component, props = {} } = activeWidget;
-                  let dynamicProps = { ...props };
-                   if (activeWidget.id === 'calendar' || activeWidget.id === 'news' || activeWidget.id === 'asset-tracker' || activeWidget.id === 'task-list') {
-                    dynamicProps.settingsOpen = false;
-                    dynamicProps.displayMode = "widgetOnly";
-                  }
-                  return <Component {...dynamicProps} />;
+                const activeWidgetConfig = getWidgetById(activeId);
+                if (activeWidgetConfig) {
+                  const { Component, props = {} } = activeWidgetConfig;
+                  return <Component {...props} settingsOpen={false} displayMode="widgetOnly" />;
                 }
                 return null;
               })()}
