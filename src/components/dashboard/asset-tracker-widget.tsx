@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SectionTitle } from './section-title';
-import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, Loader2, Settings as SettingsIcon, AlertCircle, RefreshCw } from 'lucide-react';
+import { TrendingUp, ArrowDown, ArrowUp, PlusCircle, Edit3, Trash2, Save, Loader2, Settings as SettingsIcon, AlertCircle } from 'lucide-react';
 import type { Asset, AssetPortfolio, AssetHolding } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -12,15 +12,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -29,17 +30,16 @@ import { getAssetProfile } from '@/ai/flows/asset-profile-flow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-
 const initialAssetFormState: Omit<Asset, 'id'> & { name?: string } = {
   symbol: '',
   quantity: 0,
   purchasePrice: 0,
   type: 'stock',
-  name: '', // Explicitly initialize name
+  name: '',
 };
 
 const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
-const LOCALSTORAGE_KEY = 'userAssetsLifeOS_Tiingo_v1'; // Updated key for Tiingo
+const LOCALSTORAGE_KEY = 'userAssetsLifeOS_Tiingo_v1';
 
 function calculateAssetPortfolio(
   assets: Asset[],
@@ -56,15 +56,12 @@ function calculateAssetPortfolio(
     if (typeof currentPricePerUnit === 'number') {
       currentValue = asset.quantity * currentPricePerUnit;
     } else if (asset.type === 'crypto') {
-      // For crypto, if no price fetched, we can't calculate current value from API
-      // Potentially allow manual input for crypto current price if needed in future
-      currentValue = 0; // Or keep as initial cost? For now, 0 if no API price.
+      currentValue = 0;
     }
 
-
-    const profitLoss = (typeof currentPricePerUnit === 'number' || asset.type === 'crypto' && currentPricePerUnit !== undefined)
+    const profitLoss = (typeof currentPricePerUnit === 'number' || (asset.type === 'crypto' && currentPricePerUnit !== undefined))
       ? currentValue - initialCost
-      : 0 - initialCost; // If price is null/undefined for stock/fund, PL is full loss of initial cost
+      : 0 - initialCost;
 
     totalPortfolioValue += currentValue;
     totalInitialCost += initialCost;
@@ -104,7 +101,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
           return parsedAssetsArray.filter((asset: any) =>
             asset &&
             typeof asset.id === 'string' &&
-            typeof asset.name === 'string' && asset.name.trim() !== '' && // Ensure name is present
+            typeof asset.name === 'string' && asset.name.trim() !== '' &&
             typeof asset.symbol === 'string' && asset.symbol.trim() !== '' &&
             typeof asset.quantity === 'number' && asset.quantity > 0 &&
             typeof asset.purchasePrice === 'number' && asset.purchasePrice >= 0 &&
@@ -112,7 +109,6 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
           );
         }
       } catch (e) {
-        // Error parsing, will fall through to return []
         console.error("AssetTracker: Error parsing assets from localStorage on init:", e);
       }
     }
@@ -122,7 +118,6 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   const [fetchedPrices, setFetchedPrices] = useState<Record<string, number | null>>({});
   const [portfolio, setPortfolio] = useState<AssetPortfolio | null>(null);
 
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [assetFormData, setAssetFormData] = useState<Omit<Asset, 'id'>>(initialAssetFormState);
 
@@ -130,8 +125,6 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   const [priceFetchError, setPriceFetchError] = useState<string | null>(null);
   const [isFetchingName, setIsFetchingName] = useState(false);
   const [showNewAssetForm, setShowNewAssetForm] = useState(false);
-  // const [showAssetManagement, setShowAssetManagement] = useState(false); // Controlled by settingsOpen prop now
-
 
   const isFetchingPricesRef = useRef(isFetchingPrices);
   useEffect(() => {
@@ -139,48 +132,47 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   }, [isFetchingPrices]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedAssetsString = localStorage.getItem(LOCALSTORAGE_KEY);
-      if (savedAssetsString) {
-        try {
-          const parsedAssetsArray = JSON.parse(savedAssetsString);
-          if (!Array.isArray(parsedAssetsArray)) {
-            toast({
-              title: "Storage Error",
-              description: "Asset data in storage was corrupted and has been cleared.",
-              variant: "destructive",
-              duration: 7000,
-            });
-            localStorage.removeItem(LOCALSTORAGE_KEY);
-          } else {
-             const validAssetCount = parsedAssetsArray.filter((asset: any) =>
-              asset && typeof asset.id === 'string' && typeof asset.name === 'string' && asset.name.trim() !== '' &&
-              typeof asset.symbol === 'string' && asset.symbol.trim() !== '' && typeof asset.quantity === 'number' && asset.quantity > 0 &&
-              typeof asset.purchasePrice === 'number' && asset.purchasePrice >= 0 && ['stock', 'fund', 'crypto'].includes(asset.type)
-            ).length;
-            if (validAssetCount < parsedAssetsArray.length) {
-              toast({
-                title: "Data Integrity Check",
-                description: "Some saved assets had invalid data and were not loaded.",
-                variant: "default",
-                duration: 5000,
-              });
-            }
-          }
-        } catch (e) {
-          console.error("AssetTracker: Error parsing or validating assets from localStorage in useEffect:", e);
+    if (typeof window === 'undefined') return;
+
+    const savedAssetsString = localStorage.getItem(LOCALSTORAGE_KEY);
+    if (savedAssetsString) {
+      try {
+        const parsedAssetsArray = JSON.parse(savedAssetsString);
+        if (!Array.isArray(parsedAssetsArray)) {
           toast({
             title: "Storage Error",
-            description: "Could not load saved assets due to a data error. Previous data has been cleared.",
+            description: "Asset data in storage was corrupted and has been cleared.",
             variant: "destructive",
             duration: 7000,
           });
           localStorage.removeItem(LOCALSTORAGE_KEY);
+        } else {
+           const validAssetCount = parsedAssetsArray.filter((asset: any) =>
+            asset && typeof asset.id === 'string' && typeof asset.name === 'string' && asset.name.trim() !== '' &&
+            typeof asset.symbol === 'string' && asset.symbol.trim() !== '' && typeof asset.quantity === 'number' && asset.quantity > 0 &&
+            typeof asset.purchasePrice === 'number' && asset.purchasePrice >= 0 && ['stock', 'fund', 'crypto'].includes(asset.type)
+          ).length;
+          if (validAssetCount < parsedAssetsArray.length) {
+            toast({
+              title: "Data Integrity Check",
+              description: "Some saved assets had invalid data and were not loaded.",
+              variant: "default",
+              duration: 5000,
+            });
+          }
         }
+      } catch (e) {
+        console.error("AssetTracker: Error parsing or validating assets from localStorage in useEffect:", e);
+        toast({
+          title: "Storage Error",
+          description: "Could not load saved assets due to a data error. Previous data has been cleared.",
+          variant: "destructive",
+          duration: 7000,
+        });
+        localStorage.removeItem(LOCALSTORAGE_KEY);
       }
     }
   }, []);
-
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -217,7 +209,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
     console.log("AssetTracker: Fetching prices for assets:", currentAssets.map(a => a.symbol));
 
     for (const asset of currentAssets) {
-      if ((asset.type === 'stock' || asset.type === 'fund') && asset.symbol) { // Only fetch for stock/fund
+      if ((asset.type === 'stock' || asset.type === 'fund') && asset.symbol) {
         try {
           const priceData = await getAssetPrice({ symbol: asset.symbol });
           prices[asset.id] = priceData.currentPrice;
@@ -243,7 +235,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
           }
         }
       } else {
-        prices[asset.id] = null; // Crypto or other types, don't fetch from Tiingo EOD
+        prices[asset.id] = null;
       }
     }
     setFetchedPrices(prices);
@@ -257,25 +249,20 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
           duration: 7000,
         });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Removed dependencies that might cause excessive calls
+  }, []);
 
   useEffect(() => {
-    // Fetch prices on initial load if assets exist and widget is visible
     if (assets.length > 0 && (displayMode === 'widgetOnly' || (settingsOpen && displayMode === 'settingsOnly'))) {
       fetchAllAssetPrices(assets);
     } else {
-      // If no assets or widget not in focus, clear prices/portfolio
       setFetchedPrices({});
       setPortfolio(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assets, displayMode, settingsOpen]); // Re-fetch if these change
+  }, [assets, displayMode, settingsOpen, fetchAllAssetPrices]);
 
   useEffect(() => {
-    // Auto-refresh logic
     if (assets.length === 0 || displayMode !== 'widgetOnly') {
-      return; // Only auto-refresh for widget display with assets
+      return;
     }
     const intervalId = setInterval(() => {
       if (!isFetchingPricesRef.current) {
@@ -288,9 +275,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       console.log("AssetTracker: Clearing auto-refresh interval.");
       clearInterval(intervalId);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assets, displayMode]); // Removed fetchAllAssetPrices from deps to avoid re-creating interval
-
+  }, [assets, displayMode, fetchAllAssetPrices]);
 
   useEffect(() => {
     if (assets.length > 0 || Object.keys(fetchedPrices).length > 0) {
@@ -321,12 +306,12 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         if (profile.assetName) {
           setAssetFormData(prev => ({ ...prev, name: profile.assetName! }));
         } else {
-          setAssetFormData(prev => ({ ...prev, name: symbol })); // Fallback to symbol if name not found
+          setAssetFormData(prev => ({ ...prev, name: symbol }));
           toast({ title: "Name Fetch", description: `Could not fetch name for ${symbol} from Tiingo. Using symbol as name.`, variant: "default", duration: 3000});
         }
       } catch (error) {
         console.error("Error fetching asset profile for symbol from Tiingo:", symbol, error);
-        setAssetFormData(prev => ({ ...prev, name: symbol })); // Fallback
+        setAssetFormData(prev => ({ ...prev, name: symbol }));
         toast({ title: "Name Fetch Error", description: `Error fetching name for ${symbol} from Tiingo. Using symbol as name.`, variant: "destructive"});
       } finally {
         setIsFetchingName(false);
@@ -362,12 +347,8 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       return false;
     }
     if (!assetFormData.name || !assetFormData.name.trim()) {
-        if (assetFormData.type === 'stock' || assetFormData.type === 'fund') {
-            toast({ title: "Validation Error", description: "Asset name is required. It should auto-fetch from symbol.", variant: "destructive" });
-        } else { // crypto
-            toast({ title: "Validation Error", description: "Asset name (usually symbol for crypto) is required.", variant: "destructive" });
-        }
-        return false;
+        const nameToUse = assetFormData.symbol.toUpperCase();
+        setAssetFormData(prev => ({ ...prev, name: nameToUse }));
     }
     return true;
   };
@@ -375,7 +356,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   const handleSubmitAsset = () => {
     if (!validateForm()) return;
 
-    const finalName = assetFormData.name.trim();
+    const finalName = assetFormData.name.trim() || assetFormData.symbol.toUpperCase();
     const finalSymbol = assetFormData.symbol.toUpperCase();
 
     if (editingAsset) {
@@ -383,7 +364,6 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         asset.id === editingAsset.id ? { ...asset, symbol: finalSymbol, quantity: assetFormData.quantity, purchasePrice: assetFormData.purchasePrice, type: assetFormData.type, name: finalName } : asset
       ));
       toast({ title: "Asset Updated", description: `"${finalName}" has been updated.` });
-      setIsEditDialogOpen(false);
       setEditingAsset(null);
     } else {
       const newAsset: Asset = {
@@ -402,7 +382,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
     setIsFetchingName(false);
   };
 
-  const handleOpenEditDialog = (assetToEdit: Asset) => {
+  const handleStartEditAsset = (assetToEdit: Asset) => {
     setEditingAsset(assetToEdit);
     setAssetFormData({
       name: assetToEdit.name,
@@ -411,15 +391,19 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       purchasePrice: assetToEdit.purchasePrice,
       type: assetToEdit.type,
     });
-    setIsEditDialogOpen(true);
-    setShowNewAssetForm(false);
+    setShowNewAssetForm(false); // Ensure add form is hidden if opening edit
   };
+
+  const handleCancelEditAsset = () => {
+    setEditingAsset(null);
+    setAssetFormData(initialAssetFormState);
+    setIsFetchingName(false);
+  }
 
   const handleOpenNewAssetForm = () => {
     setEditingAsset(null);
     setAssetFormData(initialAssetFormState);
     setShowNewAssetForm(true);
-    setIsEditDialogOpen(false);
   };
 
   const handleCancelNewAsset = () => {
@@ -446,12 +430,12 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
   };
 
-  const renderAssetFormFields = (forEditingDialog: boolean = false) => (
+  const renderAssetFormFields = (isInlineEdit: boolean = false) => (
     <div className="grid gap-y-4 gap-x-2 py-4">
       <div className="space-y-1">
-        <Label htmlFor={forEditingDialog ? "edit-symbol" : "symbol"}>Symbol {isFetchingName && <Loader2 className="ml-1 h-3 w-3 inline-block animate-spin" />}</Label>
+        <Label htmlFor={isInlineEdit ? `edit-symbol-${editingAsset?.id}` : "symbol"}>Symbol {isFetchingName && <Loader2 className="ml-1 h-3 w-3 inline-block animate-spin" />}</Label>
         <Input
-          id={forEditingDialog ? "edit-symbol" : "symbol"}
+          id={isInlineEdit ? `edit-symbol-${editingAsset?.id}` : "symbol"}
           name="symbol"
           value={assetFormData.symbol}
           onChange={handleInputChange}
@@ -465,9 +449,9 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         )}
       </div>
       <div className="space-y-1">
-        <Label htmlFor={forEditingDialog ? "edit-quantity" : "quantity"}>Quantity</Label>
+        <Label htmlFor={isInlineEdit ? `edit-quantity-${editingAsset?.id}` : "quantity"}>Quantity</Label>
         <Input
-            id={forEditingDialog ? "edit-quantity" : "quantity"}
+            id={isInlineEdit ? `edit-quantity-${editingAsset?.id}` : "quantity"}
             name="quantity"
             type="number"
             value={assetFormData.quantity}
@@ -479,9 +463,9 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor={forEditingDialog ? "edit-purchasePrice" : "purchasePrice"}>Purchase Price (per unit)</Label>
+        <Label htmlFor={isInlineEdit ? `edit-purchasePrice-${editingAsset?.id}` : "purchasePrice"}>Purchase Price (per unit)</Label>
         <Input
-            id={forEditingDialog ? "edit-purchasePrice" : "purchasePrice"}
+            id={isInlineEdit ? `edit-purchasePrice-${editingAsset?.id}` : "purchasePrice"}
             name="purchasePrice"
             type="number"
             value={assetFormData.purchasePrice}
@@ -493,9 +477,9 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor={forEditingDialog ? "edit-type" : "type"}>Type</Label>
+        <Label htmlFor={isInlineEdit ? `edit-type-${editingAsset?.id}` : "type"}>Type</Label>
         <Select name="type" value={assetFormData.type} onValueChange={handleTypeChange} disabled={isFetchingName}>
-          <SelectTrigger id={forEditingDialog ? "edit-type" : "type"} className="text-sm">
+          <SelectTrigger id={isInlineEdit ? `edit-type-${editingAsset?.id}` : "type"} className="text-sm">
             <SelectValue placeholder="Select asset type" />
           </SelectTrigger>
           <SelectContent>
@@ -524,13 +508,13 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
             <CardTitle className="text-lg">Asset Tracker Settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-            {!showNewAssetForm && (
+            {!showNewAssetForm && !editingAsset && (
             <Button size="sm" onClick={handleOpenNewAssetForm} className="w-full mb-3">
                 <PlusCircle className="mr-2 h-4 w-4" /> Add New Asset
             </Button>
             )}
 
-            {showNewAssetForm && (
+            {showNewAssetForm && !editingAsset && (
             <Card className="mb-3 p-3 bg-background">
                 <CardHeader className="p-1 pt-0">
                 <CardTitle className="text-base">Add New Asset</CardTitle>
@@ -563,39 +547,58 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
                     <TableBody>
                     {assets.map((asset) => (
                         <TableRow key={asset.id}>
-                        <TableCell className="p-2">
-                            <div className="font-medium text-sm text-card-foreground">{asset.name}</div>
-                            <div className="text-xs text-muted-foreground">{asset.symbol.toUpperCase()}</div>
-                        </TableCell>
-                        <TableCell className="p-2 text-xs capitalize">{asset.type}</TableCell>
-                        <TableCell className="p-2 text-center">
-                            <div className="flex justify-center items-center gap-0.5">
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleOpenEditDialog(asset)} aria-label="Edit asset">
-                                <Edit3 className="w-3.5 h-3.5" />
-                            </Button>
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive h-6 w-6" aria-label="Delete asset">
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete the asset "{asset.name}".
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleRemoveAsset(asset.id)} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-                                    Delete
-                                    </AlertDialogAction>
-                                </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                            </div>
-                        </TableCell>
+                          {editingAsset && editingAsset.id === asset.id ? (
+                            <TableCell colSpan={3} className="p-0">
+                              <Card className="m-1 p-2 bg-background shadow-md">
+                                <CardContent className="p-1">
+                                  {renderAssetFormFields(true)}
+                                  <div className="mt-2 flex justify-end gap-2">
+                                    <Button type="button" variant="outline" size="sm" onClick={handleCancelEditAsset}>Cancel</Button>
+                                    <Button type="button" onClick={handleSubmitAsset} disabled={isFetchingName} size="sm">
+                                      {isFetchingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                      Save Changes
+                                    </Button>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            </TableCell>
+                          ) : (
+                            <>
+                              <TableCell className="p-2">
+                                  <div className="font-medium text-sm text-card-foreground">{asset.name}</div>
+                                  <div className="text-xs text-muted-foreground">{asset.symbol.toUpperCase()}</div>
+                              </TableCell>
+                              <TableCell className="p-2 text-xs capitalize">{asset.type}</TableCell>
+                              <TableCell className="p-2 text-center">
+                                  <div className="flex justify-center items-center gap-0.5">
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleStartEditAsset(asset)} aria-label="Edit asset">
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive h-6 w-6" aria-label="Delete asset">
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                      </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                          This action cannot be undone. This will permanently delete the asset "{asset.name}".
+                                          </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogAction onClick={() => handleRemoveAsset(asset.id)} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                                          Delete
+                                          </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                  </AlertDialog>
+                                  </div>
+                              </TableCell>
+                            </>
+                          )}
                         </TableRow>
                     ))}
                     </TableBody>
@@ -603,7 +606,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
                 </ScrollArea>
             </div>
             ) : (
-            !showNewAssetForm && <p className="text-xs text-muted-foreground text-center py-1">No assets added yet. Click "Add New Asset" to start.</p>
+            !showNewAssetForm && !editingAsset && <p className="text-xs text-muted-foreground text-center py-1">No assets added yet. Click "Add New Asset" to start.</p>
             )}
         </CardContent>
      </Card>
@@ -612,9 +615,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   const renderWidgetDisplay = () => (
       <Card className="shadow-lg">
         <CardHeader>
-          <div className="flex justify-between items-center">
-            <SectionTitle icon={TrendingUp} title="Asset Tracker" className="mb-0 text-lg" />
-          </div>
+          <SectionTitle icon={TrendingUp} title="Asset Tracker" className="mb-0 text-lg" />
         </CardHeader>
         <CardContent className="pt-4 px-3 pb-3">
           {portfolio && assets.length > 0 ? (
@@ -708,58 +709,14 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       </Card>
   );
 
-  // Edit Dialog component
-  const editAssetDialog = (
-    <Dialog open={isEditDialogOpen} onOpenChange={(isOpen) => {
-      setIsEditDialogOpen(isOpen);
-      if (!isOpen) {
-        setEditingAsset(null);
-        setAssetFormData(initialAssetFormState);
-        setIsFetchingName(false);
-      }
-    }}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Edit Asset</DialogTitle>
-          <DialogDescription>
-            Update the details of your asset. {editingAsset && `Current Name: ${editingAsset.name}`}
-          </DialogDescription>
-        </DialogHeader>
-        {editingAsset && renderAssetFormFields(true)}
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button type="button" variant="outline">Cancel</Button>
-          </DialogClose>
-          <Button type="button" onClick={handleSubmitAsset} disabled={isFetchingName}>
-            {isFetchingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" /> }
-            Save Changes
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-
   if (displayMode === 'settingsOnly') {
-    return settingsOpen ? (
-      <>
-        {renderSettingsContent()}
-        {editAssetDialog} {/* Render the dialog when settings are open */}
-      </>
-    ) : null;
+    return settingsOpen ? renderSettingsContent() : null;
   }
 
-  // For 'widgetOnly' mode
   return (
     <TooltipProvider>
       {renderWidgetDisplay()}
-      {/* The edit dialog is now rendered separately if needed for settingsOnly mode,
-          but keeping it here for widgetOnly mode if any direct edit path from widget
-          display was ever intended. For now, it's primarily triggered from settings.
-          If it's *only* from settings, this can be removed from widgetOnly.
-          However, to be safe and ensure state `isEditDialogOpen` can open it from anywhere
-          within the component, it's better to have it rendered at the component's top level return.
-          Let's adjust the main return structure for clarity and correctness.
-      */}
     </TooltipProvider>
   );
 }
+
