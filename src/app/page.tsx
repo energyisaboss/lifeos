@@ -1,7 +1,7 @@
 
 "use client";
-
-import { useState, useEffect } from 'react';
+import { DndContext, useSensors, useSensor, PointerSensor, KeyboardSensor, DragStartEvent, DragEndEvent, closestCenter, DragOverlay } from '@dnd-kit/core';
+import { useState, useEffect, ComponentType } from 'react';
 import { DateTimeWidget } from '@/components/dashboard/datetime-widget';
 import { NewsWidget } from '@/components/dashboard/news-widget';
 import { CalendarWidget } from '@/components/dashboard/calendar-widget';
@@ -13,51 +13,38 @@ import { LifeBuoy, Settings as SettingsIcon, X, Palette as PaletteIcon } from 'l
 import { Button } from "@/components/ui/button";
 import { AccentColorSwitcher } from '@/components/theme/accent-color-switcher';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SortableContext, sortableKeyboardCoordinates, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable';
 import { Label } from '@/components/ui/label';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  rectSortingStrategy,
-} from '@dnd-kit/sortable';
 import { SortableWidgetItem } from '@/components/dashboard/sortable-widget-item';
 
-const WIDGET_ORDER_STORAGE_KEY = 'lifeOS_widgetOrder_v2';
+const WIDGET_ORDER_STORAGE_KEY = 'widgetOrder_v1'; // Updated key for potentially new structure
 
 interface WidgetConfig {
   id: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Component: React.ComponentType<any>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  props?: Record<string, any>;
-  columnSpan?: string; // e.g., 'lg:col-span-1', 'lg:col-span-2'
+  Component: ComponentType<any>; 
+  props?: any;
+  columnSpan?: string;
 }
 
 const initialWidgetConfigs: WidgetConfig[] = [
-  { id: 'datetime', Component: DateTimeWidget, columnSpan: 'lg:col-span-1' },
-  { id: 'calendar', Component: CalendarWidget, columnSpan: 'lg:col-span-1' },
-  { id: 'news', Component: NewsWidget, columnSpan: 'lg:col-span-1' },
-  { id: 'environmental', Component: EnvironmentalWidget, columnSpan: 'lg:col-span-1' },
-  { id: 'assets', Component: AssetTrackerWidget, columnSpan: 'lg:col-span-1' },
-  { id: 'tasks', Component: TaskListWidget, columnSpan: 'lg:col-span-1' },
+  { id: 'datetime', Component: DateTimeWidget, props: {}, columnSpan: 'lg:col-span-1' },
+  { id: 'news', Component: NewsWidget, props: {}, columnSpan: 'lg:col-span-1' }, // Changed from lg:col-span-2
+  { id: 'calendar', Component: CalendarWidget, props: {}, columnSpan: 'lg:col-span-1' },
+  { id: 'environmental', Component: EnvironmentalWidget, props: {}, columnSpan: 'lg:col-span-1' },
+  { id: 'asset-tracker', Component: AssetTrackerWidget, props: {}, columnSpan: 'lg:col-span-1' },
+  { id: 'task-list', Component: TaskListWidget, props: {}, columnSpan: 'lg:col-span-1' },
 ];
+
+const getWidgetById = (id: string): WidgetConfig | undefined => {
+  return initialWidgetConfigs.find(widget => widget.id === id);
+};
 
 export default function LifeOSPage() {
   const [showGlobalWidgetSettings, setShowGlobalWidgetSettings] = useState(false);
-  const [widgetOrder, setWidgetOrder] = useState<string[]>(() => initialWidgetConfigs.map(w => w.id));
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
+  const [widgetOrder, setWidgetOrder] = useState<string[]>(() => initialWidgetConfigs.map(w => w.id));
+
 
   useEffect(() => {
     setIsClient(true);
@@ -66,8 +53,11 @@ export default function LifeOSPage() {
       try {
         const parsedOrder = JSON.parse(savedOrder) as string[];
         const currentWidgetIds = new Set(initialWidgetConfigs.map(w => w.id));
+        // Filter out any IDs in savedOrder that are no longer in initialWidgetConfigs
         const filteredOrder = parsedOrder.filter(id => currentWidgetIds.has(id));
+        // Find any new widget IDs that are not in the filteredOrder
         const newIds = Array.from(currentWidgetIds).filter(id => !filteredOrder.includes(id));
+        // Combine them, keeping the user's order for existing widgets and appending new ones
         setWidgetOrder([...filteredOrder, ...newIds]);
       } catch (e) {
         console.error("Failed to parse widget order from localStorage", e);
@@ -108,10 +98,6 @@ export default function LifeOSPage() {
     }
   }
   
-  const getWidgetById = (id: string | null): WidgetConfig | undefined => {
-    return initialWidgetConfigs.find(widget => widget.id === id);
-  };
-
   const orderedWidgets = widgetOrder.map(id => getWidgetById(id)).filter(Boolean) as WidgetConfig[];
 
   if (!isClient) {
@@ -142,7 +128,7 @@ export default function LifeOSPage() {
           </div>
         </div>
         <div className="flex items-center space-x-2">
-           <Button
+          <Button
             variant="ghost"
             size="icon"
             aria-label="Toggle Widget Settings"
@@ -160,17 +146,25 @@ export default function LifeOSPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
-              <Label className="text-lg font-semibold mb-3 block">Theme Accent Color</Label>
-              <div className="p-4 border rounded-lg bg-muted/30">
-                <AccentColorSwitcher />
-              </div>
+                <Label className="text-lg font-semibold mb-3 block">Theme Accent Color</Label>
+                <div className="p-4 border rounded-lg bg-muted/30">
+                    <AccentColorSwitcher />
+                </div>
             </div>
-            <Separator />
+            <Separator/>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <CalendarWidget settingsOpen={true} displayMode="settingsOnly" />
-              <NewsWidget settingsOpen={true} displayMode="settingsOnly" />
-              <AssetTrackerWidget settingsOpen={true} displayMode="settingsOnly" />
-              <TaskListWidget settingsOpen={true} displayMode="settingsOnly" />
+              <div>
+                <CalendarWidget settingsOpen={true} displayMode="settingsOnly" />
+              </div>
+              <div>
+                <NewsWidget settingsOpen={true} displayMode="settingsOnly" />
+              </div>
+               <div>
+                <AssetTrackerWidget settingsOpen={true} displayMode="settingsOnly" />
+              </div>
+              <div>
+                <TaskListWidget settingsOpen={true} displayMode="settingsOnly" />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -188,9 +182,14 @@ export default function LifeOSPage() {
           <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start auto-rows-min">
             {orderedWidgets.map(({ id, Component, props = {}, columnSpan = 'lg:col-span-1' }) => {
               let dynamicProps = { ...props };
+              // For the main display, settingsOpen is false, and displayMode is widgetOnly
+              if (id === 'calendar' || id === 'news' || id === 'asset-tracker' || id === 'task-list') {
+                dynamicProps.settingsOpen = false; 
+                dynamicProps.displayMode = "widgetOnly";
+              }
               return (
                 <SortableWidgetItem key={id} id={id} isDragging={activeId === id} className={columnSpan}>
-                  <Component {...dynamicProps} displayMode="widgetOnly" settingsOpen={false} />
+                  <Component {...dynamicProps} />
                 </SortableWidgetItem>
               );
             })}
@@ -204,7 +203,11 @@ export default function LifeOSPage() {
                 if (activeWidget) {
                   const { Component, props = {} } = activeWidget;
                   let dynamicProps = { ...props };
-                  return <Component {...dynamicProps} displayMode="widgetOnly" settingsOpen={false} />;
+                   if (activeWidget.id === 'calendar' || activeWidget.id === 'news' || activeWidget.id === 'asset-tracker' || activeWidget.id === 'task-list') {
+                    dynamicProps.settingsOpen = false;
+                    dynamicProps.displayMode = "widgetOnly";
+                  }
+                  return <Component {...dynamicProps} />;
                 }
                 return null;
               })()}
