@@ -518,7 +518,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
             {assets.length > 0 ? (
             <div className="mt-2">
                 <h4 className="text-xs font-medium text-muted-foreground mb-1">Manage Existing Assets</h4>
-                <ScrollArea className="pr-1 max-h-[420px] overflow-y-auto">
+                <ScrollArea className="pr-1 max-h-[450px] overflow-y-auto">
                 <Table>
                     <TableHeader>
                     <TableRow>
@@ -694,11 +694,11 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         </CardContent>
       </Card>
   );
-
+  
   if (displayMode === 'settingsOnly') {
     return settingsOpen ? (
       <TooltipProvider>
-        {renderSettingsContent()}
+         {renderSettingsContent()}
       </TooltipProvider>
     ) : null;
   }
@@ -709,3 +709,4 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
     </TooltipProvider>
   );
 }
+
