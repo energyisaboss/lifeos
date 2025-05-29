@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -65,7 +64,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const [editingFeed, setEditingFeed] = useState<IcalFeedItem | null>(null);
+  const [editingFeedId, setEditingFeedId] = useState<string | null>(null);
   const [currentEditFeedUrl, setCurrentEditFeedUrl] = useState('');
   const [currentEditFeedLabel, setCurrentEditFeedLabel] = useState('');
   const [currentEditFeedColor, setCurrentEditFeedColor] = useState('');
@@ -80,7 +79,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
   const [justAddedFeedId, setJustAddedFeedId] = useState<string | null>(null);
 
   const fetchAndProcessEvents = useCallback(async () => {
-    console.log("CalendarWidget: fetchAndProcessEvents called. isClientLoaded:", isClientLoaded, 'Number of feeds:', icalFeeds.length, 'Dependencies: icalFeeds');
+    console.log("CalendarWidget: fetchAndProcessEvents called. isClientLoaded:", isClientLoaded, 'Number of feeds:', icalFeeds.length);
     if (!isClientLoaded || icalFeeds.length === 0) {
       setAllEvents([]);
       setIsLoading(false);
@@ -150,11 +149,11 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
 
   useEffect(() => {
     if (isClientLoaded) {
-        console.log("CalendarWidget: Event fetching useEffect triggered by isClientLoaded, icalFeeds, or refreshTrigger. Refresh trigger:", refreshTrigger);
+        console.log("CalendarWidget: Event fetching useEffect triggered. Refresh trigger:", refreshTrigger);
         fetchAndProcessEvents();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClientLoaded, icalFeeds, fetchAndProcessEvents, refreshTrigger]);
+  }, [isClientLoaded, icalFeeds, fetchAndProcessEvents]);
 
 
   useEffect(() => {
@@ -224,35 +223,33 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     setNewIcalUrl('');
     setNewIcalLabel('');
     toast({ title: "Feed Added", description: `"${newFeedItem.label}" added.` });
-    // setRefreshTrigger(prev => prev + 1); // Removed as icalFeeds dependency in useEffect will trigger
   }, [icalFeeds, newIcalUrl, newIcalLabel]);
 
   const handleRemoveIcalFeed = useCallback((idToRemove: string) => {
     const feedLabel = icalFeeds.find(f => f.id === idToRemove)?.label || "Feed";
     setIcalFeeds(prev => prev.filter(feed => feed.id !== idToRemove));
     toast({ title: "Feed Removed", description: `"${feedLabel}" has been removed.` });
-    // setRefreshTrigger(prev => prev + 1); // Removed
   }, [icalFeeds]);
 
-  const handleOpenEditDialog = useCallback((feedToEdit: IcalFeedItem) => {
-    setEditingFeed(feedToEdit);
+  const handleStartEditFeed = useCallback((feedToEdit: IcalFeedItem) => {
+    setEditingFeedId(feedToEdit.id);
     setCurrentEditFeedLabel(feedToEdit.label);
     setCurrentEditFeedUrl(feedToEdit.url);
     setCurrentEditFeedColor(feedToEdit.color);
   }, []);
-
-  const handleCloseEditDialog = useCallback(() => {
-    setEditingFeed(null);
+  
+  const handleCancelEditFeed = useCallback(() => {
+    setEditingFeedId(null);
     setCurrentEditFeedLabel('');
     setCurrentEditFeedUrl('');
     setCurrentEditFeedColor('');
   }, []);
 
   const handleSaveChangesToFeed = useCallback(() => {
-    if (!editingFeed) return;
+    if (!editingFeedId) return;
 
     const urlToSave = currentEditFeedUrl.trim();
-    const labelToSave = currentEditFeedLabel.trim() || `Feed ${icalFeeds.findIndex(f => f.id === editingFeed.id) + 1}`;
+    const labelToSave = currentEditFeedLabel.trim() || `Feed ${icalFeeds.findIndex(f => f.id === editingFeedId) + 1}`;
     const colorToSave = currentEditFeedColor;
 
     if (!urlToSave) {
@@ -270,32 +267,29 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
 
     setIcalFeeds(prevFeeds =>
       prevFeeds.map(f =>
-        f.id === editingFeed.id ? { ...f, url: urlToSave, label: labelToSave, color: colorToSave } : f
+        f.id === editingFeedId ? { ...f, url: urlToSave, label: labelToSave, color: colorToSave } : f
       )
     );
     toast({ title: "Feed Updated", description: `Feed "${labelToSave}" settings saved.` });
-    handleCloseEditDialog();
-    // setRefreshTrigger(prev => prev + 1); // Removed
-  }, [editingFeed, icalFeeds, currentEditFeedUrl, currentEditFeedLabel, currentEditFeedColor, handleCloseEditDialog]);
+    handleCancelEditFeed();
+  }, [editingFeedId, icalFeeds, currentEditFeedUrl, currentEditFeedLabel, currentEditFeedColor, handleCancelEditFeed]);
 
   const handleFeedColorChange = useCallback((feedId: string, newColor: string) => {
      if (newColor !== '' && !isValidHexColor(newColor)) {
          toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive", duration:3000 });
+         if (feedId === editingFeedId && newColor !== '') return; // Prevent state update for invalid color in edit mode
      }
     
-    // For inline editing, update currentEditFeedColor directly
-    if(editingFeed && editingFeed.id === feedId){
+    if(feedId === editingFeedId){ // If currently editing this feed
       setCurrentEditFeedColor(newColor);
-    } else {
-      // For direct click in settings list (if applicable later)
+    } else { // Should not happen with current inline edit setup, but good for future
       setIcalFeeds(prevFeeds =>
         prevFeeds.map(f =>
           f.id === feedId ? { ...f, color: newColor } : f
         )
       );
-      // setRefreshTrigger(prev => prev + 1); // Removed
     }
-  }, [editingFeed]);
+  }, [editingFeedId]);
 
 
   const getUpcomingEventsForFeed = useCallback((feed: IcalFeedItem): AppCalendarEvent[] => {
@@ -367,7 +361,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                 <div className="space-y-3">
                     {icalFeeds.map((feed) => (
                     <Card key={feed.id} data-feed-id={feed.id} className="p-2.5 shadow-sm border bg-background">
-                        {editingFeed && editingFeed.id === feed.id ? (
+                        {editingFeedId === feed.id ? (
                         // Inline Edit Form
                         <div className="space-y-2">
                             <div>
@@ -416,7 +410,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                                 <Button variant="default" size="sm" className="h-7 px-2 py-1 text-xs" onClick={handleSaveChangesToFeed} disabled={(currentEditFeedColor !== '' && !isValidHexColor(currentEditFeedColor)) || !currentEditFeedUrl.trim()}>
                                     <Check className="w-3.5 h-3.5 mr-1" /> Save
                                 </Button>
-                                <Button variant="outline" size="sm" className="h-7 px-2 py-1 text-xs" onClick={handleCloseEditDialog}>
+                                <Button variant="outline" size="sm" className="h-7 px-2 py-1 text-xs" onClick={handleCancelEditFeed}>
                                     <XCircle className="w-3.5 h-3.5 mr-1" /> Cancel
                                 </Button>
                             </div>
@@ -431,7 +425,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                                 </div>
                             </div>
                             <div className="mt-2 flex items-center justify-start gap-1">
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEditDialog(feed)} aria-label="Edit feed">
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEditFeed(feed)} aria-label="Edit feed">
                                     <Edit3 className="w-3.5 h-3.5" />
                                 </Button>
                                 <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive h-7 w-7" onClick={() => handleRemoveIcalFeed(feed.id)} aria-label="Delete feed">
@@ -463,21 +457,22 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
           <p className="text-sm text-muted-foreground p-2 py-2 text-center">No upcoming events. Add or enable an iCal feed via global settings.</p>
       )}
 
-      {isClientLoaded && icalFeeds.filter(f => f.url.trim()).length > 0 && (
+      {isClientLoaded && !isLoading && !error && icalFeeds.filter(f => f.url.trim()).length > 0 && (
         <div className="space-y-4">
           {icalFeeds.map((feed, index) => {
             if (!feed.url.trim()) return null;
             const eventsForThisFeed = getUpcomingEventsForFeed(feed);
             const finalFeedColor = (feed.color && isValidHexColor(feed.color)) ? feed.color : 'hsl(var(--border))';
+            const isFirstFeedCard = index === 0;
             
             if (isLoading && !eventsForThisFeed.length && !error) {
               return (
-                <Card key={feed.id} className={cn("shadow-md flex flex-col")} style={{borderTop: `4px solid ${finalFeedColor}`}}>
+                <Card key={feed.id} className={cn("shadow-md flex flex-col", isFirstFeedCard && displayMode === 'widgetOnly' && "border-t-0")} style={{borderTop: `4px solid ${finalFeedColor}`}}>
                    <CardHeader className="p-3 flex flex-row items-center space-x-2">
                      <CalendarDays className="w-5 h-5" style={{ color: finalFeedColor }} />
                      <CardTitle className="text-lg">{feed.label}</CardTitle>
                   </CardHeader>
-                  <CardContent className="py-0 px-4 pb-3 flex flex-col">
+                  <CardContent className="px-3 py-0 pb-3 flex flex-col">
                     <div className="py-2"><Skeleton className="h-4 w-3/4 mb-2" /><Skeleton className="h-3 w-1/2" /></div>
                   </CardContent>
                 </Card>
@@ -488,14 +483,14 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
             }
 
             return (
-            <Card key={feed.id} className={cn("shadow-md flex flex-col", index === 0 && displayMode === 'widgetOnly' && "border-t-0")} style={{borderTop: `4px solid ${finalFeedColor}`}}>
+            <Card key={feed.id} className={cn("shadow-md flex flex-col", isFirstFeedCard && displayMode === 'widgetOnly' && "border-t-0")} style={{borderTop: `4px solid ${finalFeedColor}`}}>
                 <CardHeader className="p-3 flex flex-row items-center space-x-2">
                     <CalendarDays className="w-5 h-5" style={{ color: finalFeedColor }} />
                     <CardTitle className="text-lg">{feed.label}</CardTitle>
                 </CardHeader>
                 <CardContent className="px-4 py-0 flex flex-col"> 
                     {eventsForThisFeed.length > 0 ? (
-                        <ScrollArea className="h-60 custom-styled-scroll-area pr-2 py-2 overflow-y-auto">
+                        <ScrollArea className="h-60 custom-styled-scroll-area pr-2 py-2 overflow-y-auto no-visual-scroll">
                         <ul className="space-y-3">
                             {eventsForThisFeed.map((event) => (
                             <li key={event.id} className="flex items-start space-x-3 pb-2 border-b border-border last:border-b-0">
@@ -522,6 +517,10 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     </React.Fragment>
   );
   
+  if (displayMode === 'settingsOnly') {
+    return settingsOpen ? renderSettingsContent() : null;
+  }
+
   if (!isClientLoaded && displayMode === 'widgetOnly') {
     return (
         <div className="space-y-4">
@@ -538,74 +537,6 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
          ))}
          </div>
     );
-  }
-
-  if (displayMode === 'settingsOnly') {
-    return settingsOpen ? (
-      <div>
-        {renderSettingsContent()}
-        {editingFeed && ( /* This dialog is only for the popup version, not inline */
-          <Dialog open={!!editingFeed} onOpenChange={(open) => !open && handleCloseEditDialog()}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Edit Feed: {editingFeed.label}</DialogTitle>
-                <DialogDescription>Update the details for your iCal feed.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3 py-3">
-                <div>
-                  <Label htmlFor="dialog-edit-label">Label</Label>
-                  <Input id="dialog-edit-label" value={currentEditFeedLabel} onChange={(e) => setCurrentEditFeedLabel(e.target.value)} placeholder="e.g., Work Calendar" />
-                </div>
-                <div>
-                  <Label htmlFor="dialog-edit-url">URL</Label>
-                  <Input id="dialog-edit-url" type="url" value={currentEditFeedUrl} onChange={(e) => setCurrentEditFeedUrl(e.target.value)} placeholder="iCal feed URL" />
-                </div>
-                <div>
-                  <Label className="text-xs flex items-center mb-1.5 mt-1">
-                      <Palette size={14} className="mr-1.5 text-muted-foreground" /> Feed Color
-                  </Label>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                      {predefinedNamedColors.map(colorOption => (
-                      <button
-                          key={`dialog-edit-${editingFeed.id}-${colorOption.value}`}
-                          type="button"
-                          title={colorOption.name}
-                          className={cn(
-                          "w-5 h-5 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
-                          currentEditFeedColor === colorOption.value ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
-                          )}
-                          style={{ backgroundColor: colorOption.value }}
-                          onClick={() => handleFeedColorChange(editingFeed.id, colorOption.value)}
-                      />
-                      ))}
-                      <Input
-                          type="text"
-                          placeholder="#HEX"
-                          value={currentEditFeedColor}
-                          onChange={(e) => handleFeedColorChange(editingFeed.id, e.target.value)}
-                          className={cn(
-                              "h-7 w-20 text-xs",
-                              currentEditFeedColor && !isValidHexColor(currentEditFeedColor) && currentEditFeedColor !== '' ? "border-destructive focus-visible:ring-destructive" : ""
-                          )}
-                          maxLength={7}
-                      />
-                  </div>
-                  {!isValidHexColor(currentEditFeedColor) && currentEditFeedColor !== '' && (
-                      <p className="text-xs text-destructive mt-1">Invalid hex color code.</p>
-                  )}
-                </div>
-              </div>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button type="button" variant="outline">Cancel</Button>
-                </DialogClose>
-                <Button type="button" onClick={handleSaveChangesToFeed} disabled={(currentEditFeedColor !== '' && !isValidHexColor(currentEditFeedColor)) || !currentEditFeedUrl.trim()}>Save Changes</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
-      </div>
-    ) : null;
   }
   return renderWidgetDisplayContent();
 }

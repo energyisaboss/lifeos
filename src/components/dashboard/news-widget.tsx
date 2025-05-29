@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -521,11 +520,11 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
   const renderWidgetDisplay = () => (
     <React.Fragment>
       {isClientLoaded && isLoading && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {Array.from({length: Math.min(2, categories.filter(c => c.feeds.some(f=>f.url.trim())).length || 1)}).map((_, i) => (
-              <Card key={`skel-cat-${i}`} className="mb-6 shadow-md">
+              <Card key={`skel-cat-${i}`} className="mb-6 shadow-md flex flex-col">
                 <CardHeader><Skeleton className="h-6 w-1/3 mb-1" /></CardHeader>
-                <CardContent className="px-4 py-0">
+                <CardContent className="px-4 py-0 flex-1 flex flex-col">
                   <div className="py-2 border-b border-border last:border-b-0">
                       <Skeleton className="h-5 w-3/4 mb-1.5" />
                       <Skeleton className="h-3 w-1/2 mb-2" />
@@ -562,7 +561,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
             >
               <CardHeader>
                  <CardTitle className="text-xl flex items-center">
-                   <Newspaper className="mr-2 h-5 w-5" style={{ color: isValidHexColor(category.color) ? category.color : 'hsl(var(--muted-foreground))' }}/>
+                   <Newspaper className="mr-2 h-5 w-5" style={{ color: isValidHexColor(category.color) ? category.color : undefined }}/>
                    <span>{category.name}</span>
                  </CardTitle>
               </CardHeader>
@@ -628,37 +627,9 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
     </React.Fragment>
   );
 
-  if (!isClientLoaded && displayMode === 'widgetOnly') {
-    return (
-      <div className="space-y-6">
-        {Array.from({length: 1 }).map((_, i) => (
-          <Card key={`skel-cat-outer-${i}`} className="mb-6 shadow-md">
-            <CardHeader><Skeleton className="h-6 w-1/3 mb-1" /></CardHeader>
-            <CardContent className="px-4 py-0">
-              <div className="py-2 border-b border-border last:border-b-0">
-                  <Skeleton className="h-5 w-3/4 mb-1.5" />
-                  <Skeleton className="h-3 w-1/2 mb-2" />
-                  <Skeleton className="h-4 w-full mb-1" />
-                  <Skeleton className="h-4 w-5/6" />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
-  
   if (displayMode === 'settingsOnly') {
     return settingsOpen ? renderSettingsUI() : null;
   }
 
-  if (displayMode === 'widgetOnly') {
-    return (
-        <React.Fragment>
-          {/* Header removed when in widgetOnly mode to comply with previous request */}
-          {renderWidgetDisplay()}
-        </React.Fragment>
-    );
-  }
-  return null;
+  return renderWidgetDisplay();
 }

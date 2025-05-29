@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -632,7 +631,6 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
     <React.Fragment>
       {!isSignedIn ? (
         <Card className="shadow-md">
-            {/* Header removed for widgetOnly mode */}
           <CardContent className="flex flex-col items-center justify-center py-8 text-center">
               <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
               <Button onClick={() => login()} variant="default">
@@ -644,14 +642,12 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
         </Card>
       ) : error ? (
          <Card className="shadow-md">
-            {/* Header removed for widgetOnly mode */}
             <CardContent>
                 <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
             </CardContent>
          </Card>
       ) : isLoadingLists && !taskLists.length ? (
           <Card className="shadow-md">
-            {/* Header removed for widgetOnly mode */}
             <CardContent className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</CardContent>
           </Card>
       ) : taskLists.filter(list => listSettings[list.id]?.visible).length > 0 ? (
@@ -700,7 +696,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                     <ul className="space-y-1.5">
                         {(tasksByListId[list.id] || []).map((task) => (
                         <li key={task.id} className="flex items-center space-x-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors">
-                            <Checkbox
+                           <Checkbox
                               id={`task-${list.id}-${task.id}`}
                               checked={task.status === 'completed'}
                               onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
@@ -735,7 +731,6 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
         </div>
       ) : (
         <Card className="shadow-md">
-            {/* Header removed for widgetOnly mode */}
            <CardContent>
                 <p className="text-sm text-muted-foreground text-center py-6">
                 { !isSignedIn ? "Sign in to see your tasks." : 
@@ -814,7 +809,6 @@ export function TaskListWidget({
     // Show error directly if in widgetOnly mode and config is missing
     return (
       <Card className="shadow-md">
-         {/* Header removed for widgetOnly mode */}
          <CardContent>
             <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
@@ -834,4 +828,3 @@ export function TaskListWidget({
     </GoogleOAuthProvider>
   );
 }
-
