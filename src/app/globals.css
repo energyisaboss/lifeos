@@ -15,22 +15,22 @@ body {
     --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
-    --primary: 0 0% 12.9%; /* Fallback for AccentColorSwitcher if not white */
-    --primary-foreground: 0 0% 100%; /* Fallback for AccentColorSwitcher if not white */
+    --primary: 0 0% 100%; /* Fallback for AccentColorSwitcher if not white */
+    --primary-foreground: 0 0% 12.9%; /* Fallback for AccentColorSwitcher if not white */
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
     --muted: 240 4.8% 95.9%;
     --muted-foreground: 240 3.8% 46.1%;
-    --accent: 0 0% 12.9%; /* Fallback for AccentColorSwitcher if not white */
-    --accent-foreground: 0 0% 100%; /* Fallback for AccentColorSwitcher if not white */
+    --accent: 0 0% 100%; /* Fallback for AccentColorSwitcher if not white */
+    --accent-foreground: 0 0% 12.9%; /* Fallback for AccentColorSwitcher if not white */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
-    --ring: 0 0% 12.9%; /* Fallback for AccentColorSwitcher if not white */
+    --ring: 0 0% 100%; /* Fallback for AccentColorSwitcher if not white */
     --radius: 0.5rem;
 
-    --chart-1: 0 0% 12.9%; /* Fallback for AccentColorSwitcher if not white */
+    --chart-1: 0 0% 100%; /* Fallback for AccentColorSwitcher if not white */
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
@@ -57,8 +57,8 @@ body {
     --popover: 0 0% 12.9%; /* Darker popovers */
     --popover-foreground: 0 0% 87.8%;
 
-    --primary: 261 42% 66.3%; /* #9575CD Muted Purple (user's accent for interactive elements) - This will be overridden by AccentColorSwitcher */
-    --primary-foreground: 0 0% 100%; /* White - This will be overridden by AccentColorSwitcher */
+    --primary: 0 0% 100%; /* White - This will be overridden by AccentColorSwitcher */
+    --primary-foreground: 0 0% 12.9%; /* Dark Grey for white accent - This will be overridden by AccentColorSwitcher */
 
     --secondary: 0 0% 25%; /* #404040 Slightly lighter grey for secondary elements */
     --secondary-foreground: 0 0% 90%; /* #E5E5E5 */
@@ -66,17 +66,17 @@ body {
     --muted: 0 0% 14.5%; /* #252525 Dimmer elements */
     --muted-foreground: 0 0% 62.7%; /* #A0A0A0 Dimmer text */
 
-    --accent: 261 42% 66.3%; /* #9575CD Muted Purple (for hovers, focus) - This will be overridden by AccentColorSwitcher */
-    --accent-foreground: 0 0% 100%; /* White - This will be overridden by AccentColorSwitcher */
+    --accent: 0 0% 100%; /* White (for hovers, focus) - This will be overridden by AccentColorSwitcher */
+    --accent-foreground: 0 0% 12.9%; /* Dark Grey - This will be overridden by AccentColorSwitcher */
 
     --destructive: 0 72% 51%; /* Standard Red */
     --destructive-foreground: 0 0% 98%; /* White */
 
     --border: 0 0% 25.9%; /* #424242 Subtle border */
     --input: 0 0% 25.9%; /* #424242 Input background */
-    --ring: 261 42% 66.3%; /* #9575CD Muted Purple for focus rings - This will be overridden by AccentColorSwitcher */
+    --ring: 0 0% 100%; /* White for focus rings - This will be overridden by AccentColorSwitcher */
 
-    --chart-1: 261 42% 66.3%; /* This will be overridden by AccentColorSwitcher */
+    --chart-1: 0 0% 100%; /* This will be overridden by AccentColorSwitcher */
     --chart-2: 220 70% 50%;
     --chart-3: 160 60% 45%;
     --chart-4: 30 80% 55%;
@@ -85,12 +85,12 @@ body {
     /* Sidebar variables (dark theme) */
     --sidebar-background: 0 0% 10%; /* Darker sidebar */
     --sidebar-foreground: 0 0% 90%;
-    --sidebar-primary: 261 42% 66.3%; /* Purple accents in sidebar */
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary: 0 0% 100%; /* White accents in sidebar */
+    --sidebar-primary-foreground: 0 0% 12.9%;
     --sidebar-accent: 0 0% 15%;
     --sidebar-accent-foreground: 0 0% 90%;
     --sidebar-border: 0 0% 20%;
-    --sidebar-ring: 261 42% 66.3%;
+    --sidebar-ring: 0 0% 100%;
   }
 }
 
@@ -104,12 +104,12 @@ body {
   }
 }
 
-/* Custom scrollbar styles for specific calendar feed list */
+/* Custom scrollbar styles */
 @layer utilities {
-  .calendar-feed-scroll-area > [data-orientation="vertical"] {
+  .custom-styled-scroll-area > [data-orientation="vertical"] {
     @apply !w-[5px]; /* Thinner scrollbar track (5px) */
   }
-  .calendar-feed-scroll-area > [data-orientation="vertical"] > [data-radix-scroll-area-thumb] {
+  .custom-styled-scroll-area > [data-orientation="vertical"] > [data-radix-scroll-area-thumb] {
     @apply !bg-[hsl(var(--sidebar-background))]; /* Darker scrollbar thumb using theme's sidebar-background color */
   }
 
@@ -125,7 +125,7 @@ body {
     @apply !bg-red-500;
   }
 
-  /* Hide scrollbar for ShadCN ScrollArea */
+  /* Hide scrollbar for ShadCN ScrollArea (if still needed for specific cases) */
   .no-visual-scroll > [data-orientation="vertical"],
   .no-visual-scroll > [data-orientation="horizontal"] {
     display: none !important;

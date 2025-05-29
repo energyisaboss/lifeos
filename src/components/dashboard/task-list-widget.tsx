@@ -519,7 +519,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
             {isLoadingLists ? (
               <div className="flex items-center justify-center py-2"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
             ) : taskLists.length > 0 ? (
-              <ScrollArea className="max-h-[300px] pr-2 overflow-y-auto">
+              <ScrollArea className="max-h-[300px] pr-2 overflow-y-auto custom-styled-scroll-area">
                 <div className="space-y-3">
                 {taskLists.map((list) => (
                   <div key={list.id} className="p-2.5 rounded-md bg-muted/30 hover:bg-muted/50">
@@ -630,12 +630,9 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
 
   const renderWidgetDisplay = () => (
     <React.Fragment>
-      {/* Global header with title and settings button will be rendered by parent if in 'settingsOnly' mode, or not at all */}
       {!isSignedIn ? (
         <Card className="shadow-md">
-          <CardHeader>
-             <SectionTitle icon={ListChecks} title="Tasks" />
-          </CardHeader>
+            {/* Header removed for widgetOnly mode */}
           <CardContent className="flex flex-col items-center justify-center py-8 text-center">
               <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
               <Button onClick={() => login()} variant="default">
@@ -647,14 +644,14 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
         </Card>
       ) : error ? (
          <Card className="shadow-md">
-            <CardHeader> <SectionTitle icon={ListChecks} title="Tasks" /></CardHeader>
+            {/* Header removed for widgetOnly mode */}
             <CardContent>
                 <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
             </CardContent>
          </Card>
       ) : isLoadingLists && !taskLists.length ? (
           <Card className="shadow-md">
-            <CardHeader> <SectionTitle icon={ListChecks} title="Tasks" /></CardHeader>
+            {/* Header removed for widgetOnly mode */}
             <CardContent className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</CardContent>
           </Card>
       ) : taskLists.filter(list => listSettings[list.id]?.visible).length > 0 ? (
@@ -699,7 +696,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                 ) : errorPerList[list.id] ? (
                     <Alert variant="destructive" className="text-xs my-2"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{errorPerList[list.id]}</AlertDescription></Alert>
                 ) : (tasksByListId[list.id] || []).length > 0 ? (
-                    <ScrollArea className="pr-1 flex-grow max-h-60">
+                    <ScrollArea className="pr-1 flex-grow max-h-60 overflow-y-auto custom-styled-scroll-area">
                     <ul className="space-y-1.5">
                         {(tasksByListId[list.id] || []).map((task) => (
                         <li key={task.id} className="flex items-center space-x-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors">
@@ -738,7 +735,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
         </div>
       ) : (
         <Card className="shadow-md">
-           <CardHeader> <SectionTitle icon={ListChecks} title="Tasks" /></CardHeader>
+            {/* Header removed for widgetOnly mode */}
            <CardContent>
                 <p className="text-sm text-muted-foreground text-center py-6">
                 { !isSignedIn ? "Sign in to see your tasks." : 
@@ -817,7 +814,7 @@ export function TaskListWidget({
     // Show error directly if in widgetOnly mode and config is missing
     return (
       <Card className="shadow-md">
-         <CardHeader> <SectionTitle icon={ListChecks} title="Tasks" /></CardHeader>
+         {/* Header removed for widgetOnly mode */}
          <CardContent>
             <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
@@ -837,3 +834,4 @@ export function TaskListWidget({
     </GoogleOAuthProvider>
   );
 }
+

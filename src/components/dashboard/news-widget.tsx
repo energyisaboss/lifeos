@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -390,7 +391,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
                 </Card>
             )}
             
-            <ScrollArea className="max-h-[400px] pr-1 calendar-feed-scroll-area overflow-y-auto">
+            <ScrollArea className="max-h-[400px] pr-1 custom-styled-scroll-area overflow-y-auto">
                 <div className="space-y-3">
                 {categories.map((category) => (
                     <Card key={category.id} className="p-3 bg-muted/30">
@@ -519,34 +520,30 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
 
   const renderWidgetDisplay = () => (
     <React.Fragment>
-      {displayMode === 'widgetOnly' && (
-        <>
-          {isClientLoaded && isLoading && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
-              <div className="space-y-4">
-                {Array.from({length: Math.min(2, categories.filter(c => c.feeds.some(f=>f.url.trim())).length || 1)}).map((_, i) => (
-                  <Card key={`skel-cat-${i}`} className="mb-6 shadow-md">
-                    <CardHeader><Skeleton className="h-6 w-1/3 mb-1" /></CardHeader>
-                    <CardContent className="px-4 py-0">
-                      <div className="py-2 border-b border-border last:border-b-0">
-                          <Skeleton className="h-5 w-3/4 mb-1.5" />
-                          <Skeleton className="h-3 w-1/2 mb-2" />
-                          <Skeleton className="h-4 w-full mb-1" />
-                          <Skeleton className="h-4 w-5/6" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-          )}
-          {isClientLoaded && error && <p className="text-sm text-destructive p-2 py-2 mx-4">Error loading articles: {error}</p>}
-          
-          {isClientLoaded && !isLoading && categories.length === 0 && (
-              <p className="text-sm text-muted-foreground p-2 py-2 text-center">No news sources configured. Open settings to add categories and RSS feeds.</p>
-          )}
-          {isClientLoaded && !isLoading && !error && allArticles.length === 0 && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
-              <p className="text-sm text-muted-foreground p-2 py-2 text-center">No articles found from active feeds, or feeds might need updating/checking.</p>
-          )}
-        </>
+      {isClientLoaded && isLoading && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
+          <div className="space-y-4">
+            {Array.from({length: Math.min(2, categories.filter(c => c.feeds.some(f=>f.url.trim())).length || 1)}).map((_, i) => (
+              <Card key={`skel-cat-${i}`} className="mb-6 shadow-md">
+                <CardHeader><Skeleton className="h-6 w-1/3 mb-1" /></CardHeader>
+                <CardContent className="px-4 py-0">
+                  <div className="py-2 border-b border-border last:border-b-0">
+                      <Skeleton className="h-5 w-3/4 mb-1.5" />
+                      <Skeleton className="h-3 w-1/2 mb-2" />
+                      <Skeleton className="h-4 w-full mb-1" />
+                      <Skeleton className="h-4 w-5/6" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+      )}
+      {isClientLoaded && error && <p className="text-sm text-destructive p-2 py-2 mx-4">Error loading articles: {error}</p>}
+      
+      {isClientLoaded && !isLoading && categories.length === 0 && (
+          <p className="text-sm text-muted-foreground p-2 py-2 text-center">No news sources configured. Open settings to add categories and RSS feeds.</p>
+      )}
+      {isClientLoaded && !isLoading && !error && allArticles.length === 0 && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
+          <p className="text-sm text-muted-foreground p-2 py-2 text-center">No articles found from active feeds, or feeds might need updating/checking.</p>
       )}
 
       {isClientLoaded && !isLoading && !error && (
@@ -566,7 +563,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
               <CardHeader>
                  <CardTitle className="text-xl flex items-center">
                    <Newspaper className="mr-2 h-5 w-5" style={{ color: isValidHexColor(category.color) ? category.color : 'hsl(var(--muted-foreground))' }}/>
-                   <span style={{ color: undefined }}>{category.name}</span>
+                   <span>{category.name}</span>
                  </CardTitle>
               </CardHeader>
               <CardContent className="px-4 py-0 flex-1 flex flex-col">
@@ -584,7 +581,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
                     </p>
                 )}
                 {categoryArticles.length > 0 && (
-                  <ScrollArea className="h-[300px] pr-3 py-2 overflow-y-auto">
+                  <ScrollArea className="h-[300px] pr-3 py-2 overflow-y-auto custom-styled-scroll-area">
                     <ul className="space-y-4">
                       {categoryArticles.map((article) => (
                         <li key={article.id} className="pb-3 border-b border-border last:border-b-0">
@@ -631,7 +628,6 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
     </React.Fragment>
   );
 
-
   if (!isClientLoaded && displayMode === 'widgetOnly') {
     return (
       <div className="space-y-6">
@@ -659,18 +655,10 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
   if (displayMode === 'widgetOnly') {
     return (
         <React.Fragment>
-          {displayMode === 'widgetOnly' && (
-            <div className="border-b pb-2 mb-4">
-              {/* This is where the main "Categorized News" title and global settings button used to be in the widgetOnly mode */}
-              {/* Now, it's empty as requested, or you can place a general header for the news section if needed */}
-            </div>
-          )}
+          {/* Header removed when in widgetOnly mode to comply with previous request */}
           {renderWidgetDisplay()}
         </React.Fragment>
     );
   }
   return null;
 }
-
-    
-

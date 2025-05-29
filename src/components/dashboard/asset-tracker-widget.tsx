@@ -518,7 +518,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
             {assets.length > 0 ? (
             <div className="mt-2">
                 <h4 className="text-xs font-medium text-muted-foreground mb-1">Manage Existing Assets</h4>
-                <ScrollArea className="pr-1 max-h-[550px] overflow-y-auto">
+                <ScrollArea className="max-h-[550px] pr-1 overflow-y-auto custom-styled-scroll-area">
                 <Table>
                     <TableHeader>
                     <TableRow>
@@ -624,7 +624,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
                 </div>
               </div>
 
-              <ScrollArea className="h-[280px] pr-0.5">
+              <ScrollArea className="h-[280px] pr-0.5 overflow-y-auto custom-styled-scroll-area">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -707,3 +707,4 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
 
   return renderWidgetDisplay();
 }
+
