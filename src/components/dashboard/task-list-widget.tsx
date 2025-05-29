@@ -296,8 +296,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
      loadGapiClient().catch(e => {
         console.error("TaskListWidget: Failed to load GAPI client on mount", e);
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadGapiClient]);
 
   useEffect(() => {
     if (accessToken && isSignedIn && isGapiClientLoaded) {
@@ -510,7 +509,6 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
   const renderSettingsContent = () => (
      <Card className="shadow-md">
         <CardHeader className="p-2 pt-2 pb-2">
-          <CardTitle className="text-lg">Task List Settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 p-3">
           <div>
@@ -561,39 +559,45 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                         />
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 mt-1">
-                        <Palette size={16} className="mr-1 text-muted-foreground" />
-                      {predefinedTaskColors.map(colorOption => (
-                        <button
-                          key={colorOption}
-                          type="button"
-                          title={colorOption}
-                          className={cn(
-                            "w-5 h-5 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
-                            listSettings[list.id]?.color === colorOption ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
-                          )}
-                          style={{ backgroundColor: colorOption }}
-                          onClick={() => handleListSettingChange(list.id, 'color', colorOption)}
-                        />
-                      ))}
-                      <Input
-                        type="text"
-                        placeholder="#HEX"
-                        value={listSettings[list.id]?.color || ''}
-                        onChange={(e) => handleListSettingChange(list.id, 'color', e.target.value)}
-                        className={cn(
-                            "h-7 w-20 text-xs",
-                            listSettings[list.id]?.color && !isValidHexColor(listSettings[list.id]?.color || '') && listSettings[list.id]?.color !== '' ? "border-destructive focus-visible:ring-destructive" : ""
-                        )}
-                        maxLength={7}
-                      />
+                     <div className="mb-1.5">
+                        <Label className="text-xs flex items-center mb-1.5 mt-1.5">
+                            <Palette size={16} className="mr-1 text-muted-foreground" /> Color
+                        </Label>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            {predefinedTaskColors.map(colorOption => (
+                            <button
+                                key={colorOption}
+                                type="button"
+                                title={colorOption}
+                                className={cn(
+                                "w-5 h-5 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
+                                listSettings[list.id]?.color === colorOption ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
+                                )}
+                                style={{ backgroundColor: colorOption }}
+                                onClick={() => handleListSettingChange(list.id, 'color', colorOption)}
+                            />
+                            ))}
+                            <Input
+                                type="text"
+                                placeholder="#HEX"
+                                value={listSettings[list.id]?.color || ''}
+                                onChange={(e) => handleListSettingChange(list.id, 'color', e.target.value)}
+                                className={cn(
+                                    "h-7 w-20 text-xs",
+                                    listSettings[list.id]?.color && !isValidHexColor(listSettings[list.id]?.color || '') && listSettings[list.id]?.color !== '' ? "border-destructive focus-visible:ring-destructive" : ""
+                                )}
+                                maxLength={7}
+                            />
+                        </div>
                     </div>
                   </div>
                 ))}
                 </div>
               </ScrollArea>
             ) : (
-              <p className="text-sm text-muted-foreground text-center py-1">No task lists found. Create one below or check Google Tasks.</p>
+              <p className="text-sm text-muted-foreground text-center py-1">
+                {isLoadingLists ? "Loading..." : "No task lists found. Create one below or check Google Tasks."}
+              </p>
             )}
           </div>
 
@@ -630,26 +634,32 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
   const renderWidgetDisplay = () => (
     <React.Fragment>
       {!isSignedIn ? (
-        <Card className="shadow-md">
-          <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-              <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
-              <Button onClick={() => login()} variant="default">
-                <LogIn className="mr-2 h-4 w-4" />
-                Sign In with Google
-              </Button>
-              {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
-          </CardContent>
-        </Card>
-      ) : error ? (
-         <Card className="shadow-md">
-            <CardContent>
-                <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
-            </CardContent>
-         </Card>
-      ) : isLoadingLists && !taskLists.length ? (
+        <div className='w-full'> {/* Ensured this div wraps the button for standalone placement */}
           <Card className="shadow-md">
-            <CardContent className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</CardContent>
+            <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+                <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
+                <Button onClick={() => login()} variant="default">
+                  <LogIn className="mr-2 h-4 w-4" />
+                  Sign In with Google
+                </Button>
+                {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
+            </CardContent>
           </Card>
+        </div>
+      ) : error ? (
+         <div className='w-full'>
+           <Card className="shadow-md">
+              <CardContent>
+                  <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
+              </CardContent>
+           </Card>
+         </div>
+      ) : isLoadingLists && !taskLists.length ? (
+          <div className='w-full'>
+            <Card className="shadow-md">
+              <CardContent className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</CardContent>
+            </Card>
+          </div>
       ) : taskLists.filter(list => listSettings[list.id]?.visible).length > 0 ? (
         <div className="space-y-4">
           {taskLists.filter(list => listSettings[list.id]?.visible).map(list => {
@@ -730,16 +740,18 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
           )})}
         </div>
       ) : (
-        <Card className="shadow-md">
-           <CardContent>
-                <p className="text-sm text-muted-foreground text-center py-6">
-                { !isSignedIn ? "Sign in to see your tasks." : 
-                  taskLists.length > 0 ? "No task lists are currently visible. Open settings to select lists to display." :
-                  "No Google Task lists found. Open settings to create one, or check your Google Tasks account."
-                }
-                </p>
-           </CardContent>
-        </Card>
+         <div className='w-full'>
+           <Card className="shadow-md">
+             <CardContent>
+                  <p className="text-sm text-muted-foreground text-center py-6">
+                  { !isSignedIn ? "Sign in to see your tasks." : 
+                    taskLists.length > 0 ? "No task lists are currently visible. Open settings to select lists to display." :
+                    "No Google Task lists found. Open settings to create one, or check your Google Tasks account."
+                  }
+                  </p>
+             </CardContent>
+           </Card>
+         </div>
       )}
     </React.Fragment>
   );
