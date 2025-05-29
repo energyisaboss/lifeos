@@ -48,7 +48,6 @@ interface TaskListSettingItem {
   color: string;
 }
 
-const GOOGLE_TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
 const TASK_LIST_SETTINGS_STORAGE_KEY = 'googleTaskListSettings_v2';
 
 const predefinedTaskColors: string[] = [
@@ -98,6 +97,8 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
   const [errorPerList, setErrorPerList] = useState<Record<string, string | null>>({});
 
   const [isGapiClientLoaded, setIsGapiClientLoaded] = useState(false);
+  const [showTaskSettings, setShowTaskSettings] = useState(false);
+
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -176,7 +177,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
       }
       document.body.appendChild(script);
     });
-  }, [isGapiClientLoaded, setError]);
+  }, [isGapiClientLoaded]);
 
   const handleSignOut = useCallback(() => {
     googleLogout();
@@ -508,17 +509,13 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
 
 
   const renderSettingsContent = () => (
-     <Card className="shadow-md">
-        <CardHeader className="p-2 pt-2 pb-2">
-           {/* Title for settings can go here if needed, or remove CardHeader */}
-        </CardHeader>
         <CardContent className="space-y-3 p-3">
           <div>
             <h4 className="text-sm font-medium text-muted-foreground mb-2">Visible Task Lists & Colors</h4>
             {isLoadingLists ? (
               <div className="flex items-center justify-center py-2"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
             ) : taskLists.length > 0 ? (
-              <ScrollArea className="max-h-[300px] pr-2 overflow-y-auto no-visual-scroll">
+              <ScrollArea className="max-h-[300px] pr-2 custom-styled-scroll-area overflow-y-auto">
                 <div className="space-y-3">
                 {taskLists.map((list) => (
                   <div key={list.id} className="p-2.5 rounded-md bg-muted/30 hover:bg-muted/50">
@@ -630,7 +627,6 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
               </Button>
           </div>
         </CardContent>
-      </Card>
   );
 
   const renderWidgetDisplay = () => (
@@ -776,64 +772,55 @@ export function TaskListWidget({
     }
   }, []);
 
-  if (!isClient && displayMode === 'settingsOnly') {
-     return <Card><CardContent className="p-4"><Skeleton className="h-40 w-full" /></CardContent></Card>;
+  if (!isClient && (displayMode === 'settingsOnly' || displayMode === 'widgetOnly')) {
+     const headerHeight = displayMode === 'widgetOnly' ? 'h-10' : 'h-auto';
+     const contentHeight = displayMode === 'widgetOnly' ? 'h-40' : 'h-80'; // Taller for settings
+     return (
+         <Card className="shadow-md">
+            {displayMode === 'settingsOnly' && (
+                 <CardHeader className="p-3">
+                    <Skeleton className="h-6 w-1/2" />
+                 </CardHeader>
+            )}
+            <CardContent className={cn("p-4", displayMode === 'settingsOnly' && "pt-0")}>
+                <Skeleton className={cn(headerHeight, "w-full mb-3")} />
+                <Skeleton className={cn(contentHeight, "w-full")} />
+            </CardContent>
+         </Card>
+     );
   }
   
-  if (displayMode === 'settingsOnly') {
-     if (providerError || !googleClientId) {
-        return (
-          <Card>
-            <CardContent className='p-4'>
-              <Alert variant="destructive" className="mt-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Configuration Error</AlertTitle>
-                <AlertDescription>
-                  {providerError || "Google Client ID is not available. Please configure it."}
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
-        );
-    }
-    return (
-      <GoogleOAuthProvider clientId={googleClientId!}>
-        <TaskListContent settingsOpen={settingsOpen} displayMode={displayMode} />
-      </GoogleOAuthProvider>
-    );
-  }
-
-  // Widget Display Mode (widgetOnly)
-  if (!isClient) {
-    return (
-      <div className="w-full">
-         <Card className="shadow-md">
-            <CardHeader className="py-3 px-4 border-b">
-              <Skeleton className="h-5 w-1/2" />
-            </CardHeader>
-            <CardContent className="pt-3 px-4 pb-3">
-              <Skeleton className="h-8 w-full mb-3" />
-              <Skeleton className="h-4 w-3/4 mb-2" />
-              <Skeleton className="h-4 w-1/2" />
-            </CardContent>
-          </Card>
-      </div>
-    );
-  }
-
-  if (providerError || !googleClientId) {
-    return (
-      <Card className="shadow-md">
-         <CardContent className="p-4">
-            <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Configuration Error</AlertTitle>
-                <AlertDescription>
-                {providerError || "Google Client ID is not available. Please configure it."}
-                </AlertDescription>
-            </Alert>
+  if (displayMode === 'settingsOnly' && (providerError || !googleClientId)) {
+     return (
+       <Card>
+         <CardHeader><SectionTitle icon={ListChecks} title="Tasks" /></CardHeader>
+         <CardContent className='p-4'>
+           <Alert variant="destructive" className="mt-4">
+             <AlertCircle className="h-4 w-4" />
+             <AlertTitle>Configuration Error</AlertTitle>
+             <AlertDescription>
+               {providerError || "Google Client ID is not available. Please configure it."}
+             </AlertDescription>
+           </Alert>
          </CardContent>
-      </Card>
+       </Card>
+     );
+  }
+  if (displayMode === 'widgetOnly' && (providerError || !googleClientId)) {
+    return (
+      <div className="space-y-4"> 
+         <Card className="shadow-md">
+            <CardContent className="p-4">
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Configuration Error</AlertTitle>
+                    <AlertDescription>
+                    {providerError || "Google Client ID is not available. Please configure it."}
+                    </AlertDescription>
+                </Alert>
+            </CardContent>
+         </Card>
+      </div>
     );
   }
   
@@ -843,3 +830,4 @@ export function TaskListWidget({
     </GoogleOAuthProvider>
   );
 }
+
