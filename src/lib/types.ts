@@ -13,12 +13,20 @@ export interface NewsArticle {
 export interface CalendarEvent {
   id: string;
   title: string;
-  startTime: string; 
-  endTime: string;   
-  calendarSource: string; 
-  color: string; 
+  startTime: string;
+  endTime: string;
+  calendarSource: string;
+  color: string;
   isAllDay?: boolean;
 }
+
+export interface IcalFeedItem {
+  id: string;
+  url: string;
+  label: string;
+  color: string;
+}
+
 
 export interface EnvironmentalData {
   locationName?: string;
@@ -48,7 +56,7 @@ export interface EnvironmentalData {
 }
 
 export interface WeatherDay {
-  day: string; 
+  day: string;
   iconName: string;
   tempHigh: number;
   tempLow: number;
