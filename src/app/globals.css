@@ -124,6 +124,12 @@ body {
   .uv-bar-high > div {
     @apply !bg-red-500;
   }
+
+  /* Hide scrollbar for ShadCN ScrollArea */
+  .no-visual-scroll > [data-orientation="vertical"],
+  .no-visual-scroll > [data-orientation="horizontal"] {
+    display: none !important;
+  }
 }
 
 @layer components {
