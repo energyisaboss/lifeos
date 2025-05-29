@@ -65,7 +65,6 @@ export default function LifeOSPage() {
     if (savedOrder) {
       try {
         const parsedOrder = JSON.parse(savedOrder) as string[];
-        // Ensure saved order contains all current widget IDs and no extras
         const currentWidgetIds = new Set(initialWidgetConfigs.map(w => w.id));
         const filteredOrder = parsedOrder.filter(id => currentWidgetIds.has(id));
         const newIds = Array.from(currentWidgetIds).filter(id => !filteredOrder.includes(id));
@@ -116,7 +115,6 @@ export default function LifeOSPage() {
   const orderedWidgets = widgetOrder.map(id => getWidgetById(id)).filter(Boolean) as WidgetConfig[];
 
   if (!isClient) {
-    // Render a placeholder or skeleton during SSR and initial client render before localStorage is accessed
     return (
       <div className="min-h-screen bg-background text-foreground p-4 md:p-8">
         <header className="mb-6 flex justify-between items-center">
@@ -187,18 +185,12 @@ export default function LifeOSPage() {
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={widgetOrder} strategy={rectSortingStrategy}>
-          <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+          <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start auto-rows-min">
             {orderedWidgets.map(({ id, Component, props = {}, columnSpan = 'lg:col-span-1' }) => {
               let dynamicProps = { ...props };
-              // Pass settingsOpen only if it's relevant to the widget's displayMode for main content
-              // if (['calendar', 'news', 'assets', 'tasks'].includes(id)) {
-              //   dynamicProps = { ...dynamicProps, settingsOpen: showGlobalWidgetSettings };
-              // }
               return (
-                <SortableWidgetItem key={id} id={id} isDragging={activeId === id}>
-                  <div className={columnSpan}> {/* This div might be redundant if SortableWidgetItem handles span */}
-                    <Component {...dynamicProps} displayMode="widgetOnly" settingsOpen={false} />
-                  </div>
+                <SortableWidgetItem key={id} id={id} isDragging={activeId === id} className={columnSpan}>
+                  <Component {...dynamicProps} displayMode="widgetOnly" settingsOpen={false} />
                 </SortableWidgetItem>
               );
             })}
@@ -212,9 +204,6 @@ export default function LifeOSPage() {
                 if (activeWidget) {
                   const { Component, props = {} } = activeWidget;
                   let dynamicProps = { ...props };
-                  // if (['calendar', 'news', 'assets', 'tasks'].includes(activeId)) {
-                  //    dynamicProps = { ...dynamicProps, settingsOpen: showGlobalWidgetSettings };
-                  // }
                   return <Component {...dynamicProps} displayMode="widgetOnly" settingsOpen={false} />;
                 }
                 return null;

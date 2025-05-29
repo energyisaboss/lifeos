@@ -11,9 +11,10 @@ interface SortableWidgetItemProps {
   id: string;
   children: React.ReactNode;
   isDragging?: boolean;
+  className?: string; // Added to accept columnSpan or other classes
 }
 
-export function SortableWidgetItem({ id, children, isDragging }: SortableWidgetItemProps) {
+export function SortableWidgetItem({ id, children, isDragging, className }: SortableWidgetItemProps) {
   const {
     attributes,
     listeners,
@@ -37,8 +38,9 @@ export function SortableWidgetItem({ id, children, isDragging }: SortableWidgetI
       style={style}
       {...attributes}
       className={cn(
-        "relative group rounded-lg",
+        "relative group rounded-lg", // Base styles
         isDragging && "shadow-2xl cursor-grabbing",
+        className // Apply passed className here (e.g., for columnSpan)
       )}
     >
       {children}
@@ -50,9 +52,8 @@ export function SortableWidgetItem({ id, children, isDragging }: SortableWidgetI
           "absolute top-2 right-2 p-1.5 rounded-md text-muted-foreground bg-background/50 hover:bg-accent hover:text-accent-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring transition-opacity",
           isDragging && "cursor-grabbing"
         )}
-        // Prevent settings dialog from opening when trying to drag
-        onClick={(e) => e.stopPropagation()} 
-        onMouseDown={(e) => e.stopPropagation()} // For good measure
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
       >
         <GripVertical className="h-5 w-5" />
       </button>
