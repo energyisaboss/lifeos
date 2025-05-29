@@ -3,8 +3,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { SectionTitle } from './section-title';
-import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw, LinkIcon, Palette, Check, Edit3, XCircle, Save } from 'lucide-react';
-import type { CalendarEvent as AppCalendarEvent } from '@/lib/types'; // Uses string dates
+import { CalendarDays, Settings, PlusCircle, Trash2, RefreshCw, LinkIcon, Palette, Check, Edit3, XCircle, Save, GripVertical } from 'lucide-react';
+import type { CalendarEvent as AppCalendarEvent, IcalFeedItem } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -29,13 +29,6 @@ import {
 
 const MAX_ICAL_FEEDS = 10;
 const LOCALSTORAGE_KEY_ICAL_FEEDS = 'icalFeedsLifeOS_v2';
-
-interface IcalFeedItem {
-  id: string;
-  url: string;
-  label: string;
-  color: string;
-}
 
 const predefinedNamedColors: { name: string, value: string }[] = [
   { name: 'Red', value: '#F44336' },
@@ -63,17 +56,18 @@ interface CalendarWidgetProps {
 
 export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: CalendarWidgetProps) {
   const [icalFeeds, setIcalFeeds] = useState<IcalFeedItem[]>([]);
-  const [allEvents, setAllEvents] = useState<AppCalendarEvent[]>([]); // Now expects events with string dates
+  const [allEvents, setAllEvents] = useState<AppCalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [editingFeedId, setEditingFeedId] = useState<string | null>(null);
+  const [editingFeed, setEditingFeed] = useState<IcalFeedItem | null>(null);
   const [editFeedUrl, setEditFeedUrl] = useState('');
   const [editFeedLabel, setEditFeedLabel] = useState('');
   const [editFeedColor, setEditFeedColor] = useState('');
 
   const [newIcalUrl, setNewIcalUrl] = useState('');
   const [newIcalLabel, setNewIcalLabel] = useState('');
+  const [newIcalColor, setNewIcalColor] = useState(predefinedNamedColors[0].value);
 
   const feedListManagementRef = useRef<HTMLDivElement>(null);
   const [justAddedFeedId, setJustAddedFeedId] = useState<string | null>(null);
@@ -102,7 +96,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
         }
       }
       setIcalFeeds(loadedFeeds);
-      setIsClientLoaded(true);
+      setIsClientLoaded(true); // Set client loaded after attempting to load feeds
     }
   }, []);
 
@@ -145,7 +139,6 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     results.forEach((result, index) => {
       const feed = validFeeds[index];
       if (result.status === 'fulfilled') {
-        // Dates are already strings from the flow
         fetchedEvents.push(...result.value);
       } else {
         console.error(`Error fetching/processing iCal feed ${feed.label} (${feed.url}):`, result.reason);
@@ -178,7 +171,6 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
         setIsLoading(false);
         setError(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [icalFeeds, isClientLoaded, fetchAndProcessEvents, refreshTrigger]);
 
 
@@ -195,22 +187,26 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
        toast({ title: "Invalid URL", description: "Please enter a valid iCalendar URL.", variant: "destructive" });
       return;
     }
+    if (!isValidHexColor(newIcalColor)) {
+      toast({ title: "Invalid Color", description: "Please select a valid hex color.", variant: "destructive" });
+      return;
+    }
 
     const newFeedId = `feed-${Date.now()}-${Math.random().toString(36).substring(2,9)}`;
-    const defaultColor = getNextFeedColor();
     const newFeed: IcalFeedItem = {
       id: newFeedId,
       url: newIcalUrl.trim(),
       label: newIcalLabel.trim() || `Feed ${icalFeeds.length + 1}`,
-      color: defaultColor,
+      color: newIcalColor,
     };
     setIcalFeeds(prev => [...prev, newFeed]);
     setJustAddedFeedId(newFeedId);
     setNewIcalUrl('');
     setNewIcalLabel('');
+    setNewIcalColor(getNextFeedColor());
     toast({ title: "Feed Added", description: `"${newFeed.label}" added. Events refreshing.` });
     setRefreshTrigger(prev => prev + 1);
-  }, [icalFeeds, newIcalUrl, newIcalLabel]);
+  }, [icalFeeds, newIcalUrl, newIcalLabel, newIcalColor]);
 
   const handleRemoveIcalFeed = useCallback((idToRemove: string) => {
     const feedLabel = icalFeeds.find(f => f.id === idToRemove)?.label || "Feed";
@@ -221,12 +217,10 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
 
   const getUpcomingEventsForFeed = useCallback((feed: IcalFeedItem): AppCalendarEvent[] => {
     if (!feed) return [];
-    // Filter events based on the feed's label and color
-    // Dates are already strings, parse for comparison
     return allEvents
-      .filter(event => event.calendarSource === feed.label && event.color.toLowerCase() === feed.color.toLowerCase())
-      .filter(event => new Date(event.endTime) >= new Date(new Date().setHours(0,0,0,0))) // Show events that end today or later
-      .slice(0, 15); // Limit to 15 upcoming events per feed
+      .filter(event => event.calendarSource === feed.label && event.color?.toLowerCase() === feed.color?.toLowerCase())
+      .filter(event => new Date(event.endTime) >= new Date(new Date().setHours(0,0,0,0)))
+      .slice(0, 15);
   }, [allEvents]);
 
   const formatEventTime = (event: AppCalendarEvent) => {
@@ -246,22 +240,22 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     return format(new Date(event.startTime), 'EEE, MMM d');
   }
 
-  const handleStartEditFeed = useCallback((feed: IcalFeedItem) => {
-    setEditingFeedId(feed.id);
-    setEditFeedUrl(feed.url);
-    setEditFeedLabel(feed.label);
-    setEditFeedColor(feed.color);
+  const handleOpenEditDialog = useCallback((feedToEdit: IcalFeedItem) => {
+    setEditingFeed(feedToEdit);
+    setEditFeedUrl(feedToEdit.url);
+    setEditFeedLabel(feedToEdit.label);
+    setEditFeedColor(feedToEdit.color);
   }, []);
 
-  const handleCancelEditFeed = useCallback(() => {
-    setEditingFeedId(null);
+  const handleCloseEditDialog = useCallback(() => {
+    setEditingFeed(null);
     setEditFeedUrl('');
     setEditFeedLabel('');
     setEditFeedColor('');
   }, []);
 
   const handleSaveChangesToFeed = useCallback(() => {
-    if (!editingFeedId) return;
+    if (!editingFeed) return;
 
     if (!editFeedUrl.trim()) {
       toast({ title: "URL Required", description: "Please enter an iCal feed URL.", variant: "destructive" });
@@ -277,56 +271,96 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     }
 
     setIcalFeeds(prevFeeds => prevFeeds.map(f =>
-      f.id === editingFeedId ? { ...f, url: editFeedUrl.trim(), label: editFeedLabel.trim() || `Feed ${prevFeeds.findIndex(pf => pf.id === f.id) + 1}`, color: editFeedColor } : f
+      f.id === editingFeed.id ? { ...f, url: editFeedUrl.trim(), label: editFeedLabel.trim() || `Feed ${prevFeeds.findIndex(pf => pf.id === f.id) + 1}`, color: editFeedColor } : f
     ));
     toast({ title: "Feed Updated", description: `Feed "${editFeedLabel || editFeedUrl}" settings saved. Events refreshing.` });
-    handleCancelEditFeed();
+    handleCloseEditDialog();
     setRefreshTrigger(prev => prev + 1);
-  }, [editingFeedId, editFeedUrl, editFeedLabel, editFeedColor, handleCancelEditFeed, icalFeeds]);
+  }, [editingFeed, editFeedUrl, editFeedLabel, editFeedColor, handleCloseEditDialog, icalFeeds]);
+
+  const handleFeedColorChange = useCallback((feedId: string, color: string) => {
+    if (isValidHexColor(color)) {
+      setIcalFeeds(prev => prev.map(f => f.id === feedId ? { ...f, color } : f));
+      setRefreshTrigger(prev => prev + 1);
+    } else if (color !== '') {
+      toast({ title: "Invalid Color", description: "Please enter a valid hex color code.", variant: "destructive", duration:3000 });
+      // Temporarily update the input's state to show the invalid value, but don't save to icalFeeds state yet
+      const tempFeeds = [...icalFeeds];
+      const feedIndex = tempFeeds.findIndex(f => f.id === feedId);
+      if (feedIndex !== -1) {
+        // This is a bit hacky for temporary visual feedback. Proper way would be separate input state.
+        // For now, we'll just let the validation prevent save.
+      }
+    }
+  }, [icalFeeds]);
 
 
-  const renderSettingsContent = () => (
+  const renderSettings = () => (
     <div className="border rounded-lg p-3 bg-muted/10 shadow-sm">
       <CardHeader className="p-1 pb-3">
         <CardTitle className="text-lg">Calendar Settings</CardTitle>
       </CardHeader>
       <CardContent className="p-1 space-y-4">
-        {editingFeedId === null && (
-          <>
-            <div>
-              <Label htmlFor="new-ical-label" className="text-xs">Feed Label (Optional)</Label>
-              <Input
-                id="new-ical-label"
+          <Card className="p-3">
+            <Label htmlFor="new-ical-label" className="text-xs font-medium">New Feed Label (Optional)</Label>
+            <Input
+              id="new-ical-label"
+              type="text"
+              placeholder="e.g., Work Calendar"
+              value={newIcalLabel}
+              onChange={(e) => setNewIcalLabel(e.target.value)}
+              className="h-9 text-sm mt-1"
+            />
+            <Label htmlFor="new-ical-url" className="text-xs font-medium mt-2 block">iCal Feed URL*</Label>
+            <Input
+              id="new-ical-url"
+              type="url"
+              placeholder="https://example.com/feed.ics"
+              value={newIcalUrl}
+              onChange={(e) => setNewIcalUrl(e.target.value)}
+              className="h-9 text-sm mt-1"
+              required
+            />
+            <Label className="text-xs font-medium flex items-center mt-2 mb-1.5">
+                <Palette size={14} className="mr-1.5 text-muted-foreground" /> New Feed Color
+            </Label>
+            <div className="flex flex-wrap items-center gap-1.5">
+            {predefinedNamedColors.map(colorOption => (
+                <button
+                key={colorOption.value}
+                type="button"
+                title={colorOption.name}
+                className={cn(
+                    "w-5 h-5 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
+                    newIcalColor === colorOption.value ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
+                )}
+                style={{ backgroundColor: colorOption.value }}
+                onClick={() => setNewIcalColor(colorOption.value)}
+                />
+            ))}
+            <Input
                 type="text"
-                placeholder="e.g., Work Calendar"
-                value={newIcalLabel}
-                onChange={(e) => setNewIcalLabel(e.target.value)}
-                className="h-9 text-sm mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="new-ical-url" className="text-xs">iCal Feed URL*</Label>
-              <Input
-                id="new-ical-url"
-                type="url"
-                placeholder="https://example.com/feed.ics"
-                value={newIcalUrl}
-                onChange={(e) => setNewIcalUrl(e.target.value)}
-                className="h-9 text-sm mt-1"
-                required
-              />
+                placeholder="#HEX"
+                value={newIcalColor}
+                onChange={(e) => setNewIcalColor(e.target.value)}
+                className={cn(
+                "h-7 w-20 text-xs",
+                newIcalColor && !isValidHexColor(newIcalColor) && newIcalColor !== '' ? "border-destructive focus-visible:ring-destructive" : ""
+                )}
+                maxLength={7}
+            />
             </div>
             <Button
               size="sm"
               onClick={handleAddNewFeed}
-              disabled={icalFeeds.length >= MAX_ICAL_FEEDS || !newIcalUrl.trim()}
-              className="w-full"
+              disabled={icalFeeds.length >= MAX_ICAL_FEEDS || !newIcalUrl.trim() || (newIcalColor !== '' && !isValidHexColor(newIcalColor))}
+              className="w-full mt-3"
             >
               <PlusCircle className="w-4 h-4 mr-2" /> Add Feed ({icalFeeds.length}/{MAX_ICAL_FEEDS})
             </Button>
-            {icalFeeds.length > 0 && <Separator className="my-3"/>}
-          </>
-        )}
+          </Card>
+
+        {icalFeeds.length > 0 && <Separator className="my-3"/>}
 
         {icalFeeds.length > 0 && (
           <div>
@@ -334,8 +368,8 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
             <ScrollArea className="max-h-[240px] pr-1 calendar-feed-scroll-area" ref={feedListManagementRef}>
               <div className="space-y-3">
                 {icalFeeds.map((feed) => (
-                  <div key={feed.id} data-feed-id={feed.id} className="p-2.5 rounded-md bg-background/70 shadow-sm border flex flex-col">
-                     {editingFeedId === feed.id ? (
+                  <Card key={feed.id} data-feed-id={feed.id} className="p-2.5 shadow-sm border">
+                     {editingFeed?.id === feed.id ? (
                         <div className="space-y-2">
                             <div>
                                 <Label htmlFor={`edit-label-${feed.id}`} className="text-xs">Label</Label>
@@ -380,16 +414,16 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                                 )}
                             </div>
                             <div className="mt-2 flex items-center justify-start gap-2">
-                                <Button variant="default" size="sm" className="h-7 px-2 py-1 text-xs" onClick={handleSaveChangesToFeed} disabled={editFeedColor !== '' && !isValidHexColor(editFeedColor)}>
+                                <Button variant="default" size="sm" className="h-7 px-2 py-1 text-xs" onClick={handleSaveChangesToFeed} disabled={(editFeedColor !== '' && !isValidHexColor(editFeedColor)) || !editFeedUrl.trim()}>
                                     <Save className="w-3.5 h-3.5 mr-1" /> Save
                                 </Button>
-                                <Button variant="outline" size="sm" className="h-7 px-2 py-1 text-xs" onClick={handleCancelEditFeed}>
+                                <Button variant="outline" size="sm" className="h-7 px-2 py-1 text-xs" onClick={handleCloseEditDialog}>
                                     <XCircle className="w-3.5 h-3.5 mr-1" /> Cancel
                                 </Button>
                             </div>
                         </div>
                      ) : (
-                        <>
+                        <div className="flex flex-col">
                             <div className="flex items-start justify-between">
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-card-foreground truncate" title={feed.label}>{feed.label}</p>
@@ -414,27 +448,14 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                                         feed.color === colorOption.value ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
                                     )}
                                     style={{ backgroundColor: colorOption.value }}
-                                    onClick={() => {
-                                        setIcalFeeds(prev => prev.map(f => f.id === feed.id ? {...f, color: colorOption.value} : f));
-                                        toast({title: "Color Updated", description: `Color for "${feed.label}" changed.`});
-                                        setRefreshTrigger(prev => prev + 1);
-                                    }}
+                                    onClick={() => handleFeedColorChange(feed.id, colorOption.value)}
                                     />
                                 ))}
                                 <Input
                                     type="text"
                                     placeholder="#HEX"
                                     value={feed.color}
-                                    onChange={(e) => {
-                                        const newColor = e.target.value;
-                                        setIcalFeeds(prev => prev.map(f => f.id === feed.id ? {...f, color: newColor} : f));
-                                        if (isValidHexColor(newColor)) {
-                                          toast({title: "Color Updated", description: `Color for "${feed.label}" changed.`});
-                                          setRefreshTrigger(prev => prev + 1);
-                                        } else if (newColor !== '') {
-                                            toast({ title: "Invalid Color", description: "Please enter a valid hex color code.", variant: "destructive", duration:3000 });
-                                        }
-                                    }}
+                                    onChange={(e) => handleFeedColorChange(feed.id, e.target.value)}
                                     className={cn(
                                         "h-7 w-20 text-xs",
                                         feed.color && !isValidHexColor(feed.color) && feed.color !== '' ? "border-destructive focus-visible:ring-destructive" : ""
@@ -446,17 +467,17 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                                     <p className="text-xs text-destructive mt-1">Invalid hex color code.</p>
                                 )}
                             </div>
-                            <div className="mt-2 flex items-center gap-1"> {/* Container for buttons */}
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEditFeed(feed)} aria-label="Edit feed">
+                            <div className="mt-2 flex items-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEditDialog(feed)} aria-label="Edit feed">
                                 <Edit3 className="w-3.5 h-3.5" />
                                 </Button>
                                 <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive h-7 w-7" onClick={() => handleRemoveIcalFeed(feed.id)} aria-label="Delete feed">
                                 <Trash2 className="w-3.5 h-3.5" />
                                 </Button>
                             </div>
-                        </>
+                        </div>
                      )}
-                  </div>
+                  </Card>
                 ))}
               </div>
             </ScrollArea>
@@ -470,15 +491,16 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
   );
 
   if (displayMode === 'settingsOnly') {
-    return settingsOpen ? renderSettingsContent() : null;
+    return settingsOpen ? renderSettings() : null;
   }
 
-  // Main Widget Display when not in 'settingsOnly' mode
   return (
     <>
-      <div className="flex justify-between items-center mb-3">
+      <div className="flex justify-between items-center mb-2">
         <SectionTitle icon={CalendarDays} title="Upcoming Events" className="mb-0 text-lg" />
       </div>
+
+      {isClientLoaded && settingsOpen && renderSettings()}
 
       {!isClientLoaded && (
           Array.from({ length: 1 }).map((_, i) => (
@@ -492,7 +514,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
       )}
 
       {isClientLoaded && isLoading && icalFeeds.filter(f => f.url.trim()).length > 0 && (
-        Array.from({ length: Math.min(2, icalFeeds.filter(f => f.url.trim() && listSettings[f.id]?.visible).length || 1) }).map((_, i) => (
+        Array.from({ length: Math.min(2, icalFeeds.filter(f => f.url.trim()).length || 1) }).map((_, i) => (
           <Card key={`skel-cat-${i}`} className="shadow-md mb-4" style={{borderTop: `4px solid hsl(var(--muted))`}}>
             <CardHeader className="p-3"> <Skeleton className="h-5 w-1/2" /> </CardHeader>
             <CardContent className="px-3 py-0 pb-3">
@@ -504,14 +526,14 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
 
       {isClientLoaded && !isLoading && error && <div className="p-4 border rounded-md bg-destructive/10 text-destructive mb-4"><p className="text-sm p-2 py-2">{error}</p></div>}
 
-      {isClientLoaded && !isLoading && !error && icalFeeds.filter(f => f.url.trim() && listSettings[f.id]?.visible).length === 0 && (
+      {isClientLoaded && !isLoading && !error && icalFeeds.filter(f => f.url.trim()).length === 0 && (
           <p className="text-sm text-muted-foreground p-2 py-2 text-center">No upcoming events. Add or enable an iCal feed via global settings.</p>
       )}
 
       {isClientLoaded && !isLoading && !error && (
         <div className="space-y-4">
           {icalFeeds.map(feed => {
-            if (!feed.url.trim() || !listSettings[feed.id]?.visible) return null;
+            if (!feed.url.trim()) return null; // Don't render card if URL is empty
             const eventsForThisFeed = getUpcomingEventsForFeed(feed);
             const feedColor = (feed.color && isValidHexColor(feed.color)) ? feed.color : 'hsl(var(--border))';
 
@@ -524,7 +546,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="py-0 px-3 pb-3 flex flex-col flex-1">
-                  {isLoading && !allEvents.some(e => e.calendarSource === feed.label && e.color === feed.color) ? ( // Show skeleton if this feed's events aren't loaded yet
+                  {isLoading && !allEvents.some(e => e.calendarSource === feed.label && e.color === feed.color) ? (
                        <div className="py-2"><Skeleton className="h-4 w-3/4 mb-2" /><Skeleton className="h-3 w-1/2" /></div>
                   ) : eventsForThisFeed.length > 0 ? (
                     <ScrollArea className="flex-1 pr-2 py-2 max-h-60">
@@ -551,10 +573,88 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
           })}
         </div>
       )}
-       {isClientLoaded && !isLoading && !error && icalFeeds.filter(f=>f.url.trim() && listSettings[f.id]?.visible).length > 0 && allEvents.filter(e => icalFeeds.find(f => f.label === e.calendarSource && f.color === e.color && listSettings[f.id]?.visible )).length === 0 && (
+       {isClientLoaded && !isLoading && !error && icalFeeds.filter(f=>f.url.trim()).length > 0 && allEvents.filter(e => icalFeeds.find(f => f.label === e.calendarSource && f.color === e.color )).length === 0 && (
         <p className="text-sm text-muted-foreground p-2 py-2 text-center">No upcoming events from any active & visible feeds for the next 30 days, or feeds might need updating/checking.</p>
       )}
+
+      <Dialog open={!!editingFeed} onOpenChange={(isOpen) => !isOpen && handleCloseEditDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit iCal Feed</DialogTitle>
+            <DialogDescription>
+              Update the URL, label, and color for your iCal feed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-feed-label" className="text-right">
+                Label
+              </Label>
+              <Input
+                id="edit-feed-label"
+                value={editFeedLabel}
+                onChange={(e) => setEditFeedLabel(e.target.value)}
+                className="col-span-3"
+                placeholder="e.g., Work Calendar"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-feed-url" className="text-right">
+                URL
+              </Label>
+              <Input
+                id="edit-feed-url"
+                value={editFeedUrl}
+                onChange={(e) => setEditFeedUrl(e.target.value)}
+                className="col-span-3"
+                placeholder="https://example.com/feed.ics"
+              />
+            </div>
+             <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right flex items-center col-span-1">
+                <Palette size={16} className="mr-2" /> Color
+              </Label>
+              <div className="col-span-3 flex flex-wrap items-center gap-2">
+                {predefinedNamedColors.map(colorOption => (
+                  <button
+                    key={colorOption.value}
+                    type="button"
+                    title={colorOption.name}
+                    className={cn(
+                      "w-6 h-6 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
+                      editFeedColor === colorOption.value ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
+                    )}
+                    style={{ backgroundColor: colorOption.value }}
+                    onClick={() => setEditFeedColor(colorOption.value)}
+                  />
+                ))}
+                 <Input
+                    type="text"
+                    placeholder="#HEX"
+                    value={editFeedColor}
+                    onChange={(e) => setEditFeedColor(e.target.value)}
+                    className={cn(
+                      "h-8 w-24 text-sm",
+                      editFeedColor && !isValidHexColor(editFeedColor) && editFeedColor !== '' ? "border-destructive focus-visible:ring-destructive" : ""
+                    )}
+                    maxLength={7}
+                />
+              </div>
+            </div>
+            {!isValidHexColor(editFeedColor) && editFeedColor !== '' && (
+                <p className="text-xs text-destructive text-center col-span-4">Invalid hex color code. Use format #RRGGBB.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button type="button" onClick={handleSaveChangesToFeed} disabled={!editFeedUrl.trim() || (editFeedColor !== '' && !isValidHexColor(editFeedColor))}>
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
-
