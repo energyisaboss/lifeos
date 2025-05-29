@@ -256,7 +256,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
         fetchedLists.forEach((list) => {
             if (!newSettings[list.id]) {
                 newSettings[list.id] = {
-                    visible: !defaultVisibleSet,
+                    visible: !defaultVisibleSet, // Make the first list visible by default
                     color: getNextColor()
                 };
                 if (!defaultVisibleSet) defaultVisibleSet = true;
@@ -294,7 +294,8 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
      loadGapiClient().catch(e => {
         console.error("TaskListWidget: Failed to load GAPI client on mount", e);
       });
-  }, [loadGapiClient]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (accessToken && isSignedIn && isGapiClientLoaded) {
@@ -452,13 +453,12 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
         const newSettings = {
             ...prev,
             [listId]: {
-                ...(prev[listId] || { visible: false, color: getNextColor() }), // Ensure existing color is kept if only visibility changes
+                ...(prev[listId] || { visible: false, color: getNextColor() }), 
                 [key]: value
             }
         };
          if (key === 'color' && typeof value === 'string' && value !== '' && !isValidHexColor(value)) {
             toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive", duration:3000 });
-             // Revert to old color or a default if invalid hex is attempted
             newSettings[listId].color = prev[listId]?.color || getNextColor();
         }
 
@@ -628,18 +628,8 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
 
   const renderWidgetDisplay = () => (
     <React.Fragment>
-      {displayMode === 'widgetOnly' && (
-        <div className="flex justify-between items-center mb-1 p-4 border-b">
-            {/* Title hidden in widgetOnly mode */}
-        </div>
-      )}
+      {/* Header for "Tasks" and settings button are now handled by global settings panel logic in page.tsx */}
         
-      {settingsOpen && displayMode === 'widgetOnly' && (
-        <div className="mb-4 p-3 border-b bg-muted/20">
-          {renderSettingsContent()}
-        </div>
-      )}
-
       <div className="space-y-4">
           {!isSignedIn ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -662,7 +652,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
               return (
               <Card
                   key={list.id}
-                  className="shadow-md flex flex-col"
+                  className="shadow-md flex flex-col mb-4" // Added mb-4 for spacing between list cards
                   style={{ borderTop: `4px solid ${finalColor}` }}
               >
                   <CardHeader className="py-3 px-4 border-b">
@@ -702,20 +692,20 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                           {(tasksByListId[list.id] || []).map((task) => (
                           <li key={task.id} className="flex items-center space-x-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors">
                               <Checkbox
-                              id={`task-${list.id}-${task.id}`}
-                              checked={task.status === 'completed'}
-                              onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
-                              aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
-                              className="task-list-checkbox"
-                              style={
-                                  finalColor && isValidHexColor(finalColor)
-                                  ? {
-                                      '--task-checkbox-checked-bg': finalColor,
-                                      '--task-checkbox-checked-border': finalColor,
-                                      '--task-checkbox-unchecked-border': finalColor,
-                                      } as React.CSSProperties
-                                  : {}
-                              }
+                                id={`task-${list.id}-${task.id}`}
+                                checked={task.status === 'completed'}
+                                onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
+                                aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
+                                className="task-list-checkbox"
+                                style={
+                                    finalColor && isValidHexColor(finalColor)
+                                    ? {
+                                        '--task-checkbox-checked-bg': finalColor,
+                                        '--task-checkbox-checked-border': finalColor,
+                                        '--task-checkbox-unchecked-border': finalColor,
+                                        } as React.CSSProperties
+                                    : {}
+                                }
                               />
                               <label
                               htmlFor={`task-${list.id}-${task.id}`}
@@ -776,14 +766,9 @@ export function TaskListWidget({
   }, []);
 
   if (!isClient && displayMode === 'widgetOnly') {
-    // Simplified skeleton for initial server render or when client not yet loaded
     return (
        <>
-        {displayMode === 'widgetOnly' && (
-          <div className="flex justify-between items-center mb-1 p-4 border-b">
-              {/* Title hidden in widgetOnly mode */}
-          </div>
-        )}
+        {/* Header div and title removed for widgetOnly mode */}
         <Card className="max-h-60">
             <CardHeader><Skeleton className="h-5 w-1/3" /></CardHeader>
             <CardContent><Skeleton className="h-20 w-full" /></CardContent>
@@ -807,11 +792,7 @@ export function TaskListWidget({
     }
     return (
          <>
-            {displayMode === 'widgetOnly' && (
-              <div className="flex justify-between items-center mb-1 p-4 border-b">
-                  {/* Title hidden in widgetOnly mode */}
-              </div>
-            )}
+           {/* Header div and title removed for widgetOnly mode */}
             {content}
         </>
     );
@@ -843,4 +824,3 @@ export function TaskListWidget({
     </GoogleOAuthProvider>
   );
 }
-
