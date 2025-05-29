@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SectionTitle } from './section-title';
-import { ListChecks, LogIn, LogOut, PlusCircle, Loader2, AlertCircle, Settings, ListPlus, Edit3, Check, XCircle, Palette } from 'lucide-react';
+import { ListChecks, LogIn, LogOut, PlusCircle, Loader2, AlertCircle, Settings, ListPlus, Edit3, Check, XCircle, Palette, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from '@/components/ui/separator';
@@ -22,6 +22,17 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 // Define the required scope for Google Tasks API
 const GOOGLE_TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
@@ -87,14 +98,15 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
 
   const [newTaskTitles, setNewTaskTitles] = useState<Record<string, string>>({});
   const [newTaskListTitle, setNewTaskListTitle] = useState('');
+  
   const [editingListId, setEditingListId] = useState<string | null>(null);
   const [editingListTitle, setEditingListTitle] = useState('');
+  const [isUpdatingListTitle, setIsUpdatingListTitle] = useState(false);
 
   const [isLoadingLists, setIsLoadingLists] = useState(false);
   const [isLoadingTasksForList, setIsLoadingTasksForList] = useState<Record<string, boolean>>({});
   const [isAddingTaskForList, setIsAddingTaskForList] = useState<Record<string, boolean>>({});
   const [isCreatingList, setIsCreatingList] = useState(false);
-  const [isUpdatingListTitle, setIsUpdatingListTitle] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorPerList, setErrorPerList] = useState<Record<string, string | null>>({});
 
@@ -220,7 +232,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
         showHidden: false,
         maxResults: 100,
       });
-      console.log(`TaskListWidget: Raw response from tasks.list() for list ${listId}:`, response);
+      console.log(`TaskListWidget: Raw response from tasks.list() for list ${listId}:`, JSON.stringify(response));
       setTasksByListId(prev => ({ ...prev, [listId]: response?.result?.items || [] }));
     } catch (err: any) {
       console.error(`TaskListWidget: Error fetching tasks for list ${listId}:`, err);
@@ -246,7 +258,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
       }
       window.gapi.client.setToken({ access_token: token });
       const response = await window.gapi.client.tasks.tasklists.list();
-      console.log('TaskListWidget: Raw response from tasklists.list():', response);
+      console.log('TaskListWidget: Raw response from tasklists.list():', JSON.stringify(response));
 
       const fetchedLists: TaskList[] = response?.result?.items || [];
       console.log(`TaskListWidget: Fetched ${fetchedLists.length} task lists from API.`);
@@ -272,7 +284,6 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
             }
         });
         
-        // Ensure all lists from API have at least a default setting
         const currentSettingIds = Object.keys(newSettings);
         fetchedLists.forEach(list => {
             if (!currentSettingIds.includes(list.id)) {
@@ -280,7 +291,6 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                 settingsChanged = true;
             }
         });
-
 
         if (settingsChanged && typeof window !== 'undefined') {
             localStorage.setItem(TASK_LIST_SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
@@ -519,12 +529,49 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
     }
   };
 
+  const handleDeleteTaskList = async (listId: string) => {
+    if (!accessToken) return;
+    // Optionally add a loading state for deleting a specific list
+    try {
+      if (!isGapiClientLoaded) await loadGapiClient();
+      if (!window.gapi || !window.gapi.client || !window.gapi.client.tasks) {
+        throw new Error("Google Tasks API client is not available for deleting list.");
+      }
+      window.gapi.client.setToken({ access_token: accessToken });
+      await window.gapi.client.tasks.tasklists.delete({
+        tasklist: listId,
+      });
+
+      const deletedListName = taskLists.find(l => l.id === listId)?.title || "List";
+      toast({ title: "Task List Deleted", description: `"${deletedListName}" has been deleted.` });
+
+      setTaskLists(prev => prev.filter(list => list.id !== listId));
+      setListSettings(prev => {
+        const newSettings = {...prev};
+        delete newSettings[listId];
+        return newSettings;
+      });
+      setTasksByListId(prev => {
+        const newTasks = {...prev};
+        delete newTasks[listId];
+        return newTasks;
+      });
+
+    } catch (err: any) {
+      console.error('TaskListWidget: Error deleting task list:', err);
+      toast({ title: "Delete Failed", description: `Could not delete task list: ${err.message || err.result?.error?.message || 'Unknown Error'}`, variant: "destructive" });
+      if (err.status === 401 || err.result?.error?.status === 'UNAUTHENTICATED') handleSignOut();
+    } finally {
+      // Optionally stop loading state here
+    }
+  };
+
 
   const renderSettingsContent = () => (
         <CardContent className="space-y-3 p-3">
           <div>
             <h4 className="text-sm font-medium text-muted-foreground mb-2">Visible Task Lists & Colors</h4>
-            {isLoadingLists ? (
+            {isLoadingLists && !taskLists.length ? (
               <div className="flex items-center justify-center py-2"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
             ) : taskLists.length > 0 ? (
               <ScrollArea className="max-h-[300px] pr-2 custom-styled-scroll-area no-visual-scroll overflow-y-auto">
@@ -555,12 +602,33 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                           {list.title}
                         </Label>
                       )}
-                      <div className="flex items-center gap-1 flex-shrink-0">
+                      <div className="flex items-center gap-0.5 flex-shrink-0">
                         {editingListId !== list.id && (
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEditListTitle(list)} aria-label="Edit list title">
                             <Edit3 className="w-3.5 h-3.5" />
                           </Button>
                         )}
+                         <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" aria-label="Delete list" disabled={editingListId === list.id}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently delete the task list "{list.title}" and all its tasks from Google Tasks. This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteTaskList(list.id)} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                                Delete List
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                         <Switch
                           id={`vis-${list.id}`}
                           checked={!!listSettings[list.id]?.visible}
@@ -766,7 +834,6 @@ export function TaskListWidget({
 
   useEffect(() => {
     setIsClient(true);
-    // Ensure this runs only on the client
     if (typeof window !== 'undefined') {
         const clientIdFromEnv = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
         if (clientIdFromEnv) {
@@ -779,18 +846,16 @@ export function TaskListWidget({
   }, []);
 
   if (!isClient && (displayMode === 'settingsOnly' || displayMode === 'widgetOnly')) {
-     const headerHeight = displayMode === 'widgetOnly' ? 'h-auto' : 'h-auto'; // No fixed header height
-     const contentHeight = displayMode === 'widgetOnly' ? 'h-auto' : 'h-auto'; // No fixed content height
      return (
         <div className={cn(displayMode === 'widgetOnly' && "space-y-4")}>
           {Array.from({ length: 1 }).map((_, i) => (
             <Card key={`skel-task-outer-${i}`} className="shadow-md">
               <CardHeader className={cn("p-3", displayMode === 'settingsOnly' && "pt-0")}>
-                <Skeleton className={cn("h-6 w-3/4", headerHeight)} />
+                <Skeleton className="h-6 w-3/4" />
               </CardHeader>
               <CardContent className={cn("p-3", displayMode === 'settingsOnly' && "pt-0")}>
-                  <Skeleton className={cn("h-8 w-full mb-3", contentHeight)} />
-                  <Skeleton className={cn("h-20 w-full", contentHeight)} />
+                  <Skeleton className="h-8 w-full mb-3" />
+                  <Skeleton className="h-20 w-full" />
               </CardContent>
             </Card>
            ))}
@@ -803,7 +868,7 @@ export function TaskListWidget({
         return (
             <Card className="p-2">
                 <CardHeader className="px-1 py-2">
-                    <SectionTitle icon={ListChecks} title="Tasks" className="text-lg" />
+                     <SectionTitle icon={ListChecks} title="Tasks Settings" className="text-lg mb-0" />
                 </CardHeader>
                 <CardContent className='p-1'>
                     <Alert variant="destructive" className="mt-2">
@@ -837,7 +902,6 @@ export function TaskListWidget({
   }
   
   if (!googleClientId) {
-    // Still waiting for client ID to load, render skeleton or minimal loading state
     return (
         <div className={cn(displayMode === 'widgetOnly' && "space-y-4")}>
          {Array.from({ length: 1 }).map((_, i) => (
