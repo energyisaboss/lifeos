@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -79,7 +80,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
   const [justAddedFeedId, setJustAddedFeedId] = useState<string | null>(null);
 
   const fetchAndProcessEvents = useCallback(async () => {
-    console.log("CalendarWidget: fetchAndProcessEvents called. isClientLoaded:", isClientLoaded, 'Number of feeds:', icalFeeds.length);
+    console.log("CalendarWidget: fetchAndProcessEvents called. isClientLoaded:", isClientLoaded, 'Number of feeds:', icalFeEDS.length);
     if (!isClientLoaded || icalFeeds.length === 0) {
       setAllEvents([]);
       setIsLoading(false);
@@ -149,11 +150,11 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
 
   useEffect(() => {
     if (isClientLoaded) {
-        console.log("CalendarWidget: Event fetching useEffect triggered. Refresh trigger:", refreshTrigger);
+        console.log("CalendarWidget: Event fetching useEffect triggered. Refresh trigger:", refreshTrigger, "icalFeeds length:", icalFeeds.length);
         fetchAndProcessEvents();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClientLoaded, icalFeeds, fetchAndProcessEvents]);
+  }, [isClientLoaded, icalFeeds, fetchAndProcessEvents, refreshTrigger]);
 
 
   useEffect(() => {
@@ -223,27 +224,29 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     setNewIcalUrl('');
     setNewIcalLabel('');
     toast({ title: "Feed Added", description: `"${newFeedItem.label}" added.` });
-  }, [icalFeeds, newIcalUrl, newIcalLabel]);
+    // setRefreshTrigger(prev => prev + 1); // Already handled by icalFeeds dependency
+  }, [icalFeeds, newIcalUrl, newIcalLabel, setIcalFeeds, setJustAddedFeedId, setNewIcalUrl, setNewIcalLabel]);
 
   const handleRemoveIcalFeed = useCallback((idToRemove: string) => {
     const feedLabel = icalFeeds.find(f => f.id === idToRemove)?.label || "Feed";
     setIcalFeeds(prev => prev.filter(feed => feed.id !== idToRemove));
     toast({ title: "Feed Removed", description: `"${feedLabel}" has been removed.` });
-  }, [icalFeeds]);
+    // setRefreshTrigger(prev => prev + 1); // Already handled by icalFeeds dependency
+  }, [icalFeeds, setIcalFeeds]);
 
   const handleStartEditFeed = useCallback((feedToEdit: IcalFeedItem) => {
     setEditingFeedId(feedToEdit.id);
     setCurrentEditFeedLabel(feedToEdit.label);
     setCurrentEditFeedUrl(feedToEdit.url);
     setCurrentEditFeedColor(feedToEdit.color);
-  }, []);
+  }, [setEditingFeedId, setCurrentEditFeedLabel, setCurrentEditFeedUrl, setCurrentEditFeedColor]);
   
   const handleCancelEditFeed = useCallback(() => {
     setEditingFeedId(null);
     setCurrentEditFeedLabel('');
     setCurrentEditFeedUrl('');
     setCurrentEditFeedColor('');
-  }, []);
+  }, [setEditingFeedId, setCurrentEditFeedLabel, setCurrentEditFeedUrl, setCurrentEditFeedColor]);
 
   const handleSaveChangesToFeed = useCallback(() => {
     if (!editingFeedId) return;
@@ -272,28 +275,32 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     );
     toast({ title: "Feed Updated", description: `Feed "${labelToSave}" settings saved.` });
     handleCancelEditFeed();
-  }, [editingFeedId, icalFeeds, currentEditFeedUrl, currentEditFeedLabel, currentEditFeedColor, handleCancelEditFeed]);
+    // setRefreshTrigger(prev => prev + 1); // Already handled by icalFeeds dependency
+  }, [editingFeedId, icalFeeds, currentEditFeedUrl, currentEditFeedLabel, currentEditFeedColor, handleCancelEditFeed, setIcalFeeds]);
 
   const handleFeedColorChange = useCallback((feedId: string, newColor: string) => {
      if (newColor !== '' && !isValidHexColor(newColor)) {
          toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive", duration:3000 });
-         if (feedId === editingFeedId && newColor !== '') return; // Prevent state update for invalid color in edit mode
+         if (editingFeedId === feedId && newColor !== '') return;
      }
     
-    if(feedId === editingFeedId){ // If currently editing this feed
-      setCurrentEditFeedColor(newColor);
-    } else { // Should not happen with current inline edit setup, but good for future
-      setIcalFeeds(prevFeeds =>
-        prevFeeds.map(f =>
-          f.id === feedId ? { ...f, color: newColor } : f
-        )
-      );
-    }
-  }, [editingFeedId]);
+    setIcalFeeds(prevFeeds =>
+      prevFeeds.map(f => {
+        if (f.id === feedId) {
+          if (editingFeedId === feedId) { // if currently in inline edit mode for this feed
+            setCurrentEditFeedColor(newColor); // update the temporary edit state as well
+          }
+          return { ...f, color: newColor };
+        }
+        return f;
+      })
+    );
+    setRefreshTrigger(prev => prev + 1); // Explicitly trigger refresh for color changes
+  }, [editingFeedId, setIcalFeeds, setCurrentEditFeedColor, setRefreshTrigger]);
 
 
   const getUpcomingEventsForFeed = useCallback((feed: IcalFeedItem): AppCalendarEvent[] => {
-    if (!feed || !isClientLoaded) return []; 
+    if (!feed || !isClientLoaded || !allEvents) return []; 
     return allEvents
       .filter(event => {
         const urlMatch = event.id.startsWith(feed.url);
@@ -358,7 +365,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
             <div className="mt-3">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">Active Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS})</h4>
                 <ScrollArea className="h-[240px] pr-1 custom-styled-scroll-area overflow-y-auto" ref={feedListManagementRef}>
-                <div className="space-y-3">
+                  <div className="space-y-3">
                     {icalFeeds.map((feed) => (
                     <Card key={feed.id} data-feed-id={feed.id} className="p-2.5 shadow-sm border bg-background">
                         {editingFeedId === feed.id ? (
@@ -387,14 +394,14 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                                         currentEditFeedColor === colorOption.value ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
                                         )}
                                         style={{ backgroundColor: colorOption.value }}
-                                        onClick={() => handleFeedColorChange(feed.id, colorOption.value)}
+                                        onClick={() => setCurrentEditFeedColor(colorOption.value)}
                                     />
                                     ))}
                                     <Input
                                         type="text"
                                         placeholder="#HEX"
                                         value={currentEditFeedColor}
-                                        onChange={(e) => handleFeedColorChange(feed.id, e.target.value)}
+                                        onChange={(e) => setCurrentEditFeedColor(e.target.value)}
                                         className={cn(
                                             "h-7 w-20 text-xs",
                                             currentEditFeedColor && !isValidHexColor(currentEditFeedColor) && currentEditFeedColor !== '' ? "border-destructive focus-visible:ring-destructive" : ""
@@ -416,7 +423,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                             </div>
                         </div>
                         ) : (
-                        // Default Compact Display
+                        // Default Compact Display - Label, Edit and Delete buttons only
                         <div className="flex flex-col">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center min-w-0">
@@ -457,7 +464,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
           <p className="text-sm text-muted-foreground p-2 py-2 text-center">No upcoming events. Add or enable an iCal feed via global settings.</p>
       )}
 
-      {isClientLoaded && !isLoading && !error && icalFeeds.filter(f => f.url.trim()).length > 0 && (
+      {isClientLoaded && !isLoading && !error && (
         <div className="space-y-4">
           {icalFeeds.map((feed, index) => {
             if (!feed.url.trim()) return null;
@@ -488,9 +495,9 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                     <CalendarDays className="w-5 h-5" style={{ color: finalFeedColor }} />
                     <CardTitle className="text-lg">{feed.label}</CardTitle>
                 </CardHeader>
-                <CardContent className="px-4 py-0 flex flex-col"> 
+                <CardContent className="py-0 px-4 flex flex-col"> 
                     {eventsForThisFeed.length > 0 ? (
-                        <ScrollArea className="h-60 custom-styled-scroll-area pr-2 py-2 overflow-y-auto no-visual-scroll">
+                        <ScrollArea className="h-60 pr-2 py-2 no-visual-scroll overflow-y-auto">
                         <ul className="space-y-3">
                             {eventsForThisFeed.map((event) => (
                             <li key={event.id} className="flex items-start space-x-3 pb-2 border-b border-border last:border-b-0">
@@ -540,3 +547,4 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
   }
   return renderWidgetDisplayContent();
 }
+
