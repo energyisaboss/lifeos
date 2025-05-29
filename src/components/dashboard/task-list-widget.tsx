@@ -532,6 +532,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
   const handleDeleteTaskList = async (listId: string) => {
     if (!accessToken) return;
     // Optionally add a loading state for deleting a specific list
+    setError(null); // Clear potential previous global errors
     try {
       if (!isGapiClientLoaded) await loadGapiClient();
       if (!window.gapi || !window.gapi.client || !window.gapi.client.tasks) {
@@ -568,7 +569,10 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
 
 
   const renderSettingsContent = () => (
-        <CardContent className="space-y-3 p-3">
+    <Card className="p-3 border rounded-lg bg-muted/30 shadow-sm">
+      <CardContent className="space-y-3">
+          <CardTitle className="text-xl">Tasks Settings</CardTitle>
+          {error && <Alert variant="destructive" className="my-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
           <div>
             <h4 className="text-sm font-medium text-muted-foreground mb-2">Visible Task Lists & Colors</h4>
             {isLoadingLists && !taskLists.length ? (
@@ -707,6 +711,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
               </Button>
           </div>
         </CardContent>
+    </Card>
   );
 
   const renderWidgetDisplay = () => (

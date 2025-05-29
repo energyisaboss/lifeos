@@ -113,12 +113,24 @@ body {
     @apply !bg-[hsl(var(--sidebar-background))]; /* Even darker scrollbar thumb using theme's sidebar-background color */
   }
 
-  /* UV Progress Bar Colors */
-  /* Targets the inner indicator (direct child div) of the Progress component when the parent has these classes */
+  /* Hide scrollbar visually */
+  .custom-styled-scroll-area::-webkit-scrollbar,
+  .no-visual-scroll::-webkit-scrollbar {
+    display: none; /* Safari and Chrome */
+  }
+
+  .custom-styled-scroll-area,
+  .no-visual-scroll {
+    -ms-overflow-style: none;  /* Internet Explorer 10+ */
+    scrollbar-width: none;  /* Firefox */
+    scrollbar-color: transparent transparent; /* For some versions of Firefox */
+  }
+
+  /* UV Index Progress Bar Colors */
   .uv-bar-low > div {
     @apply !bg-green-500;
   }
-  .uv-bar-moderate > div {
+ .uv-bar-moderate > div {
     @apply !bg-yellow-500;
   }
   .uv-bar-high > div {
@@ -126,10 +138,6 @@ body {
   }
 
   /* Hide scrollbar for ShadCN ScrollArea (if still needed for specific cases) */
-  .no-visual-scroll > [data-orientation="vertical"],
-  .no-visual-scroll > [data-orientation="horizontal"] {
-    display: none !important;
-  }
 }
 
 @layer components {

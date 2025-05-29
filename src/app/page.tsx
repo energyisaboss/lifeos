@@ -16,23 +16,26 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SortableContext, sortableKeyboardCoordinates, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable';
 import { Label } from '@/components/ui/label';
 import { SortableWidgetItem } from '@/components/dashboard/sortable-widget-item';
+import { Switch } from '@/components/ui/switch';
 
 const WIDGET_ORDER_STORAGE_KEY = 'widgetOrder_v1'; // Updated key for potentially new structure
+const WIDGET_VISIBILITY_STORAGE_KEY = 'widgetVisibility_v1';
 
 interface WidgetConfig {
   id: string;
   Component: ComponentType<any>; 
+  name: string; // Added name property for display
   props?: any;
   columnSpan?: string;
 }
 
 const initialWidgetConfigs: WidgetConfig[] = [
-  { id: 'datetime', Component: DateTimeWidget, props: {}, columnSpan: 'lg:col-span-1' },
-  { id: 'news', Component: NewsWidget, props: {}, columnSpan: 'lg:col-span-1' }, // Changed from lg:col-span-2
-  { id: 'calendar', Component: CalendarWidget, props: {}, columnSpan: 'lg:col-span-1' },
-  { id: 'environmental', Component: EnvironmentalWidget, props: {}, columnSpan: 'lg:col-span-1' },
-  { id: 'asset-tracker', Component: AssetTrackerWidget, props: {}, columnSpan: 'lg:col-span-1' },
-  { id: 'task-list', Component: TaskListWidget, props: {}, columnSpan: 'lg:col-span-1' },
+  { id: 'datetime', name: 'Date and Time', Component: DateTimeWidget, props: {}, columnSpan: 'lg:col-span-1' },
+  { id: 'news', name: 'News', Component: NewsWidget, props: {}, columnSpan: 'lg:col-span-1' }, // Changed from lg:col-span-2
+  { id: 'calendar', name: 'Calendar', Component: CalendarWidget, props: {}, columnSpan: 'lg:col-span-1' },
+  { id: 'environmental', name: 'Environmental', Component: EnvironmentalWidget, props: {}, columnSpan: 'lg:col-span-1' },
+  { id: 'asset-tracker', name: 'Asset Tracker', Component: AssetTrackerWidget, props: {}, columnSpan: 'lg:col-span-1' },
+  { id: 'task-list', name: 'Tasks', Component: TaskListWidget, props: {}, columnSpan: 'lg:col-span-1' },
 ];
 
 const getWidgetById = (id: string): WidgetConfig | undefined => {
@@ -44,6 +47,10 @@ export default function LifeOSPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [widgetOrder, setWidgetOrder] = useState<string[]>(() => initialWidgetConfigs.map(w => w.id));
+  const [widgetVisibility, setWidgetVisibility] = useState<Record<string, boolean>>(() => {
+    // Default: all widgets visible
+    return initialWidgetConfigs.reduce((acc, widget) => ({ ...acc, [widget.id]: true }), {});
+  });
 
 
   useEffect(() => {
@@ -63,16 +70,46 @@ export default function LifeOSPage() {
         console.error("Failed to parse widget order from localStorage", e);
         setWidgetOrder(initialWidgetConfigs.map(w => w.id));
       }
+
+      const savedVisibility = localStorage.getItem(WIDGET_VISIBILITY_STORAGE_KEY);
+      if (savedVisibility) {
+        try {
+          const parsedVisibility = JSON.parse(savedVisibility) as Record<string, boolean>;
+          const currentWidgetIds = new Set(initialWidgetConfigs.map(w => w.id));
+          const updatedVisibility: Record<string, boolean> = {};
+          // Include saved visibility for existing widgets
+          Object.keys(parsedVisibility).forEach(id => {
+            if (currentWidgetIds.has(id)) {
+              updatedVisibility[id] = parsedVisibility[id];
+            }
+          });
+          // Add new widgets as visible by default
+          initialWidgetConfigs.forEach(widget => {
+            if (updatedVisibility[widget.id] === undefined) {
+              updatedVisibility[widget.id] = true;
+            }
+          });
+          setWidgetVisibility(updatedVisibility);
+        } catch (e) {
+          console.error("Failed to parse widget visibility from localStorage", e);
+        }
+      }
     } else {
       setWidgetOrder(initialWidgetConfigs.map(w => w.id));
     }
-  }, []);
+  }, []); // Empty dependency array to run only on mount
 
   useEffect(() => {
     if (isClient) {
       localStorage.setItem(WIDGET_ORDER_STORAGE_KEY, JSON.stringify(widgetOrder));
     }
   }, [widgetOrder, isClient]);
+
+  useEffect(() => {
+    if (isClient && Object.keys(widgetVisibility).length > 0) {
+      localStorage.setItem(WIDGET_VISIBILITY_STORAGE_KEY, JSON.stringify(widgetVisibility));
+    }
+  }, [widgetVisibility, isClient]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -97,8 +134,13 @@ export default function LifeOSPage() {
       });
     }
   }
-  
-  const orderedWidgets = widgetOrder.map(id => getWidgetById(id)).filter(Boolean) as WidgetConfig[];
+
+  const handleWidgetVisibilityChange = (id: string, isVisible: boolean) => {
+    setWidgetVisibility(prev => ({ ...prev, [id]: isVisible }));
+  };
+
+  // Filter widgets based on visibility before ordering
+  const orderedWidgets = widgetOrder.map(id => getWidgetById(id)).filter(Boolean).filter(widget => widgetVisibility[widget!.id]) as WidgetConfig[];
 
   if (!isClient) {
     return (
@@ -152,6 +194,21 @@ export default function LifeOSPage() {
                 </div>
             </div>
             <Separator/>
+            <div>
+              <Label className="text-lg font-semibold mb-3 block">Widget Visibility</Label>
+              <div className="p-4 border rounded-lg bg-muted/30 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {initialWidgetConfigs.map(widget => (
+                  <div key={widget.id} className="flex items-center justify-between space-x-2">
+                    <Label htmlFor={`switch-${widget.id}`}>{widget.name}</Label>
+                    <Switch
+                      id={`switch-${widget.id}`}
+                      checked={!!widgetVisibility[widget.id]}
+                      onCheckedChange={(checked) => handleWidgetVisibilityChange(widget.id, checked)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <CalendarWidget settingsOpen={true} displayMode="settingsOnly" />
@@ -178,7 +235,7 @@ export default function LifeOSPage() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext items={widgetOrder} strategy={rectSortingStrategy}>
+        <SortableContext items={orderedWidgets.map(w => w.id)} strategy={rectSortingStrategy}>
           <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start auto-rows-min">
             {orderedWidgets.map(({ id, Component, props = {}, columnSpan = 'lg:col-span-1' }) => {
               let dynamicProps = { ...props };

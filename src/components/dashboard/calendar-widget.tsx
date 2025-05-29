@@ -329,6 +329,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
 
   const renderSettingsContent = () => (
      <div className="p-3 border rounded-lg bg-muted/20 shadow-sm">
+ <CardTitle className="text-lg mb-4">Calendar</CardTitle>
         <CardContent className="p-1 space-y-4">
             <Card className="p-3 bg-muted/30 rounded-md">
                 <Label htmlFor="new-ical-label" className="text-xs font-medium">New Feed Label (Optional)</Label>
@@ -362,7 +363,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
 
             {isClientLoaded && icalFeeds.length > 0 && (
             <div className="mt-3">
-                <h4 className="text-sm font-medium text-muted-foreground mb-2">Active Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS})</h4>
+ <h4 className="text-sm font-medium text-muted-foreground mb-2">Calendars ({icalFeeds.length}/{MAX_ICAL_FEEDS})</h4>
                 <ScrollArea className="h-[240px] pr-1 calendar-feed-scroll-area overflow-y-auto" ref={feedListManagementRef}>
                   <div className="space-y-3">
                     {icalFeeds.map((feed) => (

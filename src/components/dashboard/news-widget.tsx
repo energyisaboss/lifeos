@@ -335,6 +335,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
 
   const renderSettingsUI = () => (
     <div className="p-3 border rounded-lg bg-muted/30 shadow-sm">
+      <CardTitle className="text-lg font-semibold mb-4">News Settings</CardTitle>
         <CardContent className="p-1 space-y-4">
             <Card className="p-3 bg-muted/30 rounded-md">
                 <Label htmlFor="new-category-name" className="text-xs font-medium">New Category Name</Label>
