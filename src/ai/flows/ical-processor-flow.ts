@@ -77,7 +77,7 @@ const icalProcessorFlow = ai.defineFlow(
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Start of today
       const expansionEndDate = new Date(today);
-      expansionEndDate.setDate(today.getDate() + 90); // Expand for the next 90 days
+      expansionEndDate.setDate(today.getDate() + 30); // Expand for the next 30 days
 
       for (const veventComponent of vevents) {
         const event = new ICAL.Event(veventComponent);

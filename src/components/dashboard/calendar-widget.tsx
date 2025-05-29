@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { SectionTitle } from './section-title';
-import { CalendarDays, Settings, PlusCircle, Trash2, LinkIcon, Palette, Edit3, Check, XCircle, Loader2 } from 'lucide-react';
+import { CalendarDays, Settings, PlusCircle, Trash2, LinkIcon, Palette, Edit3, Check, XCircle, Loader2, RefreshCw } from 'lucide-react';
 import type { CalendarEvent as AppCalendarEvent } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -34,7 +34,7 @@ interface IcalFeedItem {
 }
 
 const MAX_ICAL_FEEDS = 10;
-const LOCALSTORAGE_KEY_ICAL_FEEDS = 'icalFeedsLifeOS_v2';
+const LOCALSTORAGE_KEY_ICAL_FEEDS = 'icalFeedsLifeOS_v2'; 
 
 const predefinedNamedColors: { name: string; value: string }[] = [
   { name: 'Red', value: '#F44336' },
@@ -99,11 +99,9 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     }
     
     if (validFeeds.length === 0 && displayMode === 'settingsOnly' && settingsOpen) {
-        // Even if no valid feeds, we might still want to show the settings UI
-        // but clear any old events and errors.
         setAllEvents([]);
         setError(null);
-        setIsLoading(false); // Not loading if no feeds to fetch
+        setIsLoading(false); 
         return;
     }
 
@@ -166,7 +164,6 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
 
 
   useEffect(() => {
-    // Load feeds from localStorage on client mount
     const savedFeedsString = localStorage.getItem(LOCALSTORAGE_KEY_ICAL_FEEDS);
     let loadedFeeds: IcalFeedItem[] = [];
     if (savedFeedsString) {
@@ -226,7 +223,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
       id: newFeedId,
       url: newIcalUrl.trim(),
       label: newIcalLabel.trim() || `Feed ${icalFeeds.length + 1}`,
-      color: getNextFeedColor(), // Assign a new color
+      color: getNextFeedColor(), 
     };
     setIcalFeeds(prev => [...prev, newFeedItem]);
     setJustAddedFeedId(newFeedId); 
@@ -287,11 +284,17 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
   const handleFeedColorChange = useCallback((feedId: string, newColor: string) => {
     if (newColor !== '' && !isValidHexColor(newColor)) {
         toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive", duration:3000 });
-        if (editingFeedId === feedId && currentEditFeedColor !== newColor) return; // Don't apply if invalid for current edit
+        if (editingFeedId === feedId && currentEditFeedColor !== newColor) return; 
     }
     
     if (editingFeedId === feedId) {
         setCurrentEditFeedColor(newColor);
+    } else {
+      setIcalFeeds(prevFeeds =>
+        prevFeeds.map(f =>
+          f.id === feedId ? { ...f, color: newColor } : f
+        )
+      );
     }
   }, [editingFeedId, currentEditFeedColor]);
 
@@ -363,7 +366,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
             {icalFeeds.length > 0 && (
             <div className="mt-3">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">Active Feeds ({icalFeeds.length}/{MAX_ICAL_FEEDS})</h4>
-                <ScrollArea className="max-h-[240px] pr-1 calendar-feed-scroll-area" ref={feedListManagementRef}>
+                <ScrollArea className="max-h-[240px] h-auto pr-1 calendar-feed-scroll-area" ref={feedListManagementRef}>
                     <div className="space-y-3">
                         {icalFeeds.map((feed) => (
                         <Card key={feed.id} data-feed-id={feed.id} className="p-2.5 shadow-sm border">
@@ -421,14 +424,14 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                                     </div>
                                 </div>
                             ) : (
-                                <div>
+                                <div className="flex flex-col">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center min-w-0">
                                             <LinkIcon className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" style={{color: feed.color}} />
                                             <p className="text-sm font-medium text-card-foreground truncate" title={feed.label}>{feed.label}</p>
                                         </div>
                                     </div>
-                                     <div className="mt-2 flex items-center justify-start gap-1"> {/* Aligned left */}
+                                     <div className="mt-1.5 flex items-center gap-1">
                                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEditDialog(feed)} aria-label="Edit feed">
                                             <Edit3 className="w-3.5 h-3.5" />
                                         </Button>
@@ -450,65 +453,7 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
             {isLoading && displayMode === 'settingsOnly' && <div className="flex items-center justify-center py-3"><Loader2 className="h-5 w-5 animate-spin mr-2" />Loading events...</div>}
         </CardContent>
 
-         {/* Edit Feed Dialog */}
-        <Dialog open={!!editingFeedId && displayMode==='settingsOnly'} onOpenChange={(isOpen) => { if (!isOpen) handleCloseEditDialog(); }}>
-            <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-                <DialogTitle>Edit iCal Feed</DialogTitle>
-                <DialogDescription>
-                Update the details for &quot;{icalFeeds.find(f => f.id === editingFeedId)?.label || 'this feed'}&quot;.
-                </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-feed-label" className="text-right text-xs">Label</Label>
-                <Input id="edit-feed-label" value={currentEditFeedLabel} onChange={(e) => setCurrentEditFeedLabel(e.target.value)} className="col-span-3 h-8 text-sm" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-feed-url" className="text-right text-xs">URL</Label>
-                <Input id="edit-feed-url" value={currentEditFeedUrl} onChange={(e) => setCurrentEditFeedUrl(e.target.value)} className="col-span-3 h-8 text-sm" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label className="text-right text-xs flex items-center col-span-1 justify-end">
-                        <Palette size={14} className="mr-1.5 text-muted-foreground" /> Color
-                    </Label>
-                    <div className="col-span-3 flex flex-wrap items-center gap-1.5">
-                        {predefinedNamedColors.map(colorOption => (
-                            <button
-                            key={`dialog-${editingFeedId}-${colorOption.value}`}
-                            type="button"
-                            title={colorOption.name}
-                            className={cn(
-                                "w-5 h-5 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
-                                currentEditFeedColor === colorOption.value ? "border-foreground" : "border-transparent hover:border-muted-foreground/50"
-                            )}
-                            style={{ backgroundColor: colorOption.value }}
-                            onClick={() => editingFeedId && handleFeedColorChange(editingFeedId, colorOption.value)}
-                            />
-                        ))}
-                        <Input
-                            type="text"
-                            placeholder="#HEX"
-                            value={currentEditFeedColor}
-                            onChange={(e) => editingFeedId && handleFeedColorChange(editingFeedId, e.target.value)}
-                            className={cn(
-                                "h-7 w-20 text-xs",
-                                currentEditFeedColor && !isValidHexColor(currentEditFeedColor) && currentEditFeedColor !== '' ? "border-destructive focus-visible:ring-destructive" : ""
-                            )}
-                            maxLength={7}
-                        />
-                    </div>
-                </div>
-                 {!isValidHexColor(currentEditFeedColor) && currentEditFeedColor !== '' && (
-                    <p className="col-span-4 text-xs text-destructive text-center">Invalid hex color code.</p>
-                )}
-            </div>
-            <DialogFooter>
-                <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-                <Button type="button" onClick={handleSaveChangesToFeed} disabled={(currentEditFeedColor !== '' && !isValidHexColor(currentEditFeedColor)) || !currentEditFeedUrl.trim()}>Save Changes</Button>
-            </DialogFooter>
-            </DialogContent>
-        </Dialog>
+         {/* Edit Feed Dialog - Now part of the inline editing logic */}
     </div>
   );
   
@@ -517,7 +462,10 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
       {!isClientLoaded && displayMode === 'widgetOnly' && (
         Array.from({ length: 1 }).map((_, i) => (
           <Card key={`skel-cat-outer-${i}`} className="shadow-md mb-4 flex flex-col" style={{borderTop: `4px solid hsl(var(--muted))`}}>
-            <CardHeader className="p-3"> <Skeleton className="h-5 w-1/2" /> </CardHeader>
+            <CardHeader className="p-3 flex flex-row items-center space-x-2"> 
+                <Skeleton className="h-5 w-5" /> 
+                <Skeleton className="h-5 w-1/2" /> 
+            </CardHeader>
             <CardContent className="px-3 py-0 pb-3 flex flex-col flex-1">
               <div className="py-2"><Skeleton className="h-4 w-3/4 mb-2" /><Skeleton className="h-3 w-1/2" /></div>
             </CardContent>
@@ -541,11 +489,9 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
             if (isLoading && !eventsForThisFeed.length && !error) {
               return (
                 <Card key={feed.id} className={cn("shadow-md mb-4 flex flex-col", isFirstFeedCard && displayMode === 'widgetOnly' && "border-t-0")} style={{borderTop: `4px solid ${finalFeedColor}`}}>
-                  <CardHeader className="p-3">
-                    <CardTitle className="text-lg flex items-center">
-                      <CalendarDays className="w-5 h-5 mr-2" style={{ color: finalFeedColor }} />
-                      {feed.label}
-                    </CardTitle>
+                   <CardHeader className="p-3 flex flex-row items-center space-x-2">
+                     <CalendarDays className="w-5 h-5" style={{ color: finalFeedColor }} />
+                     <CardTitle className="text-lg">{feed.label}</CardTitle>
                   </CardHeader>
                   <CardContent className="py-0 px-4 pb-3 flex flex-col flex-1">
                     <div className="py-2"><Skeleton className="h-4 w-3/4 mb-2" /><Skeleton className="h-3 w-1/2" /></div>
@@ -553,22 +499,19 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
                 </Card>
               );
             }
-            // Only render the card if there are events for this feed or if it's loading
             if (eventsForThisFeed.length === 0 && !isLoading) {
                  return null; 
             }
 
             return (
             <Card key={feed.id} className={cn("shadow-md mb-4 flex flex-col", isFirstFeedCard && displayMode === 'widgetOnly' && "border-t-0")} style={{borderTop: `4px solid ${finalFeedColor}`}}>
-                <CardHeader className="p-3">
-                <CardTitle className="text-lg flex items-center">
-                    <CalendarDays className="w-5 h-5 mr-2" style={{ color: finalFeedColor }} />
-                    {feed.label}
-                </CardTitle>
+                <CardHeader className="p-3 flex flex-row items-center space-x-2">
+                    <CalendarDays className="w-5 h-5" style={{ color: finalFeedColor }} />
+                    <CardTitle className="text-lg">{feed.label}</CardTitle>
                 </CardHeader>
                 <CardContent className="py-0 px-4 pb-3 flex flex-col flex-1">
                 {eventsForThisFeed.length > 0 ? (
-                    <ScrollArea className="h-full max-h-60 pr-2 py-2">
+                    <ScrollArea className="h-full max-h-60 pr-2 py-2 overflow-y-auto">
                     <ul className="space-y-3">
                         {eventsForThisFeed.map((event) => (
                         <li key={event.id} className="flex items-start space-x-3 pb-2 border-b border-border last:border-b-0">
@@ -603,7 +546,10 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
     return (
         Array.from({ length: 1 }).map((_, i) => (
           <Card key={`skel-cat-outer-${i}`} className="shadow-md mb-4 flex flex-col" style={{borderTop: `4px solid hsl(var(--muted))`}}>
-            <CardHeader className="p-3"> <Skeleton className="h-5 w-1/2" /> </CardHeader>
+             <CardHeader className="p-3 flex flex-row items-center space-x-2"> 
+                <Skeleton className="h-5 w-5" /> 
+                <Skeleton className="h-5 w-1/2" /> 
+            </CardHeader>
             <CardContent className="px-3 py-0 pb-3 flex flex-col flex-1">
               <div className="py-2"><Skeleton className="h-4 w-3/4 mb-2" /><Skeleton className="h-3 w-1/2" /></div>
             </CardContent>
@@ -613,3 +559,4 @@ export function CalendarWidget({ settingsOpen, displayMode = 'widgetOnly' }: Cal
   }
   return renderWidgetDisplayContent();
 }
+
