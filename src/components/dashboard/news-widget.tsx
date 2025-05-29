@@ -3,7 +3,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { SectionTitle } from './section-title';
 import { Newspaper, Settings, PlusCircle, Trash2, LinkIcon, RefreshCw, Tag, Edit3, FolderPlus, FolderMinus, FilePlus, CheckCircle, XCircle, Palette, GripVertical, Loader2 } from 'lucide-react';
 import type { NewsArticle as AppNewsArticle } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -84,19 +83,23 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
     const savedCategories = localStorage.getItem(LOCALSTORAGE_KEY_CATEGORIES);
     try {
       const parsed = savedCategories ? JSON.parse(savedCategories) : [];
-      setCategories(Array.isArray(parsed) ? parsed.map((cat: any, index: number) => ({
-        id: cat.id || `cat-${Date.now()}-${Math.random()}`,
-        name: cat.name || 'Untitled Category',
-        feeds: Array.isArray(cat.feeds) ? cat.feeds.map((feed: any) => ({
-          id: feed.id || `feed-${Date.now()}-${Math.random()}`,
-          url: feed.url || '',
-          userLabel: feed.userLabel || 'Untitled Feed',
-        })) : [],
-        isEditingName: false,
-        color: cat.color && isValidHexColor(cat.color) ? cat.color : getNextCategoryColor(), 
-      })) : []);
+      if (Array.isArray(parsed)) {
+        setCategories(parsed.map((cat: any) => ({
+          id: cat.id || `cat-${Date.now()}-${Math.random()}`,
+          name: cat.name || 'Untitled Category',
+          feeds: Array.isArray(cat.feeds) ? cat.feeds.map((feed: any) => ({
+            id: feed.id || `feed-${Date.now()}-${Math.random()}`,
+            url: feed.url || '',
+            userLabel: feed.userLabel || 'Untitled Feed',
+          })) : [],
+          isEditingName: false,
+          color: cat.color && isValidHexColor(cat.color) ? cat.color : getNextCategoryColor(), 
+        })));
+      } else {
+        setCategories([]);
+      }
     } catch (e) {
-      console.error("Failed to parse RSS categories from localStorage", e);
+      console.error("NewsWidget: Failed to parse RSS categories from localStorage", e);
       setCategories([]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -141,7 +144,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
           categoryId: categoryId,
         }));
       } catch (err) {
-        console.error(`Error processing RSS feed ${feed.userLabel || 'feed'} (${feed.url}):`, err);
+        console.error(`NewsWidget: Error processing RSS feed ${feed.userLabel || 'feed'} (${feed.url}):`, err);
         let detail = "Failed to fetch or parse feed.";
         if (err instanceof Error) {
            if (err.message.startsWith('Failed to process RSS feed')) {
@@ -197,11 +200,11 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
   }, [categories, isClientLoaded]); 
 
   useEffect(() => {
-    if (isClientLoaded && (displayMode === 'widgetOnly' || settingsOpen)) { 
+    if (isClientLoaded && (displayMode === 'widgetOnly' || (settingsOpen && displayMode === 'settingsOnly'))) { 
       fetchAndProcessAllFeeds();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categories, triggerFeedRefresh, displayMode, settingsOpen, isClientLoaded]);
+  }, [categories, triggerFeedRefresh, displayMode, settingsOpen, isClientLoaded, fetchAndProcessAllFeeds]);
 
   const handleAddCategory = useCallback(() => {
     if (!newCategoryName.trim()) {
@@ -231,7 +234,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
       cat.id === categoryId ? { ...cat, isEditingName: !cat.isEditingName } : {...cat, isEditingName: false}
     ));
     const categoryToEdit = categories.find(cat => cat.id === categoryId);
-    if (categoryToEdit) {
+    if (categoryToEdit && !categoryToEdit.isEditingName) { // Only set if going into edit mode
       setEditingCategoryState(prev => ({ ...prev, [categoryId]: { name: categoryToEdit.name, color: categoryToEdit.color } }));
     }
   }, [categories]);
@@ -242,7 +245,9 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
 
     if (!newName || !newName.trim()) {
       toast({ title: "Category Name Required", variant: "destructive" });
-      setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, isEditingName: false } : cat)); 
+      // Revert to old name if edit state was prematurely cleared or new name is empty
+      const oldCategory = categories.find(c => c.id === categoryId);
+      setCategories(prev => prev.map(cat => cat.id === categoryId ? { ...cat, name: oldCategory?.name || 'Untitled', isEditingName: false } : cat)); 
       return;
     }
     setCategories(prev => prev.map(cat =>
@@ -254,7 +259,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
       delete newState[categoryId];
       return newState;
     });
-  }, [editingCategoryState]);
+  }, [editingCategoryState, categories]);
 
   const handleDeleteCategory = useCallback((categoryId: string) => {
     const categoryToDelete = categories.find(cat => cat.id === categoryId);
@@ -314,7 +319,8 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
   const handleCategoryColorChange = useCallback((categoryId: string, newColor: string) => {
     if (newColor !== '' && !isValidHexColor(newColor)) {
       toast({ title: "Invalid Color", description: "Please enter a valid hex color code (e.g. #RRGGBB).", variant: "destructive", duration:3000 });
-      if (categories.find(c => c.id === categoryId)?.color !== newColor) return;
+      // Do not update state if color is invalid and not empty
+      if (categories.find(c => c.id === categoryId)?.color !== newColor && newColor !== '') return;
     }
 
     setCategories(prevCategories => prevCategories.map(cat => {
@@ -325,17 +331,16 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
     }));
   }, [categories]);
 
+
   const articlesByCategoryId = (catId: string) => {
     return allArticles.filter(article => article.categoryId === catId);
   }
 
   const renderSettingsUI = () => (
-    <div className="p-3 border rounded-lg bg-muted/20 shadow-sm">
-        <CardHeader className="p-1 pb-3">
-            <CardTitle className="text-lg">News Feed Settings</CardTitle>
-        </CardHeader>
+    <div className="p-3 border rounded-lg bg-background/30 shadow-sm">
+        {/* CardHeader and CardTitle for settings already in page.tsx now */}
         <CardContent className="p-1 space-y-4">
-            <div className="p-3 bg-muted/30 rounded-md">
+            <Card className="p-3 bg-muted/30 rounded-md">
                 <Label htmlFor="new-category-name" className="text-xs font-medium">New Category Name</Label>
                 <div className="flex gap-2 mt-1">
                 <Input
@@ -350,7 +355,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
                     <FolderPlus size={16} className="mr-1.5" /> Add ({categories.length}/{MAX_CATEGORIES})
                 </Button>
                 </div>
-            </div>
+            </Card>
 
             {editingFeed && (
                 <Card className="p-3 my-3 bg-muted/40">
@@ -409,7 +414,8 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
                         </div>
                         ) : (
                         <h5 className="text-sm font-semibold text-card-foreground truncate flex-grow cursor-pointer hover:underline" onClick={() => handleToggleEditCategoryName(category.id)} title="Click to edit name">
-                            {category.name}
+                           <Newspaper className="mr-1.5 h-4 w-4 inline-block align-middle" style={{ color: isValidHexColor(category.color) ? category.color : 'hsl(var(--muted-foreground))' }}/>
+                           {category.name}
                         </h5>
                         )}
                         <div className="flex items-center gap-1 ml-2 flex-shrink-0">
@@ -508,7 +514,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
                     </Button>
                     </Card>
                 ))}
-                {categories.length === 0 && <p className="text-xs text-muted-foreground text-center py-3">No categories created yet. Add one above.</p>}
+                {categories.length === 0 && !isLoading && <p className="text-xs text-muted-foreground text-center py-3">No categories created yet. Add one above.</p>}
                 </div>
             </ScrollArea>
         </CardContent>
@@ -517,30 +523,34 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
 
   const renderWidgetDisplay = () => (
     <React.Fragment>
-      {isClientLoaded && isLoading && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
-          <div className="space-y-4">
-            {Array.from({length: Math.min(2, categories.filter(c => c.feeds.some(f=>f.url.trim())).length || 1)}).map((_, i) => (
-              <Card key={`skel-cat-${i}`} className="mb-6 shadow-md">
-                <CardHeader><Skeleton className="h-6 w-1/3 mb-1" /></CardHeader>
-                <CardContent className="px-4 py-0">
-                  <div className="py-2 border-b border-border last:border-b-0">
-                      <Skeleton className="h-5 w-3/4 mb-1.5" />
-                      <Skeleton className="h-3 w-1/2 mb-2" />
-                      <Skeleton className="h-4 w-full mb-1" />
-                      <Skeleton className="h-4 w-5/6" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-      )}
-      {isClientLoaded && error && <p className="text-sm text-destructive p-2 py-2 mx-4">Error loading articles: {error}</p>}
-      
-      {isClientLoaded && !isLoading && categories.length === 0 && displayMode === 'widgetOnly' && (
-          <p className="text-sm text-muted-foreground p-2 py-2 text-center">No news sources configured. Use settings to add categories and RSS feeds.</p>
-      )}
-      {isClientLoaded && !isLoading && !error && allArticles.length === 0 && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
-          <p className="text-sm text-muted-foreground p-2 py-2 text-center">No articles found from active feeds, or feeds might need updating/checking.</p>
+      {displayMode === 'widgetOnly' && (
+        <>
+          {isClientLoaded && isLoading && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
+              <div className="space-y-4">
+                {Array.from({length: Math.min(2, categories.filter(c => c.feeds.some(f=>f.url.trim())).length || 1)}).map((_, i) => (
+                  <Card key={`skel-cat-${i}`} className="mb-6 shadow-md">
+                    <CardHeader><Skeleton className="h-6 w-1/3 mb-1" /></CardHeader>
+                    <CardContent className="px-4 py-0">
+                      <div className="py-2 border-b border-border last:border-b-0">
+                          <Skeleton className="h-5 w-3/4 mb-1.5" />
+                          <Skeleton className="h-3 w-1/2 mb-2" />
+                          <Skeleton className="h-4 w-full mb-1" />
+                          <Skeleton className="h-4 w-5/6" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+          )}
+          {isClientLoaded && error && <p className="text-sm text-destructive p-2 py-2 mx-4">Error loading articles: {error}</p>}
+          
+          {isClientLoaded && !isLoading && categories.length === 0 && (
+              <p className="text-sm text-muted-foreground p-2 py-2 text-center">No news sources configured. Open settings to add categories and RSS feeds.</p>
+          )}
+          {isClientLoaded && !isLoading && !error && allArticles.length === 0 && categories.flatMap(c => c.feeds).filter(f => f.url.trim()).length > 0 && (
+              <p className="text-sm text-muted-foreground p-2 py-2 text-center">No articles found from active feeds, or feeds might need updating/checking.</p>
+          )}
+        </>
       )}
 
       {isClientLoaded && !isLoading && !error && (
@@ -559,7 +569,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
             >
               <CardHeader>
                 <CardTitle className="text-xl flex items-center">
-                   <Newspaper className="mr-2 h-5 w-5" style={{ color: categoryColor }}/>
+                   <Newspaper className="mr-2 h-5 w-5" style={{ color: isValidHexColor(category.color) ? category.color : 'hsl(var(--muted-foreground))' }}/>
                    <span>{category.name}</span>
                 </CardTitle>
               </CardHeader>
@@ -578,7 +588,7 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
                     </p>
                 )}
                 {categoryArticles.length > 0 && (
-                  <ScrollArea className="h-full max-h-[300px] pr-3 py-2"> {/* Use h-full and max-h */}
+                  <ScrollArea className="h-[300px] pr-3 py-2 overflow-y-auto"> {/* Fixed height */}
                     <ul className="space-y-4">
                       {categoryArticles.map((article) => (
                         <li key={article.id} className="pb-3 border-b border-border last:border-b-0">
@@ -625,16 +635,10 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
     </React.Fragment>
   );
 
-
-  if (displayMode === 'settingsOnly') {
-    return settingsOpen ? renderSettingsUI() : null;
-  }
-
-  // For widgetOnly mode (main dashboard display)
   if (!isClientLoaded && displayMode === 'widgetOnly') {
     return (
-      <>
-        {/* Header (title & settings button) is removed for widgetOnly in global settings setup */}
+      <div className="space-y-6">
+        {/* Header for the "Categorized News" (title & settings button) will be rendered by page.tsx */}
         {Array.from({length: 1 }).map((_, i) => (
           <Card key={`skel-cat-outer-${i}`} className="mb-6 shadow-md">
             <CardHeader><Skeleton className="h-6 w-1/3 mb-1" /></CardHeader>
@@ -648,10 +652,28 @@ export function NewsWidget({ settingsOpen, displayMode = 'widgetOnly' }: NewsWid
             </CardContent>
           </Card>
         ))}
-      </>
+      </div>
     );
   }
-  return renderWidgetDisplay();
+
+  if (displayMode === 'settingsOnly') {
+    return settingsOpen ? renderSettingsUI() : null;
+  }
+
+  // This is the main content for widgetOnly mode (on the dashboard)
+  // It now consists of a header div and then the category cards
+  if (displayMode === 'widgetOnly') {
+    return (
+        <React.Fragment>
+        {/* The settings management UI - only shown if global `settingsOpen` is true */}
+        {/* This is handled by page.tsx now where it renders this widget with displayMode="settingsOnly" */}
+
+        {/* The list of category cards */}
+        {renderWidgetDisplay()}
+        </React.Fragment>
+    );
+  }
+  return null; // Should not happen if displayMode is correctly widgetOnly or settingsOnly
 }
 
     
