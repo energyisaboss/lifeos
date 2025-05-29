@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -509,6 +510,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
   const renderSettingsContent = () => (
      <Card className="shadow-md">
         <CardHeader className="p-2 pt-2 pb-2">
+           {/* Title for settings can go here if needed, or remove CardHeader */}
         </CardHeader>
         <CardContent className="space-y-3 p-3">
           <div>
@@ -634,8 +636,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
   const renderWidgetDisplay = () => (
     <React.Fragment>
       {!isSignedIn ? (
-        <div className='w-full'> {/* Ensured this div wraps the button for standalone placement */}
-          <Card className="shadow-md">
+         <Card className="shadow-md">
             <CardContent className="flex flex-col items-center justify-center py-8 text-center">
                 <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
                 <Button onClick={() => login()} variant="default">
@@ -645,21 +646,16 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                 {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
             </CardContent>
           </Card>
-        </div>
       ) : error ? (
-         <div className='w-full'>
            <Card className="shadow-md">
               <CardContent>
                   <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
               </CardContent>
            </Card>
-         </div>
       ) : isLoadingLists && !taskLists.length ? (
-          <div className='w-full'>
             <Card className="shadow-md">
               <CardContent className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</CardContent>
             </Card>
-          </div>
       ) : taskLists.filter(list => listSettings[list.id]?.visible).length > 0 ? (
         <div className="space-y-4">
           {taskLists.filter(list => listSettings[list.id]?.visible).map(list => {
@@ -711,15 +707,20 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                               checked={task.status === 'completed'}
                               onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
                               aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
-                              className="task-list-checkbox"
-                              style={
-                                  finalColor && isValidHexColor(finalColor)
+                              className={cn(
+                                "task-list-checkbox",
+                                task.status === 'completed' && `!bg-[${finalColor}] !border-[${finalColor}] text-primary-foreground`
+                              )}
+                                style={
+                                  task.status === 'completed' && finalColor && isValidHexColor(finalColor)
                                   ? {
                                       '--task-checkbox-checked-bg': finalColor,
                                       '--task-checkbox-checked-border': finalColor,
                                       '--task-checkbox-unchecked-border': finalColor,
                                       } as React.CSSProperties
-                                  : {}
+                                  : {
+                                      '--task-checkbox-unchecked-border': finalColor,
+                                  } as React.CSSProperties
                               }
                             />
                             <label
@@ -740,7 +741,6 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
           )})}
         </div>
       ) : (
-         <div className='w-full'>
            <Card className="shadow-md">
              <CardContent>
                   <p className="text-sm text-muted-foreground text-center py-6">
@@ -751,7 +751,6 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
                   </p>
              </CardContent>
            </Card>
-         </div>
       )}
     </React.Fragment>
   );
@@ -814,7 +813,20 @@ export function TaskListWidget({
   // Widget Display Mode (widgetOnly)
   if (!isClient) {
     // Minimal skeleton for widgetOnly mode before client is loaded
-    return <Skeleton className="h-60 w-full rounded-lg shadow-md" />;
+    return (
+      <div className="w-full"> {/* Ensure wrapper for skeleton */}
+         <Card className="shadow-md">
+            <CardHeader className="py-3 px-4 border-b">
+              <Skeleton className="h-5 w-1/3" />
+            </CardHeader>
+            <CardContent className="pt-3 px-4 pb-3">
+              <Skeleton className="h-8 w-full mb-3" />
+              <Skeleton className="h-4 w-3/4 mb-2" />
+              <Skeleton className="h-4 w-1/2" />
+            </CardContent>
+          </Card>
+      </div>
+    );
   }
 
   if (providerError || !googleClientId) {
@@ -840,3 +852,4 @@ export function TaskListWidget({
     </GoogleOAuthProvider>
   );
 }
+
