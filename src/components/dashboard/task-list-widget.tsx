@@ -253,12 +253,11 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
       setListSettings(prevSettings => {
         const newSettings = {...prevSettings};
         let settingsChanged = false;
-        // Determine if any list is already visible by default
+        
         let defaultVisibleSet = Object.values(newSettings).some(s => s.visible);
 
         fetchedLists.forEach((list, index) => {
             if (!newSettings[list.id]) {
-                // Make the first fetched list visible by default if no other list is visible yet
                 newSettings[list.id] = {
                     visible: !defaultVisibleSet && index === 0, 
                     color: getNextColor()
@@ -321,7 +320,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
   }, [listSettings, accessToken, isGapiClientLoaded, taskLists, tasksByListId, isLoadingTasksForList, fetchAndSetTasksForList]);
 
 
-  const handleLoginSuccess = (tokenResponse: Omit<TokenResponse, 'error' | 'error_description' | 'error_uri'>) => {
+  const handleLoginSuccess = useCallback((tokenResponse: Omit<TokenResponse, 'error' | 'error_description' | 'error_uri'>) => {
     const newAccessToken = tokenResponse.access_token;
     setAccessToken(newAccessToken);
     setIsSignedIn(true);
@@ -330,7 +329,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
     if (isGapiClientLoaded) {
         fetchTaskLists(newAccessToken);
     }
-  };
+  }, [isGapiClientLoaded, fetchTaskLists]);
 
   const login = useGoogleLogin({
     onSuccess: handleLoginSuccess,
@@ -342,13 +341,6 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
     scope: GOOGLE_TASKS_SCOPE,
     flow: 'implicit',
   });
-
-  useEffect(() => {
-    // This effect ensures GAPI client is loaded early if user is already signed in.
-    if (isSignedIn && accessToken && !isGapiClientLoaded) {
-      loadGapiClient();
-    }
-  }, [isSignedIn, accessToken, isGapiClientLoaded, loadGapiClient]);
 
   const handleAddTask = async (listId: string) => {
     const title = newTaskTitles[listId]?.trim();
@@ -515,7 +507,6 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
     }
   };
 
-  const visibleListsToDisplay = taskLists.filter(list => listSettings[list.id]?.visible);
 
   const renderSettingsContent = () => (
      <Card className="shadow-md">
@@ -528,7 +519,7 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
             {isLoadingLists ? (
               <div className="flex items-center justify-center py-2"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading task lists...</div>
             ) : taskLists.length > 0 ? (
-              <ScrollArea className="max-h-48 pr-2">
+              <ScrollArea className="max-h-[300px] pr-2 overflow-y-auto">
                 <div className="space-y-3">
                 {taskLists.map((list) => (
                   <div key={list.id} className="p-2.5 rounded-md bg-muted/30 hover:bg-muted/50">
@@ -639,109 +630,125 @@ const TaskListContent: React.FC<TaskListContentProps> = ({ settingsOpen, display
 
   const renderWidgetDisplay = () => (
     <React.Fragment>
-      <div className="space-y-4">
-          {!isSignedIn ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-                <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
-                <Button onClick={() => login()} variant="default">
-                  <LogIn className="mr-2 h-4 w-4" />
-                  Sign In with Google
-                </Button>
-                {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
-            </div>
-          ) : error ? (
-            <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
-          ) : isLoadingLists && !taskLists.length ? (
-              <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</div>
-          ) : visibleListsToDisplay.length > 0 ? (
-          <>
-              {visibleListsToDisplay.map(list => {
-              const finalColor = (listSettings[list.id]?.color && isValidHexColor(listSettings[list.id].color)) ? listSettings[list.id].color : predefinedTaskColors[0];
-
-              return (
-              <Card
-                  key={list.id}
-                  className="shadow-md flex flex-col mb-4" 
-                  style={{ borderTop: `4px solid ${finalColor}` }}
-              >
-                  <CardHeader className="py-3 px-4 border-b">
-                  <CardTitle className="text-md">{list.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-3 px-4 pb-3 flex-grow flex flex-col overflow-hidden">
-                  <div className="flex gap-2 mb-3">
-                      <Input
-                      type="text"
-                      value={newTaskTitles[list.id] || ''}
-                      onChange={(e) => setNewTaskTitles(prev => ({...prev, [list.id]: e.target.value}))}
-                      placeholder="Add a task..."
-                      className="flex-grow h-9 text-sm"
-                      onKeyPress={(e) => e.key === 'Enter' && !isAddingTaskForList[list.id] && handleAddTask(list.id)}
-                      disabled={isAddingTaskForList[list.id]}
-                      />
-                      <Button
-                        onClick={() => handleAddTask(list.id)}
-                        disabled={!(newTaskTitles[list.id] || '').trim() || isAddingTaskForList[list.id]}
-                        size="sm"
-                        className="h-9"
-                        style={{
-                            backgroundColor: finalColor,
-                            color: 'hsl(var(--primary-foreground))'
-                        }}
-                      >
-                      {isAddingTaskForList[list.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
-                      </Button>
-                  </div>
-                  {isLoadingTasksForList[list.id] ? (
-                      <div className="flex items-center justify-center py-4"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading tasks...</div>
-                  ) : errorPerList[list.id] ? (
-                      <Alert variant="destructive" className="text-xs my-2"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{errorPerList[list.id]}</AlertDescription></Alert>
-                  ) : (tasksByListId[list.id] || []).length > 0 ? (
-                      <ScrollArea className="pr-1 flex-grow max-h-60">
-                      <ul className="space-y-1.5">
-                          {(tasksByListId[list.id] || []).map((task) => (
-                          <li key={task.id} className="flex items-center space-x-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors">
-                              <Checkbox
-                                id={`task-${list.id}-${task.id}`}
-                                checked={task.status === 'completed'}
-                                onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
-                                aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
-                                className="task-list-checkbox"
-                                style={
-                                    finalColor && isValidHexColor(finalColor)
-                                    ? {
-                                        '--task-checkbox-checked-bg': finalColor,
-                                        '--task-checkbox-checked-border': finalColor,
-                                        '--task-checkbox-unchecked-border': finalColor,
-                                        } as React.CSSProperties
-                                    : {}
-                                }
-                              />
-                              <label
-                              htmlFor={`task-${list.id}-${task.id}`}
-                              className={`flex-1 text-sm cursor-pointer ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-card-foreground'}`}
-                              >
-                              {task.title}
-                              </label>
-                          </li>
-                          ))}
-                      </ul>
-                      </ScrollArea>
-                  ) : (
-                      <p className="text-xs text-muted-foreground text-center py-3">No active tasks in this list.</p>
-                  )}
-                  </CardContent>
-              </Card>
-              )})}
-          </>
-          ) : (
-              !isLoadingLists && isSignedIn && taskLists.length > 0 && displayMode === 'widgetOnly' && (
-              <p className="text-sm text-muted-foreground text-center py-6">No task lists are currently visible. Open settings to select lists to display.</p>
-              )
-          )}
-          {!isLoadingLists && !taskLists.length && isSignedIn && !error && displayMode === 'widgetOnly' && (
-              <p className="text-sm text-muted-foreground text-center py-6">No Google Task lists found. Open settings to create one, or ensure you have at least one list in your Google Tasks account.</p>
-          )}
-      </div>
+      {/* Global header with title and settings button will be rendered by parent if in 'settingsOnly' mode, or not at all */}
+      {!isSignedIn ? (
+        <Card className="shadow-md">
+          <CardHeader>
+             <SectionTitle icon={ListChecks} title="Tasks" />
+          </CardHeader>
+          <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+              <p className="text-muted-foreground mb-4">Sign in to manage your Google Tasks.</p>
+              <Button onClick={() => login()} variant="default">
+                <LogIn className="mr-2 h-4 w-4" />
+                Sign In with Google
+              </Button>
+              {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
+          </CardContent>
+        </Card>
+      ) : error ? (
+         <Card className="shadow-md">
+            <CardHeader> <SectionTitle icon={ListChecks} title="Tasks" /></CardHeader>
+            <CardContent>
+                <Alert variant="destructive" className="mb-4 text-xs"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
+            </CardContent>
+         </Card>
+      ) : isLoadingLists && !taskLists.length ? (
+          <Card className="shadow-md">
+            <CardHeader> <SectionTitle icon={ListChecks} title="Tasks" /></CardHeader>
+            <CardContent className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your task lists...</CardContent>
+          </Card>
+      ) : taskLists.filter(list => listSettings[list.id]?.visible).length > 0 ? (
+        <div className="space-y-4">
+          {taskLists.filter(list => listSettings[list.id]?.visible).map(list => {
+            const finalColor = (listSettings[list.id]?.color && isValidHexColor(listSettings[list.id].color)) ? listSettings[list.id].color : predefinedTaskColors[0];
+            return (
+            <Card
+                key={list.id}
+                className="shadow-md flex flex-col" 
+                style={{ borderTop: `4px solid ${finalColor}` }}
+            >
+                <CardHeader className="py-3 px-4 border-b">
+                <CardTitle className="text-md">{list.title}</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-3 px-4 pb-3 flex-grow flex flex-col overflow-hidden">
+                <div className="flex gap-2 mb-3">
+                    <Input
+                    type="text"
+                    value={newTaskTitles[list.id] || ''}
+                    onChange={(e) => setNewTaskTitles(prev => ({...prev, [list.id]: e.target.value}))}
+                    placeholder="Add a task..."
+                    className="flex-grow h-9 text-sm"
+                    onKeyPress={(e) => e.key === 'Enter' && !isAddingTaskForList[list.id] && handleAddTask(list.id)}
+                    disabled={isAddingTaskForList[list.id]}
+                    />
+                    <Button
+                      onClick={() => handleAddTask(list.id)}
+                      disabled={!(newTaskTitles[list.id] || '').trim() || isAddingTaskForList[list.id]}
+                      size="sm"
+                      className="h-9"
+                      style={{
+                          backgroundColor: finalColor,
+                          color: 'hsl(var(--primary-foreground))'
+                      }}
+                    >
+                    {isAddingTaskForList[list.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+                    </Button>
+                </div>
+                {isLoadingTasksForList[list.id] ? (
+                    <div className="flex items-center justify-center py-4"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading tasks...</div>
+                ) : errorPerList[list.id] ? (
+                    <Alert variant="destructive" className="text-xs my-2"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{errorPerList[list.id]}</AlertDescription></Alert>
+                ) : (tasksByListId[list.id] || []).length > 0 ? (
+                    <ScrollArea className="pr-1 flex-grow max-h-60">
+                    <ul className="space-y-1.5">
+                        {(tasksByListId[list.id] || []).map((task) => (
+                        <li key={task.id} className="flex items-center space-x-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors">
+                            <Checkbox
+                              id={`task-${list.id}-${task.id}`}
+                              checked={task.status === 'completed'}
+                              onCheckedChange={() => handleToggleTaskCompletion(task, list.id)}
+                              aria-label={`Mark task ${task.title} as ${task.status === 'completed' ? 'incomplete' : 'complete'}`}
+                              className="task-list-checkbox"
+                              style={
+                                  finalColor && isValidHexColor(finalColor)
+                                  ? {
+                                      '--task-checkbox-checked-bg': finalColor,
+                                      '--task-checkbox-checked-border': finalColor,
+                                      '--task-checkbox-unchecked-border': finalColor,
+                                      } as React.CSSProperties
+                                  : {}
+                              }
+                            />
+                            <label
+                            htmlFor={`task-${list.id}-${task.id}`}
+                            className={`flex-1 text-sm cursor-pointer ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-card-foreground'}`}
+                            >
+                            {task.title}
+                            </label>
+                        </li>
+                        ))}
+                    </ul>
+                    </ScrollArea>
+                ) : (
+                    <p className="text-xs text-muted-foreground text-center py-3">No active tasks in this list.</p>
+                )}
+                </CardContent>
+            </Card>
+          )})}
+        </div>
+      ) : (
+        <Card className="shadow-md">
+           <CardHeader> <SectionTitle icon={ListChecks} title="Tasks" /></CardHeader>
+           <CardContent>
+                <p className="text-sm text-muted-foreground text-center py-6">
+                { !isSignedIn ? "Sign in to see your tasks." : 
+                  taskLists.length > 0 ? "No task lists are currently visible. Open settings to select lists to display." :
+                  "No Google Task lists found. Open settings to create one, or check your Google Tasks account."
+                }
+                </p>
+           </CardContent>
+        </Card>
+      )}
     </React.Fragment>
   );
 
@@ -774,38 +781,53 @@ export function TaskListWidget({
     }
   }, []);
 
-  if (!isClient && displayMode === 'widgetOnly') {
+  if (displayMode === 'settingsOnly') {
+     if (!isClient) {
+        return <Card><CardContent className="p-4"><Skeleton className="h-40 w-full" /></CardContent></Card>;
+     }
+     if (providerError || !googleClientId) {
+        return (
+          <Card>
+            <CardContent className='p-4'>
+              <Alert variant="destructive" className="mt-4 mx-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Configuration Error</AlertTitle>
+                <AlertDescription>
+                  {providerError || "Google Client ID is not available. Please configure it."}
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+        );
+    }
     return (
-      <Card className="flex flex-col">
-        <CardHeader>
-          {/* No title for widgetOnly mode */}
-          <Skeleton className="h-5 w-1/3" />
-        </CardHeader>
-        <CardContent className="flex-1">
-          <Skeleton className="h-20 w-full" />
-        </CardContent>
-      </Card>
+      <GoogleOAuthProvider clientId={googleClientId!}>
+        <TaskListContent settingsOpen={settingsOpen} displayMode={displayMode} />
+      </GoogleOAuthProvider>
     );
   }
 
-  if ((providerError || !googleClientId)) {
-     const content = (
-      <Alert variant="destructive" className="mt-4 mx-4">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Configuration Error</AlertTitle>
-        <AlertDescription>
-          {providerError || "Google Client ID is not available. Please configure it."}
-        </AlertDescription>
-      </Alert>
-    );
-    if (displayMode === 'settingsOnly') {
-        return settingsOpen ? <Card><CardContent className='p-4'>{content}</CardContent></Card> : null;
-    }
+  // Widget Display Mode (widgetOnly)
+  if (!isClient) {
+    // Minimal skeleton for widgetOnly mode before client is loaded
+    return <Skeleton className="h-60 w-full rounded-lg shadow-md" />;
+  }
+
+  if (providerError || !googleClientId) {
+    // Show error directly if in widgetOnly mode and config is missing
     return (
-      <div className="flex flex-col">
-        {/* No title for widgetOnly mode */}
-        {content}
-      </div>
+      <Card className="shadow-md">
+         <CardHeader> <SectionTitle icon={ListChecks} title="Tasks" /></CardHeader>
+         <CardContent>
+            <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Configuration Error</AlertTitle>
+                <AlertDescription>
+                {providerError || "Google Client ID is not available. Please configure it."}
+                </AlertDescription>
+            </Alert>
+         </CardContent>
+      </Card>
     );
   }
   
@@ -815,6 +837,3 @@ export function TaskListWidget({
     </GoogleOAuthProvider>
   );
 }
-
-
-    
