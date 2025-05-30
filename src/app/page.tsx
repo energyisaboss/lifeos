@@ -9,7 +9,7 @@ import { EnvironmentalWidget } from '@/components/dashboard/environmental-widget
 import { AssetTrackerWidget } from '@/components/dashboard/asset-tracker-widget';
 import { TaskListWidget } from '@/components/dashboard/task-list-widget';
 import { Separator } from '@/components/ui/separator';
-import { LifeBuoy, Settings as SettingsIcon, X, Palette as PaletteIcon, PlusCircle, Trash2, Edit3, LinkIcon, Check, XCircle } from 'lucide-react';
+import { LifeBuoy, Settings as SettingsIcon, X, Palette as PaletteIcon, PlusCircle, Trash2, Edit3, LinkIcon, Check, XCircle, Palette } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { AccentColorSwitcher } from '@/components/theme/accent-color-switcher';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
