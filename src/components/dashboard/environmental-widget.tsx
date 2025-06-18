@@ -67,15 +67,15 @@ export function EnvironmentalWidget() {
         },
         (err) => {
           console.error("Error getting geolocation:", err);
-          setLocationError("Could not get your location. Please enable location services. Showing data for a default location (San Francisco).");
-          setLatitude(37.7749); // Default to San Francisco
-          setLongitude(-122.4194); // Default to San Francisco
+          setLocationError("Could not get your location. Please enable location services. Showing data for a default location (Orlando).");
+          setLatitude(28.5384); // Default to Orlando
+          setLongitude(-81.3789); // Default to Orlando
         }
       );
     } else {
-      setLocationError("Geolocation is not supported by your browser. Showing data for a default location (San Francisco).");
-      setLatitude(37.7749); // Default to San Francisco
-      setLongitude(-122.4194); // Default to San Francisco
+      setLocationError("Geolocation is not supported by your browser. Showing data for a default location (Orlando).");
+      setLatitude(28.5384); // Default to Orlando
+      setLongitude(-81.3789); // Default to Orlando
     }
   }, []);
 

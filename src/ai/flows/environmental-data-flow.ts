@@ -10,6 +10,8 @@
  * - EnvironmentalDataOutput - Output schema based on src/lib/types.ts.
  */
 
+const DEFAULT_WEATHER_LOCATION = "Orlando, FL";
+
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import type { EnvironmentalData as AppEnvironmentalData } from '@/lib/types';
