@@ -319,9 +319,9 @@ export function EnvironmentalWidget() {
          <div className="flex flex-col items-center">
             <h4 className="text-sm font-medium text-muted-foreground mb-2 text-center">Weekly Weather</h4>
             {data.weeklyWeather && data.weeklyWeather.length > 0 ? (
-                <div className="flex flex-wrap justify-center gap-2 text-center">
+ <div className="flex flex-nowrap justify-center gap-2 text-center w-full">
                 {data.weeklyWeather.map((dayWeather) => (
-                    <div key={dayWeather.day} className="w-16 p-2 rounded-md bg-muted/30 flex flex-col items-center justify-between min-h-[90px] text-center">
+ <div key={dayWeather.day} className="flex-1 min-w-0 p-2 rounded-md bg-muted/30 flex flex-col items-center justify-between min-h-[90px] text-center text-xs">
                     <p className="text-xs font-medium text-card-foreground">{dayWeather.day}</p>
                     <IconComponent name={dayWeather.iconName || "Cloud"} className="my-1 text-2xl text-primary" />
                     <p className="text-xs text-card-foreground">{dayWeather.tempHigh}°F / {dayWeather.tempLow}°F</p>
