@@ -268,36 +268,12 @@ export function EnvironmentalWidget() {
       <CardHeader>
         <SectionTitle icon={Cloud} title="Environment" />
          {locationError && !error && (
-            <p className="text-xs text-amber-600 dark:text-amber-500 mt-1 flex items-center">
-                <MapPinOff size={14} className="mr-1.5 flex-shrink-0" /> {locationError}
-            </p>
-        )}
+ <p className="text-xs text-amber-600 dark:text-amber-500 mt-1 flex items-center">
+ <MapPinOff size={14} className="mr-1.5 flex-shrink-0" /> {locationError}
+ </p>
+ )}
       </CardHeader>
       <CardContent className="space-y-6">
-        
-        {currentWeather && (
-          <div className="p-4 rounded-md bg-muted/30 shadow-md">
-            <div className="flex flex-col sm:flex-row items-center justify-between mb-2">
-              <div className="flex items-center mb-2 sm:mb-0">
-                <IconComponent name={currentWeather.iconName || "Cloud"} className="w-12 h-12 mr-3 text-primary" />
-                <span className="text-5xl font-semibold">{currentWeather.temp}°F</span>
-              </div>
-              <div className="flex flex-col items-center sm:items-end">
-                <span className="text-lg text-card-foreground capitalize text-center sm:text-right">{currentWeather.description}</span>
-                {data.locationName && <span className="text-xs text-muted-foreground">in {data.locationName}</span>}
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row items-center justify-around text-sm text-muted-foreground space-y-1 sm:space-y-0 sm:space-x-4 mt-3 pt-3 border-t border-border/50">
-              <div className="flex items-center">
-                <LucideIcons.Droplets className="w-4 h-4 mr-1.5" /> Humidity: {currentWeather.humidity}%
-              </div>
-              <div className="flex items-center">
-                <LucideIcons.Wind className="w-4 h-4 mr-1.5" /> Wind: {currentWeather.windSpeed} mph
-              </div>
-            </div>
-          </div>
-        )}
-
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {moonPhase ? (
              <div className="p-3 rounded-md bg-muted/30 min-h-[80px] flex flex-col items-center justify-center text-center">
