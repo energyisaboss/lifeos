@@ -15,6 +15,7 @@ import { AccentColorSwitcher } from '@/components/theme/accent-color-switcher';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SortableContext, sortableKeyboardCoordinates, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable';
 import { Label } from '@/components/ui/label';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { SortableWidgetItem } from '@/components/dashboard/sortable-widget-item';
 import { Switch } from '@/components/ui/switch';
 import type { IcalFeedItem } from '@/lib/types';
@@ -385,74 +386,68 @@ export default function LifeOSPage() {
               </div>
             </div>
             <Separator/>
-            
-            {/* Calendar Feeds Management Section */}
-            <div className="p-3 border rounded-lg bg-muted/20 shadow-sm">
-                <CardTitle className="text-lg mb-3">Manage Calendar Feeds</CardTitle>
-                <Card className="p-3 bg-muted/30 rounded-md mb-4">
-                    <Label htmlFor="new-ical-label" className="text-xs font-medium">New Feed Label (Optional)</Label>
-                    <Input id="new-ical-label" type="text" placeholder="e.g., Work Calendar" value={newIcalLabel} onChange={(e) => setNewIcalLabel(e.target.value)} className="h-9 text-sm mt-1" />
-                    <Label htmlFor="new-ical-url" className="text-xs font-medium mt-2 block">iCal Feed URL*</Label>
-                    <Input id="new-ical-url" type="url" placeholder="https://example.com/feed.ics" value={newIcalUrl} onChange={(e) => setNewIcalUrl(e.target.value)} className="h-9 text-sm mt-1" required />
-                    <Button size="sm" onClick={handleAddNewIcalFeed} disabled={icalFeeds.length >= MAX_ICAL_FEEDS_PAGE || !newIcalUrl.trim()} className="w-full mt-3">
-                        <PlusCircle className="w-4 h-4 mr-2" /> Add Feed ({icalFeeds.length}/{MAX_ICAL_FEEDS_PAGE})
-                    </Button>
-                </Card>
+            <Separator/>
 
-                {isClient && icalFeeds.length > 0 && (
-                <div className="mt-3">
-                    <h4 className="text-sm font-medium text-muted-foreground mb-2">Active Calendar Feeds</h4>
-                    <ScrollArea className="h-[240px] pr-1 custom-styled-scroll-area overflow-y-auto">
-                    <div className="space-y-3">
-                        {icalFeeds.map((feed) => (
-                        <Card key={feed.id} className="p-2.5 shadow-sm border bg-background">
-                            {editingIcalFeed && editingIcalFeed.id === feed.id ? (
-                            <div className="space-y-2">
-                                <div><Label htmlFor={`edit-label-${feed.id}`} className="text-xs">Label</Label><Input id={`edit-label-${feed.id}`} value={currentIcalEditData.label} onChange={(e) => setCurrentIcalEditData(prev => ({...prev, label: e.target.value}))} placeholder="Feed Label" className="h-8 text-sm mt-0.5" /></div>
-                                <div><Label htmlFor={`edit-url-${feed.id}`} className="text-xs">URL</Label><Input id={`edit-url-${feed.id}`} type="url" value={currentIcalEditData.url} onChange={(e) => setCurrentIcalEditData(prev => ({...prev, url: e.target.value}))} placeholder="iCal Feed URL" className="h-8 text-sm mt-0.5" /></div>
-                                <div>
-                                <Label className="text-xs flex items-center mb-1.5 mt-1.5"><Palette size={14} className="mr-1.5 text-muted-foreground" /> Color</Label>
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                    {predefinedCalendarColors.map(colorOption => (
-                                    <button key={`edit-${feed.id}-${colorOption.value}`} type="button" title={colorOption.name}
-                                        className={cn("w-5 h-5 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1", currentIcalEditData.color === colorOption.value ? "border-foreground" : "border-transparent hover:border-muted-foreground/50")}
-                                        style={{ backgroundColor: colorOption.value }} onClick={() => handleIcalFeedColorChange(feed.id, colorOption.value)} />
-                                    ))}
-                                    <Input type="text" placeholder="#HEX" value={currentIcalEditData.color} onChange={(e) => handleIcalFeedColorChange(feed.id, e.target.value)}
-                                        className={cn("h-7 w-20 text-xs", currentIcalEditData.color && !isValidHexColor(currentIcalEditData.color) && currentIcalEditData.color !== '' ? "border-destructive focus-visible:ring-destructive" : "")} maxLength={7} />
-                                </div>
-                                </div>
-                                <div className="mt-3 flex items-center justify-start gap-1">
-                                <Button variant="default" size="sm" className="h-7 px-2 py-1 text-xs" onClick={handleSaveIcalFeedChanges} disabled={(currentIcalEditData.color !== '' && !isValidHexColor(currentIcalEditData.color)) || !currentIcalEditData.url.trim()}><Check className="w-3.5 h-3.5 mr-1" /> Save</Button>
-                                <Button variant="outline" size="sm" className="h-7 px-2 py-1 text-xs" onClick={handleCancelEditIcalFeed}><XCircle className="w-3.5 h-3.5 mr-1" /> Cancel</Button>
-                                </div>
-                            </div>
-                            ) : (
-                            <div className="flex flex-col">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium text-card-foreground truncate pr-2" title={feed.label} style={{color: isValidHexColor(feed.color) ? feed.color: 'inherit'}}>{feed.label}</span>
-                                    <div className="flex-shrink-0">
-                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEditIcalFeed(feed)}><Edit3 className="w-3.5 h-3.5" /></Button>
-                                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive h-7 w-7" onClick={() => handleRemoveIcalFeed(feed.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                                    </div>
-                                </div>
-                                <span className="text-xs text-muted-foreground truncate mt-0.5" title={feed.url}><LinkIcon size={12} className="inline mr-1" />{feed.url}</span>
-                            </div>
-                            )}
-                        </Card>
-                        ))}
-                    </div>
-                    </ScrollArea>
-                </div>
-                )}
-                 {isClient && icalFeeds.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">No calendar feeds added yet.</p>}
-            </div>
+            {/* Accordion for Module Settings */}
+            <Accordion type="multiple" className="w-full space-y-4">
+              {/* Calendar Feeds Management Accordion Item */}
+              <AccordionItem value="calendar-feeds-settings">
+                <AccordionTrigger className="text-lg font-semibold hover:no-underline">Calendar Feeds Settings</AccordionTrigger>
+                <AccordionContent className="p-3 border rounded-lg bg-muted/20 shadow-sm">
+                  {/* Content from the original Calendar Feeds Management Section */}
+                  <CardTitle className="text-lg mb-3">Manage Calendar Feeds</CardTitle>
+                  <Card className="p-3 bg-muted/30 rounded-md mb-4">
+                      <Label htmlFor="new-ical-label" className="text-xs font-medium">New Feed Label (Optional)</Label>
+                      <Input id="new-ical-label" type="text" placeholder="e.g., Work Calendar" value={newIcalLabel} onChange={(e) => setNewIcalLabel(e.target.value)} className="h-9 text-sm mt-1" />
+                      <Label htmlFor="new-ical-url" className="text-xs font-medium mt-2 block">iCal Feed URL*</Label>
+                      <Input id="new-ical-url" type="url" placeholder="https://example.com/feed.ics" value={newIcalUrl} onChange={(e) => setNewIcalUrl(e.target.value)} className="h-9 text-sm mt-1" required />
+                      <Button size="sm" onClick={handleAddNewIcalFeed} disabled={icalFeeds.length >= MAX_ICAL_FEEDS_PAGE || !newIcalUrl.trim()} className="w-full mt-3">
+                          <PlusCircle className="w-4 h-4 mr-2" /> Add Feed ({icalFeeds.length}/{MAX_ICAL_FEEDS_PAGE})
+                      </Button>
+                  </Card>
+                  {isClient && icalFeeds.length > 0 && (
+                  <div className="mt-3">
+                      <h4 className="text-sm font-medium text-muted-foreground mb-2">Active Calendar Feeds</h4>
+                      <ScrollArea className="h-[240px] pr-1 custom-styled-scroll-area overflow-y-auto">
+                        {/* Existing map of icalFeeds */}
+                          <div className="space-y-3">
+                              {icalFeeds.map((feed) => (
+                              <Card key={feed.id} className="p-2.5 shadow-sm border bg-background">
+                                  {/* Content for editing/displaying feed */}
+                                  {editingIcalFeed && editingIcalFeed.id === feed.id ? (<div className="space-y-2"><div><Label htmlFor={`edit-label-${feed.id}`} className="text-xs">Label</Label><Input id={`edit-label-${feed.id}`} value={currentIcalEditData.label} onChange={(e) => setCurrentIcalEditData(prev => ({...prev, label: e.target.value}))} placeholder="Feed Label" className="h-8 text-sm mt-0.5" /></div><div><Label htmlFor={`edit-url-${feed.id}`} className="text-xs">URL</Label><Input id={`edit-url-${feed.id}`} type="url" value={currentIcalEditData.url} onChange={(e) => setCurrentIcalEditData(prev => ({...prev, url: e.target.value}))} placeholder="iCal Feed URL" className="h-8 text-sm mt-0.5" /></div><div><Label className="text-xs flex items-center mb-1.5 mt-1.5"><Palette size={14} className="mr-1.5 text-muted-foreground" /> Color</Label><div className="flex flex-wrap items-center gap-1.5">{predefinedCalendarColors.map(colorOption => (<button key={`edit-${feed.id}-${colorOption.value}`} type="button" title={colorOption.name} className={cn("w-5 h-5 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1", currentIcalEditData.color === colorOption.value ? "border-foreground" : "border-transparent hover:border-muted-foreground/50")} style={{ backgroundColor: colorOption.value }} onClick={() => handleIcalFeedColorChange(feed.id, colorOption.value)} />))}<Input type="text" placeholder="#HEX" value={currentIcalEditData.color} onChange={(e) => handleIcalFeedColorChange(feed.id, e.target.value)} className={cn("h-7 w-20 text-xs", currentIcalEditData.color && !isValidHexColor(currentIcalEditData.color) && currentIcalEditData.color !== '' ? "border-destructive focus-visible:ring-destructive" : "")} maxLength={7} /></div></div><div className="mt-3 flex items-center justify-start gap-1"><Button variant="default" size="sm" className="h-7 px-2 py-1 text-xs" onClick={handleSaveIcalFeedChanges} disabled={(currentIcalEditData.color !== '' && !isValidHexColor(currentIcalEditData.color)) || !currentIcalEditData.url.trim()}><Check className="w-3.5 h-3.5 mr-1" /> Save</Button><Button variant="outline" size="sm" className="h-7 px-2 py-1 text-xs" onClick={handleCancelEditIcalFeed}><XCircle className="w-3.5 h-3.5 mr-1" /> Cancel</Button></div></div>) : (<div className="flex flex-col"><div className="flex items-center justify-between"><span className="text-sm font-medium text-card-foreground truncate pr-2" title={feed.label} style={{color: isValidHexColor(feed.color) ? feed.color: 'inherit'}}>{feed.label}</span><div className="flex-shrink-0"><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleStartEditIcalFeed(feed)}><Edit3 className="w-3.5 h-3.5" /></Button><Button variant="ghost" size="icon" className="text-destructive hover:text-destructive h-7 w-7" onClick={() => handleRemoveIcalFeed(feed.id)}><Trash2 className="w-3.5 h-3.5" /></Button></div></div><span className="text-xs text-muted-foreground truncate mt-0.5" title={feed.url}><LinkIcon size={12} className="inline mr-1" />{feed.url}</span></div>)}
+                              </Card>
+                              ))}
+                          </div>
+                      </ScrollArea>
+                  </div>
+                  )}
+                  {isClient && icalFeeds.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">No calendar feeds added yet.</p>}
+                </AccordionContent>
+              </AccordionItem>
 
+              {/* Existing Settings sections for other widgets */}
+              <AccordionItem value="news-settings">
+                <AccordionTrigger className="text-lg font-semibold hover:no-underline">News Settings</AccordionTrigger>
+                <AccordionContent>
+                  <NewsWidget settingsOpen={true} displayMode="settingsOnly" />
+                </AccordionContent>
+              </AccordionItem>
 
+              <AccordionItem value="asset-tracker-settings">
+                <AccordionTrigger className="text-lg font-semibold hover:no-underline">Asset Tracker Settings</AccordionTrigger>
+                <AccordionContent>
+                  <AssetTrackerWidget settingsOpen={true} displayMode="settingsOnly" />
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="task-list-settings">
+                <AccordionTrigger className="text-lg font-semibold hover:no-underline">Tasks Settings</AccordionTrigger>
+                <AccordionContent>
+                  <TaskListWidget settingsOpen={true} displayMode="settingsOnly" />
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
             {/* Existing Settings sections for other widgets */}
-            <NewsWidget settingsOpen={true} displayMode="settingsOnly" />
-            <AssetTrackerWidget settingsOpen={true} displayMode="settingsOnly" />
-            <TaskListWidget settingsOpen={true} displayMode="settingsOnly" />
           </CardContent>
         </Card>
       )}
