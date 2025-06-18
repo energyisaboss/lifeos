@@ -91,7 +91,7 @@ export function EnvironmentalWidget() {
       const result = await getEnvironmentalData({ latitude: lat, longitude: lon });
       setData(result);
       if (locationError && result.locationName && !result.locationName.toLowerCase().includes("san francisco")) {
-        setLocationError(`Could not get your location. Showing data for ${result.locationName}. Please enable location services for local data.`);
+        setLocationError(`Error Please enable location. Showing data for ${result.locationName}.`);
       } else if (locationError && result.locationName && result.locationName.toLowerCase().includes("san francisco")) {
          // Keep existing locationError about default location if it's SF
       } else if (!locationError) {
