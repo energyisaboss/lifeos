@@ -83,6 +83,9 @@ export default function LifeOSPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [tiingoApiKey, setTiingoApiKey] = useState('');
+  const [openweatherApiKey, setOpenweatherApiKey] = useState('');
+  const [weatherapiComKey, setWeatherapiComKey] = useState('');
+  const [openuvApiKey, setOpenuvApiKey] = useState('');
 
   // State for iCal feeds, managed at page level
   const [icalFeeds, setIcalFeeds] = useState<IcalFeedItem[]>([]);
@@ -129,6 +132,27 @@ export default function LifeOSPage() {
     }
   }, [isClient]);
 
+  // Load all Environmental API keys from localStorage
+  useEffect(() => {
+    if (isClient) {
+      const savedOpenweatherApiKey = localStorage.getItem('openweather_api_key');
+      if (savedOpenweatherApiKey) setOpenweatherApiKey(savedOpenweatherApiKey);
+
+      const savedWeatherapiComKey = localStorage.getItem('weatherapi_com_key');
+      if (savedWeatherapiComKey) setWeatherapiComKey(savedWeatherapiComKey);
+
+      const savedOpenuvApiKey = localStorage.getItem('openuv_api_key');
+      if (savedOpenuvApiKey) setOpenuvApiKey(savedOpenuvApiKey);
+    }
+  }, [isClient]);
+
+  // Save Tiingo API key to localStorage (kept separate as it's not environmental)
+  useEffect(() => {
+    if (isClient) {
+      localStorage.setItem('tiingo_api_key', tiingoApiKey.trim());
+    }
+  }, [tiingoApiKey, isClient]);
+
   // Load Tiingo API key from localStorage
   useEffect(() => {
     if (isClient) {
@@ -136,8 +160,6 @@ export default function LifeOSPage() {
       if (savedApiKey) setTiingoApiKey(savedApiKey);
     }
   }, [isClient]);
-
-  // Save iCal feeds to localStorage
   useEffect(() => {
     if (isClient && icalFeeds.length > 0) { // Save even if empty to clear old data potentially
       localStorage.setItem(ICAL_FEEDS_STORAGE_KEY_PAGE, JSON.stringify(icalFeeds));
@@ -199,9 +221,28 @@ export default function LifeOSPage() {
     }
   }, [widgetVisibility, isClient]);
 
-  const handleSaveApiKey = () => {
+  const handleSaveOpenweatherApiKey = () => {
     if (isClient) {
-      localStorage.setItem('tiingo_api_key', tiingoApiKey.trim());
+      localStorage.setItem('openweather_api_key', openweatherApiKey.trim());
+      toast({ title: "OpenWeather API Key Saved", description: "Your OpenWeather API key has been saved to local storage." });
+    } else {
+      toast({ title: "Client Not Ready", description: "Please wait for the page to load before saving.", variant: "destructive" });
+    }
+  };
+
+  const handleSaveWeatherapiComKey = () => {
+    if (isClient) {
+      localStorage.setItem('weatherapi_com_key', weatherapiComKey.trim());
+       toast({ title: "WeatherAPI.com API Key Saved", description: "Your WeatherAPI.com key has been saved to local storage." });
+    } else {
+       toast({ title: "Client Not Ready", description: "Please wait for the page to load before saving.", variant: "destructive" });
+    }
+  };
+
+  const handleSaveOpenuvApiKey = () => {
+    if (isClient) {
+      localStorage.setItem('openuv_api_key', openuvApiKey.trim());
+       toast({ title: "OpenUV API Key Saved", description: "Your OpenUV API key has been saved to local storage." });
     }
   };
 
@@ -403,8 +444,120 @@ export default function LifeOSPage() {
             <Separator/>
 
             {/* Accordion for Module Settings */}
+            {/* Add new AccordionItems for API keys here */}
             <Accordion type="multiple" className="w-full space-y-4">
               {/* Calendar Feeds Management Accordion Item */}
+              {/* Environmental API Key Settings Accordion Item */}
+              <AccordionItem value="environmental-api-key-settings">
+                <AccordionTrigger className="text-lg font-semibold hover:no-underline">Environmental API Key Settings</AccordionTrigger>
+                <AccordionContent className="p-3 border rounded-lg bg-muted/20 shadow-sm">
+                  {/* OpenWeather */}
+                  <div className="mb-6">
+                    <CardTitle className="text-lg mb-3">OpenWeather API Key</CardTitle>
+                    <div className="space-y-1">
+                      <Label htmlFor="openweather-api-key">API Key:</Label>
+                      <Input
+                        id="openweather-api-key"
+                        type="text"
+                        placeholder="Enter your OpenWeather API Key"
+                        value={openweatherApiKey}
+                        onChange={(e) => setOpenweatherApiKey(e.target.value)}
+                        className="text-sm mt-1"
+                      />
+                    </div>
+                    <Button onClick={handleSaveOpenweatherApiKey} size="sm" className="w-full mt-3">
+                      Save API Key
+                    </Button>
+                  </div>
+
+                  <Separator className="my-6" />
+
+                  {/* WeatherAPI.com */}
+                  <div className="mb-6">
+                    <CardTitle className="text-lg mb-3">WeatherAPI.com API Key</CardTitle>
+                    <div className="space-y-1">
+                      <Label htmlFor="weatherapi-com-key">API Key:</Label>
+                      <Input
+                        id="weatherapi-com-key"
+                        type="text"
+                        placeholder="Enter your WeatherAPI.com Key"
+                        value={weatherapiComKey}
+                        onChange={(e) => setWeatherapiComKey(e.target.value)}
+                        className="text-sm mt-1"
+                      />
+                    </div>
+                    <Button onClick={handleSaveWeatherapiComKey} size="sm" className="w-full mt-3">
+                      Save API Key
+                    </Button>
+                  </div>
+
+                   <Separator className="my-6" />
+
+                  {/* OpenUV */}
+                  <div>
+                    <CardTitle className="text-lg mb-3">OpenUV API Key</CardTitle>
+                    <div className="space-y-1">
+                      <Label htmlFor="openuv-api-key">API Key:</Label>
+                      <Input
+                        id="openuv-api-key"
+                        type="text"
+                        placeholder="Enter your OpenUV API Key"
+                        value={openuvApiKey}
+                        onChange={(e) => setOpenuvApiKey(e.target.value)}
+                        className="text-sm mt-1"
+                      />
+                    </div>
+                    <Button onClick={handleSaveOpenuvApiKey} size="sm" className="w-full mt-3">
+                      Save API Key
+                    </Button>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+               {/* Tiingo API Key Settings Accordion Item (Moved from individual for Asset Tracker) */}
+               <AccordionItem value="tiingo-api-key-settings">
+                <AccordionTrigger className="text-lg font-semibold hover:no-underline">Tiingo API Key Settings</AccordionTrigger>
+                <AccordionContent className="p-3 border rounded-lg bg-muted/20 shadow-sm">
+                   <CardTitle className="text-lg mb-3">Tiingo API Key</CardTitle>
+                   <div className="space-y-1">
+                      <Label htmlFor="tiingo-api-key">API Key:</Label>
+                      <Input
+                        id="tiingo-api-key"
+                        type="text"
+                        placeholder="Enter your Tiingo API Key"
+                        value={tiingoApiKey}
+                        onChange={(e) => setTiingoApiKey(e.target.value)}
+                        className="text-sm mt-1"
+                      />
+                    </div>
+                    <Button onClick={() => localStorage.setItem('tiingo_api_key', tiingoApiKey.trim())} size="sm" className="w-full mt-3">
+                      Save API Key
+                    </Button>
+                </AccordionContent>
+              </AccordionItem>
+
+
+              <AccordionItem value="openuv-api-key-settings">
+                <AccordionTrigger className="text-lg font-semibold hover:no-underline">OpenUV API Key Settings</AccordionTrigger>
+                <AccordionContent className="p-3 border rounded-lg bg-muted/20 shadow-sm">
+                   <CardTitle className="text-lg mb-3">OpenUV API Key</CardTitle>
+                   <div className="space-y-1">
+                      <Label htmlFor="openuv-api-key">API Key:</Label>
+                      <Input
+                        id="openuv-api-key"
+                        type="text"
+                        placeholder="Enter your OpenUV API Key"
+                        value={openuvApiKey}
+                        onChange={(e) => setOpenuvApiKey(e.target.value)}
+                        className="text-sm mt-1"
+                      />
+                    </div>
+                    <Button onClick={handleSaveOpenuvApiKey} size="sm" className="w-full mt-3">
+                      Save API Key
+                    </Button>
+                </AccordionContent>
+              </AccordionItem>
+
               <AccordionItem value="calendar-feeds-settings">
                 <AccordionTrigger className="text-lg font-semibold hover:no-underline">Calendar Feeds Settings</AccordionTrigger>
                 <AccordionContent className="p-3 border rounded-lg bg-muted/20 shadow-sm">
@@ -461,7 +614,6 @@ export default function LifeOSPage() {
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
-            {/* Existing Settings sections for other widgets */}
           </CardContent>
         </Card>
       )}

@@ -88,7 +88,18 @@ export function EnvironmentalWidget() {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await getEnvironmentalData({ latitude: lat, longitude: lon });
+      // Retrieve API keys from local storage
+      const openWeatherApiKey = typeof window !== 'undefined' ? localStorage.getItem('openweather_api_key') : null;
+      const weatherApiComKey = typeof window !== 'undefined' ? localStorage.getItem('weatherapi_com_key') : null;
+      const openUvApiKey = typeof window !== 'undefined' ? localStorage.getItem('openuv_api_key') : null;
+
+      const result = await getEnvironmentalData({
+        latitude: lat,
+        longitude: lon,
+        openWeatherApiKey: openWeatherApiKey || undefined, // Pass key if found, otherwise undefined
+        weatherApiComKey: weatherApiComKey || undefined,
+        openUvApiKey: openUvApiKey || undefined,
+      });
       setData(result);
       if (locationError && result.locationName && !result.locationName.toLowerCase().includes("san francisco")) {
         setLocationError(`Error Please enable location. Showing data for ${result.locationName}.`);
@@ -104,11 +115,11 @@ export function EnvironmentalWidget() {
       if (errorMessage.includes("GEMINI_API_KEY") || errorMessage.includes("GOOGLE_API_KEY") || errorMessage.toLowerCase().includes("failed_precondition") || errorMessage.toLowerCase().includes("api key not valid")) {
          setError("Google AI API key is missing. Please add GOOGLE_API_KEY or GEMINI_API_KEY to your .env.local file and restart the server. See https://firebase.google.com/docs/genkit/plugins/google-genai for details.");
       } else if ((errorMessage.includes("OPENWEATHER_API_KEY") || errorMessage.includes("OpenWeatherMap API key")) && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
-         setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your .env.local file and restart server.");
+         setError("OpenWeatherMap API key is missing. Please add OPENWEATHER_API_KEY to your settings or .env.local file and restart server.");
       } else if ((errorMessage.includes("OPENUV_API_KEY") || errorMessage.includes("OpenUV API key")) && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
-         setError("OpenUV API key for UV Index is missing. Please add OPENUV_API_KEY to .env.local and restart server. Note: OpenUV has low free tier limits.");
+         setError("OpenUV API key for UV Index is missing. Please add OPENUV_API_KEY to your settings or .env.local file and restart server. Note: OpenUV has low free tier limits.");
       } else if ((errorMessage.includes("WEATHERAPI_COM_KEY") || errorMessage.includes("WeatherAPI.com key")) && (errorMessage.toLowerCase().includes("not configured") || errorMessage.toLowerCase().includes("missing"))) {
-         setError("WeatherAPI.com key for Moon Phase is missing. Please add WEATHERAPI_COM_KEY to .env.local and restart server. Note: WeatherAPI.com has low free tier limits.");
+         setError("WeatherAPI.com key for Moon Phase is missing. Please add WEATHERAPI_COM_KEY to your settings or .env.local file and restart server. Note: WeatherAPI.com has low free tier limits.");
       } else if (errorMessage.toLowerCase().includes("unauthorized") || errorMessage.includes("401")) {
           setError("Failed to fetch weather data: Unauthorized. Check your API keys (OpenWeatherMap, OpenUV, WeatherAPI.com), ensure they are active, and subscribed to necessary services.");
       }
