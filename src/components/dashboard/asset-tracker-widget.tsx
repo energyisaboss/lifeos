@@ -193,6 +193,24 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
       }
     }
   }, [assets]);
+  const TIINGO_LOCAL_STORAGE_KEY = 'tiingo_api_key';
+  const [tiingoApiKeyInput, setTiingoApiKeyInput] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedApiKey = localStorage.getItem(TIINGO_LOCAL_STORAGE_KEY);
+      if (savedApiKey) {
+        setTiingoApiKeyInput(savedApiKey);
+      }
+    }
+  }, []);
+
+  const handleSaveApiKey = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(TIINGO_LOCAL_STORAGE_KEY, tiingoApiKeyInput);
+      toast({ title: "API Key Saved", description: "Your Tiingo API key has been saved.", duration: 3000 });
+    }
+  };
 
   const fetchAllAssetPrices = useCallback(async (currentAssets: Asset[]) => {
     if (currentAssets.length === 0) {
@@ -208,12 +226,19 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
     const prices: Record<string, number | null> = {};
     let anErrorOccurred = false;
     let specificErrorMessage = "Could not fetch prices for some assets. Ensure symbols are correct and Tiingo API key is set in .env.local.";
+    
+    const tiingoApiKey = typeof window !== 'undefined' ? localStorage.getItem(TIINGO_LOCAL_STORAGE_KEY) : null;
 
     for (const asset of currentAssets) {
       if ((asset.type === 'stock' || asset.type === 'fund') && asset.symbol) {
         try {
-          const priceData = await getAssetPrice({ symbol: asset.symbol });
+          const priceData = await getAssetPrice({ symbol: asset.symbol, apiKey: tiingoApiKey });
           prices[asset.id] = priceData.currentPrice;
+          if (priceData.message === 'TIINGO_API_KEY_NOT_CONFIGURED' && !tiingoApiKey) {
+             anErrorOccurred = true;
+             specificErrorMessage = "Tiingo API Key is not configured. Please enter your API key in the global settings.";
+             break; // No need to continue fetching if key is missing
+          }
            if (priceData.currentPrice === null) {
              console.warn(`Tiingo: Price not found for symbol ${asset.symbol} (Type: ${asset.type}). Response: ${JSON.stringify(priceData)}`);
           }
@@ -222,7 +247,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
           anErrorOccurred = true;
           if (err instanceof Error) {
             if (err.message.includes('TIINGO_API_KEY_NOT_CONFIGURED')) {
-              specificErrorMessage = "Tiingo API Key is not configured. Please set TIINGO_API_KEY in .env.local and restart server.";
+              specificErrorMessage = "Tiingo API Key is not configured. Please enter your API key in the global settings.";
             } else if (err.message.startsWith('TIINGO_API_ERROR')) {
                const statusMatch = err.message.match(/TIINGO_API_ERROR: (\d+)/);
                specificErrorMessage = `Tiingo API error for ${asset.symbol} (Status: ${statusMatch ? statusMatch[1] : 'Unknown'}). Check symbol, API limits, or plan.`;
@@ -288,11 +313,19 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
     setAssetFormData(prev => ({ ...prev, symbol })); 
 
     if (assetFormData.type === 'stock' || assetFormData.type === 'fund') {
+      const tiingoApiKey = typeof window !== 'undefined' ? localStorage.getItem(TIINGO_LOCAL_STORAGE_KEY) : null;
+
+      if (!tiingoApiKey) {
+        toast({ title: "API Key Required", description: "Please enter your Tiingo API key in the global settings to fetch asset names.", variant: "destructive", duration: 7000 });
+        setAssetFormData(prev => ({ ...prev, name: symbol }));
+        return; // Stop fetch attempt if key is missing
+      }
+
       setIsFetchingName(true);
       try {
-        const profile = await getAssetProfile({ symbol });
-        setAssetFormData(prev => ({ ...prev, name: profile.assetName || symbol })); 
-        if (!profile.assetName) {
+        const profile = await getAssetProfile({ symbol, apiKey: tiingoApiKey });
+         setAssetFormData(prev => ({ ...prev, name: profile.assetName || symbol }));
+         if (!profile.assetName && profile.message !== 'TIINGO_API_KEY_NOT_CONFIGURED') {
           toast({ title: "Name Fetch", description: `Could not fetch name for ${symbol} from Tiingo. Using symbol as name.`, variant: "default", duration: 3000});
         }
       } catch (error) {
@@ -485,8 +518,26 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   );
 
   const renderSettingsContent = () => (
-     <div className="p-3 border rounded-lg bg-background/30 shadow-sm">
-        <CardHeader className="p-1">
+    <>
+      <div className="p-3 border rounded-lg bg-background/30 shadow-sm mb-4"> {/* Added margin bottom for spacing */}
+        <CardHeader className="p-1 pt-0"> {/* Adjusted padding */}
+          <CardTitle className="text-lg">Tiingo API Key</CardTitle>
+        </CardHeader>
+      <CardContent className="p-1 space-y-2">
+          <Label htmlFor="tiingoApiKey">API Key</Label>
+          <Input
+            id="tiingoApiKey"
+            type="text"
+            value={tiingoApiKeyInput}
+            onChange={(e) => setTiingoApiKeyInput(e.target.value)}
+            placeholder="Enter your Tiingo API Key"
+            className="text-sm"
+          />
+        <Button size="sm" onClick={handleSaveApiKey} className="w-full"><Save className="mr-2 h-4 w-4" /> Save API Key</Button>
+      </CardContent>
+      </div>
+      <div className="p-3 border rounded-lg bg-background/30 shadow-sm">
+        <CardHeader className="p-1 pt-0"> {/* Adjust padding for better spacing */}
           <CardTitle className="text-lg">Manage Assets</CardTitle>
         </CardHeader>
         <CardContent className="p-1 space-y-4">
@@ -595,6 +646,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
             )}
         </CardContent>
      </div>
+    </>
   );
 
   const renderWidgetDisplay = () => (

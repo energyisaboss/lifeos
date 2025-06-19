@@ -82,6 +82,7 @@ export default function LifeOSPage() {
   const [showGlobalWidgetSettings, setShowGlobalWidgetSettings] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
+  const [tiingoApiKey, setTiingoApiKey] = useState('');
 
   // State for iCal feeds, managed at page level
   const [icalFeeds, setIcalFeeds] = useState<IcalFeedItem[]>([]);
@@ -125,6 +126,14 @@ export default function LifeOSPage() {
           setIcalFeeds([]);
         }
       }
+    }
+  }, [isClient]);
+
+  // Load Tiingo API key from localStorage
+  useEffect(() => {
+    if (isClient) {
+      const savedApiKey = localStorage.getItem('tiingo_api_key');
+      if (savedApiKey) setTiingoApiKey(savedApiKey);
     }
   }, [isClient]);
 
@@ -190,6 +199,11 @@ export default function LifeOSPage() {
     }
   }, [widgetVisibility, isClient]);
 
+  const handleSaveApiKey = () => {
+    if (isClient) {
+      localStorage.setItem('tiingo_api_key', tiingoApiKey.trim());
+    }
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor),
