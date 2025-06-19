@@ -82,7 +82,6 @@ export default function LifeOSPage() {
   const [showGlobalWidgetSettings, setShowGlobalWidgetSettings] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
-  const [tiingoApiKey, setTiingoApiKey] = useState('');
   const [openweatherApiKey, setOpenweatherApiKey] = useState('');
   const [weatherapiComKey, setWeatherapiComKey] = useState('');
   const [openuvApiKey, setOpenuvApiKey] = useState('');
@@ -146,20 +145,6 @@ export default function LifeOSPage() {
     }
   }, [isClient]);
 
-  // Save Tiingo API key to localStorage (kept separate as it's not environmental)
-  useEffect(() => {
-    if (isClient) {
-      localStorage.setItem('tiingo_api_key', tiingoApiKey.trim());
-    }
-  }, [tiingoApiKey, isClient]);
-
-  // Load Tiingo API key from localStorage
-  useEffect(() => {
-    if (isClient) {
-      const savedApiKey = localStorage.getItem('tiingo_api_key');
-      if (savedApiKey) setTiingoApiKey(savedApiKey);
-    }
-  }, [isClient]);
   useEffect(() => {
     if (isClient && icalFeeds.length > 0) { // Save even if empty to clear old data potentially
       localStorage.setItem(ICAL_FEEDS_STORAGE_KEY_PAGE, JSON.stringify(icalFeeds));
@@ -514,49 +499,6 @@ export default function LifeOSPage() {
                 </AccordionContent>
               </AccordionItem>
 
-               {/* Tiingo API Key Settings Accordion Item (Moved from individual for Asset Tracker) */}
-               <AccordionItem value="tiingo-api-key-settings">
-                <AccordionTrigger className="text-lg font-semibold hover:no-underline">Tiingo API Key Settings</AccordionTrigger>
-                <AccordionContent className="p-3 border rounded-lg bg-muted/20 shadow-sm">
-                   <CardTitle className="text-lg mb-3">Tiingo API Key</CardTitle>
-                   <div className="space-y-1">
-                      <Label htmlFor="tiingo-api-key">API Key:</Label>
-                      <Input
-                        id="tiingo-api-key"
-                        type="text"
-                        placeholder="Enter your Tiingo API Key"
-                        value={tiingoApiKey}
-                        onChange={(e) => setTiingoApiKey(e.target.value)}
-                        className="text-sm mt-1"
-                      />
-                    </div>
-                    <Button onClick={() => localStorage.setItem('tiingo_api_key', tiingoApiKey.trim())} size="sm" className="w-full mt-3">
-                      Save API Key
-                    </Button>
-                </AccordionContent>
-              </AccordionItem>
-
-
-              <AccordionItem value="openuv-api-key-settings">
-                <AccordionTrigger className="text-lg font-semibold hover:no-underline">OpenUV API Key Settings</AccordionTrigger>
-                <AccordionContent className="p-3 border rounded-lg bg-muted/20 shadow-sm">
-                   <CardTitle className="text-lg mb-3">OpenUV API Key</CardTitle>
-                   <div className="space-y-1">
-                      <Label htmlFor="openuv-api-key">API Key:</Label>
-                      <Input
-                        id="openuv-api-key"
-                        type="text"
-                        placeholder="Enter your OpenUV API Key"
-                        value={openuvApiKey}
-                        onChange={(e) => setOpenuvApiKey(e.target.value)}
-                        className="text-sm mt-1"
-                      />
-                    </div>
-                    <Button onClick={handleSaveOpenuvApiKey} size="sm" className="w-full mt-3">
-                      Save API Key
-                    </Button>
-                </AccordionContent>
-              </AccordionItem>
 
               <AccordionItem value="calendar-feeds-settings">
                 <AccordionTrigger className="text-lg font-semibold hover:no-underline">Calendar Feeds Settings</AccordionTrigger>
