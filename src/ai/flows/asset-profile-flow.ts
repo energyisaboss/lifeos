@@ -13,6 +13,7 @@ import { z } from 'genkit';
 
 const AssetProfileInputSchema = z.object({
   symbol: z.string().describe('The stock/asset symbol (e.g., AAPL, MSFT, FXAIX).'),
+  apiKey: z.string().optional().describe('Optional Tiingo API key.'),
 });
 export type AssetProfileInput = z.infer<typeof AssetProfileInputSchema>;
 
@@ -31,9 +32,9 @@ const assetProfileFlow = ai.defineFlow(
     inputSchema: AssetProfileInputSchema,
     outputSchema: AssetProfileOutputSchema,
   },
-  async ({ symbol }) => {
-    const tiingoApiKey = process.env.TIINGO_API_KEY;
+  async ({ symbol, apiKey }) => {
 
+    const tiingoApiKey = apiKey || process.env.TIINGO_API_KEY;
     if (!tiingoApiKey) {
       const errorMsg = 'Tiingo API key (TIINGO_API_KEY) is not configured in .env.local. Cannot fetch asset profiles.';
       console.error(errorMsg);

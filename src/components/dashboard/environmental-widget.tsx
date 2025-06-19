@@ -96,9 +96,9 @@ export function EnvironmentalWidget() {
       const result = await getEnvironmentalData({
         latitude: lat,
         longitude: lon,
-        openWeatherApiKey: openWeatherApiKey || undefined, // Pass key if found, otherwise undefined
-        weatherApiComKey: weatherApiComKey || undefined,
-        openUvApiKey: openUvApiKey || undefined,
+ openWeatherApiKey: openWeatherApiKey || undefined, // Pass keys from local storage
+ weatherApiComKey: weatherApiComKey || undefined,
+ openUvApiKey: openUvApiKey || undefined,
       });
       setData(result);
       if (locationError && result.locationName && !result.locationName.toLowerCase().includes("san francisco")) {

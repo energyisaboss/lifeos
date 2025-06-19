@@ -19,7 +19,10 @@ import { format, parseISO } from 'date-fns';
 
 const EnvironmentalDataInputSchema = z.object({
   latitude: z.number().describe('Latitude for the location.'),
-  longitude: z.number().describe('Longitude for the location.'),
+ longitude: z.number().describe('Longitude for the location.'),
+ openWeatherApiKey: z.string().optional().describe('Optional OpenWeatherMap API key.'),
+ openUvApiKey: z.string().optional().describe('Optional OpenUV API key.'),
+ weatherApiComKey: z.string().optional().describe('Optional WeatherAPI.com key.'),
 });
 export type EnvironmentalDataInput = z.infer<typeof EnvironmentalDataInputSchema>;
 
@@ -112,12 +115,15 @@ const environmentalDataFlow = ai.defineFlow(
     inputSchema: EnvironmentalDataInputSchema,
     outputSchema: EnvironmentalDataOutputSchema,
   },
-  async ({ latitude, longitude }) => {
-    const openWeatherApiKey = process.env.OPENWEATHER_API_KEY;
-    const openUvApiKey = process.env.OPENUV_API_KEY;
-    const weatherApiComKey = process.env.WEATHERAPI_COM_KEY;
+  async ({
+ latitude,
+ longitude,
+ openWeatherApiKey,
+ openUvApiKey,
+ weatherApiComKey
+  }) => {
 
-    let currentWeatherData: AppEnvironmentalData['currentWeather'] | undefined;
+    let currentWeatherData: AppEnvironmentalData['currentWeather'] | undefined; // Use let as it will be assigned later
     let weeklyWeatherData: AppEnvironmentalData['weeklyWeather'] = [];
     let locationNameData: string | undefined;
     let uvIndexData: AppEnvironmentalData['uvIndex'] | undefined;
@@ -128,9 +134,10 @@ const environmentalDataFlow = ai.defineFlow(
 
     // Fetch OpenWeatherMap Data (Current Weather, Forecast, Air Quality)
     if (openWeatherApiKey) {
-      const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${openWeatherApiKey}&units=imperial`;
-      const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&appid=${openWeatherApiKey}&units=imperial`;
-      const airQualityUrl = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${latitude}&lon=${longitude}&appid=${openWeatherApiKey}`;
+      const apiKey = openWeatherApiKey || process.env.OPENWEATHER_API_KEY;
+      const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=imperial`;
+      const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=imperial`;
+      const airQualityUrl = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${latitude}&lon=${longitude}&appid=${apiKey}`;
       
       try {
         const [currentWeatherResponse, forecastResponse, airQualityResponse] = await Promise.all([
@@ -231,10 +238,11 @@ const environmentalDataFlow = ai.defineFlow(
     }
 
     // Fetch UV Index from OpenUV
-    if (openUvApiKey) {
+ const openUvApiKeyToUse = openUvApiKey || process.env.OPENUV_API_KEY;
+ if (openUvApiKeyToUse) {
       const openUvUrl = `https://api.openuv.io/api/v1/uv?lat=${latitude}&lng=${longitude}`;
       try {
-        const uvResponse = await fetch(openUvUrl, { headers: { 'x-access-token': openUvApiKey } });
+ const uvResponse = await fetch(openUvUrl, { headers: { 'x-access-token': openUvApiKeyToUse } });
         if (!uvResponse.ok) {
           const errorText = await uvResponse.text();
           const errorMessage = `OpenUV API Error: ${uvResponse.status} ${errorText}`;
@@ -263,8 +271,9 @@ const environmentalDataFlow = ai.defineFlow(
     }
 
     // Fetch Moon Phase from WeatherAPI.com
-    if (weatherApiComKey) {
-      const weatherApiUrl = `https://api.weatherapi.com/v1/astronomy.json?key=${weatherApiComKey}&q=${latitude},${longitude}`;
+    const weatherApiComKeyToUse = weatherApiComKey || process.env.WEATHERAPI_COM_KEY;
+    if (weatherApiComKeyToUse) {
+      const weatherApiUrl = `https://api.weatherapi.com/v1/astronomy.json?key=${weatherApiComKeyToUse}&q=${latitude},${longitude}`;
       try {
         const moonResponse = await fetch(weatherApiUrl);
         if (!moonResponse.ok) {

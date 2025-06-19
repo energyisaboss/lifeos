@@ -13,6 +13,7 @@ import { z } from 'genkit';
 
 const AssetPriceInputSchema = z.object({
   symbol: z.string().describe('The stock/asset symbol (e.g., AAPL, MSFT, FXAIX).'),
+  apiKey: z.string().optional().describe('Optional Tiingo API key.'),
 });
 export type AssetPriceInput = z.infer<typeof AssetPriceInputSchema>;
 
@@ -31,7 +32,7 @@ const assetPriceFlow = ai.defineFlow(
     inputSchema: AssetPriceInputSchema,
     outputSchema: AssetPriceOutputSchema,
   },
-  async ({ symbol }) => {
+  async ({ symbol, apiKey }) => {
     const tiingoApiKey = process.env.TIINGO_API_KEY;
 
     if (!tiingoApiKey) {
@@ -47,7 +48,7 @@ const assetPriceFlow = ai.defineFlow(
       const response = await fetch(apiUrl, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Token ${tiingoApiKey}`
+          'Authorization': `Token ${apiKey || tiingoApiKey}`
         }
       });
 

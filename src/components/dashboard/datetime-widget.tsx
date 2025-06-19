@@ -56,7 +56,11 @@ export function DateTimeWidget() {
       setIsLoadingEnvironmental(true);
       setEnvironmentalError(null);
       try {
-        const data = await getEnvironmentalData({ latitude: lat, longitude: lon });
+        // Retrieve API keys from local storage
+        const openWeatherApiKey = typeof window !== 'undefined' ? localStorage.getItem('openweather_api_key') : null;
+        const weatherApiComKey = typeof window !== 'undefined' ? localStorage.getItem('weatherapi_com_key') : null;
+        const openUvApiKey = typeof window !== 'undefined' ? localStorage.getItem('openuv_api_key') : null;
+        const data = await getEnvironmentalData({ latitude: lat, longitude: lon, openWeatherApiKey: openWeatherApiKey || undefined, weatherApiComKey: weatherApiComKey || undefined, openUvApiKey: openUvApiKey || undefined });
         setEnvironmentalData(data);
       } catch (err) {
         console.error("Failed to fetch environmental data:", err);

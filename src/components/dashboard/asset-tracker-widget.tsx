@@ -86,6 +86,7 @@ interface AssetTrackerWidgetProps {
 }
 
 export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }: AssetTrackerWidgetProps) {
+  console.log("AssetTrackerWidget component rendered");
   const [assets, setAssets] = useState<Asset[]>(() => {
     if (typeof window === 'undefined') {
       return [];
@@ -229,6 +230,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
     
     const tiingoApiKey = typeof window !== 'undefined' ? localStorage.getItem(TIINGO_LOCAL_STORAGE_KEY) : null;
 
+    console.log("AssetTracker fetchAllAssetPrices: Tiingo API Key:", tiingoApiKey ? "Set" : "Not Set");
     for (const asset of currentAssets) {
       if ((asset.type === 'stock' || asset.type === 'fund') && asset.symbol) {
         try {
@@ -314,6 +316,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
 
     if (assetFormData.type === 'stock' || assetFormData.type === 'fund') {
       const tiingoApiKey = typeof window !== 'undefined' ? localStorage.getItem(TIINGO_LOCAL_STORAGE_KEY) : null;
+      console.log("AssetTracker handleSymbolBlur: Tiingo API Key:", tiingoApiKey ? "Set" : "Not Set");
 
       if (!tiingoApiKey) {
         toast({ title: "API Key Required", description: "Please enter your Tiingo API key in the global settings to fetch asset names.", variant: "destructive", duration: 7000 });
