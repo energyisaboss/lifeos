@@ -196,6 +196,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   }, [assets]);
   const TIINGO_LOCAL_STORAGE_KEY = 'tiingo_api_key';
   const [tiingoApiKeyInput, setTiingoApiKeyInput] = useState('');
+  const tiingoApiKey = typeof window !== 'undefined' ? localStorage.getItem(TIINGO_LOCAL_STORAGE_KEY) : null;
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -214,6 +215,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   };
 
   const fetchAllAssetPrices = useCallback(async (currentAssets: Asset[]) => {
+    console.log("AssetTracker fetchAllAssetPrices: Entering function.");
     if (currentAssets.length === 0) {
       setFetchedPrices({});
       setIsFetchingPrices(false);
@@ -228,32 +230,35 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
     let anErrorOccurred = false;
     let specificErrorMessage = "Could not fetch prices for some assets. Ensure symbols are correct and Tiingo API key is set in .env.local.";
     
-    const tiingoApiKey = typeof window !== 'undefined' ? localStorage.getItem(TIINGO_LOCAL_STORAGE_KEY) : null;
-
-    console.log("AssetTracker fetchAllAssetPrices: Tiingo API Key:", tiingoApiKey ? "Set" : "Not Set");
+    console.log("AssetTracker fetchAllAssetPrices: Tiingo API Key status:", tiingoApiKey ? "Set" : "Not Set");
     for (const asset of currentAssets) {
       if ((asset.type === 'stock' || asset.type === 'fund') && asset.symbol) {
         try {
           const priceData = await getAssetPrice({ symbol: asset.symbol, apiKey: tiingoApiKey });
           prices[asset.id] = priceData.currentPrice;
           if (priceData.message === 'TIINGO_API_KEY_NOT_CONFIGURED' && !tiingoApiKey) {
+             console.error("AssetTracker fetchAllAssetPrices: TIINGO_API_KEY_NOT_CONFIGURED message received when key is not set.");
              anErrorOccurred = true;
              specificErrorMessage = "Tiingo API Key is not configured. Please enter your API key in the global settings.";
              break; // No need to continue fetching if key is missing
           }
            if (priceData.currentPrice === null) {
-             console.warn(`Tiingo: Price not found for symbol ${asset.symbol} (Type: ${asset.type}). Response: ${JSON.stringify(priceData)}`);
+             console.warn(`AssetTracker fetchAllAssetPrices: Price not found for symbol ${asset.symbol} (Type: ${asset.type}). Response: ${JSON.stringify(priceData)}`);
           }
         } catch (err) {
+          console.error("AssetTracker fetchAllAssetPrices: Error during asset processing for", asset.symbol, ":", err);
           prices[asset.id] = null;
           anErrorOccurred = true;
           if (err instanceof Error) {
             if (err.message.includes('TIINGO_API_KEY_NOT_CONFIGURED')) {
+               console.error("AssetTracker fetchAllAssetPrices: Caught TIINGO_API_KEY_NOT_CONFIGURED error.");
               specificErrorMessage = "Tiingo API Key is not configured. Please enter your API key in the global settings.";
             } else if (err.message.startsWith('TIINGO_API_ERROR')) {
                const statusMatch = err.message.match(/TIINGO_API_ERROR: (\d+)/);
+               console.error(`AssetTracker fetchAllAssetPrices: Caught TIINGO_API_ERROR for ${asset.symbol}.`);
                specificErrorMessage = `Tiingo API error for ${asset.symbol} (Status: ${statusMatch ? statusMatch[1] : 'Unknown'}). Check symbol, API limits, or plan.`;
             } else if (err.message.startsWith('FETCH_ERROR')) {
+               console.error(`AssetTracker fetchAllAssetPrices: Caught FETCH_ERROR for ${asset.symbol}.`);
                specificErrorMessage = `Network error fetching price for ${asset.symbol}. Check connection or Tiingo status.`;
             } else {
                console.error(`Asset Price Fetch - Unhandled error for ${asset.symbol}:`, err);
@@ -264,6 +269,7 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
         prices[asset.id] = null; 
       }
     }
+    console.log("AssetTracker fetchAllAssetPrices: Finished processing assets. Setting prices:", prices);
     setFetchedPrices(prices);
     setIsFetchingPrices(false);
     if (anErrorOccurred) {
@@ -273,6 +279,8 @@ export function AssetTrackerWidget({ settingsOpen, displayMode = 'widgetOnly' }:
   }, []);
 
   useEffect(() => {
+    console.log("AssetTracker useEffect [assets, displayMode, settingsOpen] triggered. Assets count:", assets.length);
+ console.log("AssetTracker useEffect [assets, displayMode, settingsOpen] triggered. Condition to fetch:", assets.length > 0 && (displayMode === 'widgetOnly' || (settingsOpen && displayMode === 'settingsOnly')));
     if (assets.length > 0 && (displayMode === 'widgetOnly' || (settingsOpen && displayMode === 'settingsOnly'))) {
       fetchAllAssetPrices(assets);
     } else {

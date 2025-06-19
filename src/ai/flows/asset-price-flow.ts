@@ -33,9 +33,9 @@ const assetPriceFlow = ai.defineFlow(
     outputSchema: AssetPriceOutputSchema,
   },
   async ({ symbol, apiKey }) => {
-    const tiingoApiKey = process.env.TIINGO_API_KEY;
+    const finalApiKey = apiKey || process.env.TIINGO_API_KEY;
 
-    if (!tiingoApiKey) {
+    if (!finalApiKey) {
       const errorMsg = 'Tiingo API key (TIINGO_API_KEY) is not configured in .env.local. Cannot fetch asset prices.';
       console.error(errorMsg);
       throw new Error('TIINGO_API_KEY_NOT_CONFIGURED');
@@ -49,7 +49,7 @@ const assetPriceFlow = ai.defineFlow(
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Token ${apiKey || tiingoApiKey}`
-        }
+ }
       });
 
       const responseDataText = await response.text();

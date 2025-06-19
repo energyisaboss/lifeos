@@ -34,8 +34,8 @@ const assetProfileFlow = ai.defineFlow(
   },
   async ({ symbol, apiKey }) => {
 
-    const tiingoApiKey = apiKey || process.env.TIINGO_API_KEY;
-    if (!tiingoApiKey) {
+    const finalApiKey = apiKey || process.env.TIINGO_API_KEY;
+    if (!finalApiKey) {
       const errorMsg = 'Tiingo API key (TIINGO_API_KEY) is not configured in .env.local. Cannot fetch asset profiles.';
       console.error(errorMsg);
       // Do not throw hard error, allow graceful degradation in UI if name isn't found.
@@ -49,7 +49,7 @@ const assetProfileFlow = ai.defineFlow(
       const response = await fetch(apiUrl, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Token ${tiingoApiKey}`
+ 'Authorization': `Token ${finalApiKey}`
         }
       });
       
